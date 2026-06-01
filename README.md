@@ -75,6 +75,15 @@ node build-pdf.mjs   # → docs/byeori-tech-spec.pdf 생성
 
 ---
 
+## 기여 · 협업 규칙
+
+브랜치 명명(GitHub Flow)·커밋·PR 규칙은 [`CONTRIBUTING.md`](CONTRIBUTING.md)를 참고하세요.
+
+- `main` 직접 push 금지 → 토픽 브랜치 + PR(1인 리뷰) + Squash 머지
+- 브랜치: `<type>/<이슈번호>-<요약>` (예: `feature/12-hanbok-filter`)
+
+---
+
 ## 데이터 출처 (이용 의무)
 
 본 서비스는 공공데이터를 활용하며, 다음 출처 표기 의무를 준수합니다.
