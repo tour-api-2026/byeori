@@ -1,0 +1,194 @@
+/* 벼리(Byeori) 기술 설계 문서 — 인쇄용 스타일
+ * 폰트(@font-face NotoSansKR)는 build-pdf.mjs가 문서 상단에 주입한다. */
+
+:root {
+  --ink: #1f2430;
+  --muted: #5b6472;
+  --line: #d9dee7;
+  --accent: #7c4dff;       /* 벼리: 별/은하수 → 보랏빛 */
+  --accent-soft: #f1ecff;
+  --code-bg: #f5f6f8;
+  --th-bg: #f0eefb;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  color: var(--ink);
+  font-family: 'Noto Sans KR', 'WenQuanYi Zen Hei', sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ---------- 페이지 ---------- */
+@page {
+  size: A4;
+  margin: 18mm 16mm 20mm 16mm;
+}
+
+/* ---------- 표지 ---------- */
+.cover {
+  page-break-after: always;
+  height: 247mm;            /* A4 - 여백 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+  background: linear-gradient(160deg, #ffffff 0%, var(--accent-soft) 100%);
+  border-radius: 4px;
+}
+.cover .brand {
+  font-size: 46pt;
+  font-weight: 900;
+  letter-spacing: -1px;
+  color: var(--accent);
+  margin: 0;
+}
+.cover .slogan {
+  font-size: 12pt;
+  color: var(--muted);
+  margin: 6mm 0 0;
+  font-weight: 500;
+}
+.cover .doc-title {
+  font-size: 19pt;
+  font-weight: 700;
+  margin: 22mm 0 0;
+  color: var(--ink);
+}
+.cover .doc-sub {
+  font-size: 11pt;
+  color: var(--muted);
+  margin: 4mm 0 0;
+}
+.cover .meta {
+  margin-top: 26mm;
+  font-size: 9.5pt;
+  color: var(--muted);
+  line-height: 1.9;
+}
+.cover .meta b { color: var(--ink); font-weight: 600; }
+
+/* ---------- 목차 ---------- */
+.toc {
+  page-break-after: always;
+}
+.toc h2 {
+  border: 0;
+  font-size: 16pt;
+  color: var(--accent);
+  margin-bottom: 6mm;
+}
+.toc ol { list-style: none; padding-left: 0; counter-reset: toc; }
+.toc > ol > li {
+  counter-increment: toc;
+  font-weight: 700;
+  font-size: 11.5pt;
+  margin: 3.5mm 0 1mm;
+  padding-bottom: 1mm;
+  border-bottom: 1px dashed var(--line);
+}
+.toc > ol > li::before { content: counter(toc) ". "; color: var(--accent); }
+.toc ol ol { padding-left: 8mm; margin: 1mm 0; }
+.toc ol ol li { font-weight: 400; font-size: 10pt; color: var(--muted); }
+
+/* ---------- 제목 ---------- */
+h1 {
+  font-size: 18pt;
+  font-weight: 800;
+  color: var(--accent);
+  margin: 0 0 5mm;
+  padding-bottom: 2.5mm;
+  border-bottom: 2.5px solid var(--accent);
+  page-break-before: always;   /* 각 대섹션은 새 페이지에서 시작 */
+}
+h1:first-of-type { page-break-before: avoid; }
+h2 {
+  font-size: 13.5pt;
+  font-weight: 700;
+  margin: 9mm 0 3mm;
+  padding-bottom: 1.5mm;
+  border-bottom: 1px solid var(--line);
+  page-break-after: avoid;
+}
+h3 {
+  font-size: 11.5pt;
+  font-weight: 700;
+  color: #34303f;
+  margin: 6mm 0 2mm;
+  page-break-after: avoid;
+}
+h4 { font-size: 10.5pt; font-weight: 700; margin: 4mm 0 1.5mm; color: var(--muted); }
+
+p { margin: 2mm 0; }
+ul, ol { margin: 2mm 0; padding-left: 6mm; }
+li { margin: 1mm 0; }
+strong { font-weight: 700; }
+hr { border: 0; border-top: 1px solid var(--line); margin: 6mm 0; }
+
+a { color: var(--accent); text-decoration: none; }
+
+/* ---------- 표 ---------- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 3mm 0;
+  font-size: 9pt;
+  page-break-inside: avoid;
+}
+th, td {
+  border: 1px solid var(--line);
+  padding: 1.6mm 2.4mm;
+  text-align: left;
+  vertical-align: top;
+  word-break: break-word;
+}
+th { background: var(--th-bg); font-weight: 700; color: #2c2740; }
+tr:nth-child(even) td { background: #fafbfc; }
+
+/* ---------- 코드 ---------- */
+code {
+  font-family: 'DejaVu Sans Mono', 'WenQuanYi Zen Hei Mono', monospace;
+  background: var(--code-bg);
+  padding: 0.4mm 1.4mm;
+  border-radius: 3px;
+  font-size: 8.6pt;
+  color: #b03a6e;
+}
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: 3mm 4mm;
+  overflow-x: auto;
+  font-size: 8.4pt;
+  line-height: 1.5;
+  page-break-inside: avoid;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+pre code {
+  background: none;
+  padding: 0;
+  color: #2f3a44;
+  font-size: 8.4pt;
+  font-family: 'DejaVu Sans Mono', 'WenQuanYi Zen Hei Mono', monospace;
+}
+
+/* ---------- 인용/메모 ---------- */
+blockquote {
+  margin: 3mm 0;
+  padding: 2mm 4mm;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 4px 4px 0;
+  color: #463a6b;
+  font-size: 9.5pt;
+}
+blockquote p { margin: 1mm 0; }

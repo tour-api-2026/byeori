@@ -1,0 +1,15 @@
+# Node
+docs/node_modules/
+node_modules/
+
+# 빌드 임시 파일
+docs/.build.html
+docs/.verify-*.png
+docs/.verify-*.html
+
+# 로컬 설정
+.claude/settings.local.json
+
+# OS
+.DS_Store
+*.log

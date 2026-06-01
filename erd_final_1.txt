@@ -1,0 +1,380 @@
+// =============================================
+// 한국 여행 일지 가이드 서비스 ERD (최종본 v3)
+// dbdiagram.io 에서 import 하여 사용하세요
+//
+// [v3 추가 — 개발 표준 문서 작성 중 확정]
+// - users.role(USER|ADMIN): 어드민 API(/api/v1/admin/**) 권한 식별. ERD에 권한 구분이 없어 추가
+// - source enum에 TOURAPI 추가(venues/performances): 한국관광공사 OpenAPI(TourAPI 4.0·문화포털)
+//   수집 데이터 식별. 음식점·관광지·문화시설은 venues, 축제/행사는 performances로 매핑
+//   · tour_content_id: TourAPI contentId 보관(UNIQUE WHERE NOT NULL). KOPIS와 동일 패턴
+//   · TOURAPI도 출처 표기 의무 대상(공공데이터 이용 조건) → source 컬럼이 표기 대상 식별
+//   · sync_logs.provider(KOPIS|TOURAPI): 어느 OpenAPI 동기화 배치인지 구분
+//
+// 변경 요약
+// - 예약/좌석: 외부 예매 사이트에 위임 → seats 제거, 예약 추적 안 함
+//   · performances.external_booking_url 로 예매처 redirect 주소 보관
+// - 여행 일지: itineraries / itinerary_items / curated_courses / curated_course_items 신규
+// - 데이터 출처 3종: source(KOPIS | MANUAL | USER) 로 구분
+//   · KOPIS  = 공연/공연시설 (배치 동기화로 자동 수집)
+//   · MANUAL = 한복점/메이크업샵/체험/음식점 (운영자 직접 입력)
+//   · USER   = 사용자가 등록한 장소 (거지맵식 공유 지도). created_by_user_id +
+//     visibility(PUBLIC/PRIVATE)로 관리, 공개 콘텐츠라 venue_reports로 신고/검수
+// - 리뷰 평점 캐시: performances.avg_rating / review_count (목록·상세 성능)
+// - 한복 할인 혜택: venues.hanbok_discount(+desc) → "한복 입고 방문 시 할인" 혜택 지도 필터
+// - 방문자 집계 태그: comment_tags(마스터) + content_tag_votes(선택기록).
+//   장소/공연 상세에 "분위기 좋음 N명"처럼 COUNT 집계로 표시
+// - 종료 공연: state로 'ENDED' 표시(종료 배지). 데이터는 삭제 안 함(찜/일지 참조)
+// - 회원 탈퇴: soft delete. users.status=WITHDRAWN + withdrawn_at,
+//   N개월 유예 후 배치가 본인+리뷰/찜/일지 영구 삭제(복구는 유예 내에서만)
+// - 다국어: 1차는 UI만 다국어, 콘텐츠(공연명·설명)는 한국어 고정.
+//   향후 *_translations 테이블 분리 또는 실시간 번역 API로 확장 (지금 ERD 변경 없음)
+// - KOPIS 동기화: kopis_id, synced_at 컬럼 + sync_logs 로그 테이블
+//   · 주기: 매일 1회 진행중·예정 공연 전체 갱신 (KOPIS 한도가 총량이 아닌
+//     '1초당 10회' 속도 제한이므로, 초당 throttle만 지키면 전체 갱신 가능)
+//   · 동기화 순서: 반드시 시설(venue) → 공연(performance). performances.venue_id가
+//     NOT NULL이므로, 공연상세의 시설ID(mt10id)를 보면 그 시설을 먼저 upsert한 뒤
+//     공연을 insert/update 해야 함 (순서 어기면 첫 동기화부터 FK 실패)
+//   · synced_at: 배치가 중간에 끊겼을 때 '아직 안 한 것부터' 이어달리기 용도.
+//     성공했을 때만 갱신 → 실패분은 다음 배치가 자동 재시도
+//
+// [삭제된 테이블]
+//   · venue_nearbys: 주변 음식점은 카카오 지도 API로 실시간 조회 (DB 저장 불필요)
+//   · performance_tags: 속성 태그 미사용. 향후 장르 기반 필터 필요 시 재추가
+//
+// [향후 추가 예정 (지금 안 만듦, 추가형이라 안전)]
+//   · performance_benefits: 행사 관람 후 제휴처 혜택. 제휴 성사 시
+//     (performance_id, venue_id, benefit_desc) 테이블 추가. 기존 구조 영향 없음.
+//   · 한복 혜택과 행사 혜택을 합치지 않는 이유: 행사 혜택은 performance_id가 필수라
+//     성격이 다름. 한복 혜택은 장소 속성이라 venues 컬럼으로 충분
+//
+// [다형성 참조 주의 — dbdiagram엔 표현 안 되므로 실제 DDL에서 처리]
+//   wishlists / reviews / content_tag_votes / curated_course_items / itinerary_items 는
+//   performance_id 와 venue_id 중 "정확히 하나만" 채워야 함.
+//   → 실제 DDL에 CHECK( (performance_id IS NULL) <> (venue_id IS NULL) ) 추가
+//   → NULL 포함 unique는 조건부 인덱스로: 예) wishlists는
+//     UNIQUE(user_id, performance_id) WHERE performance_id IS NOT NULL,
+//     UNIQUE(user_id, venue_id) WHERE venue_id IS NOT NULL
+//   → venues.kopis_id 도 UNIQUE WHERE kopis_id IS NOT NULL (MANUAL/USER는 NULL 다수)
+//
+// [KOPIS OPEN API 이용제한 — 설계 반영 사항]
+//   · 1초당 10회 초과 시 차단 → 배치에 호출 간격(throttle) 강제 (ERD 외 로직)
+//   · 출처 표기 의무: source=KOPIS 데이터를 노출하는 화면에 출처 문구 필수
+//     (예, 출처: (재)예술경영지원센터 공연예술통합전산망, www.kopis.or.kr)
+//     누락 시 서비스 중단 사유 → source 컬럼이 표기 대상 식별에도 사용됨
+//   · 인증키 1인 1개·PC 전용 → 앱에서 직접 호출 불가, 백엔드 배치만 KOPIS 호출
+// =============================================
+
+
+// -----------------------------------------------
+// 회원 / 인증
+// -----------------------------------------------
+
+Table users {
+  id             bigint       [pk, increment]
+  name           varchar(50)  [not null]
+  email          varchar(100) [not null, unique]
+  phone          varchar(20)
+  password_hash  varchar(255) [note: 'LOCAL 가입자만, 소셜은 null']
+  auth_provider  varchar(20)  [not null, default: 'LOCAL', note: 'LOCAL | KAKAO | NAVER | APPLE | GOOGLE']
+  phone_verified boolean      [not null, default: false]
+  email_verified boolean      [not null, default: false]
+  language       varchar(10)  [not null, default: 'ko', note: '외국인 관광객 대응: ko | en | ja | zh 등']
+  role           varchar(20)  [not null, default: 'USER', note: 'USER | ADMIN — 어드민(/api/v1/admin/**) 권한 식별. ROLE_ADMIN 가드 기준']
+  status         varchar(20)  [not null, default: 'ACTIVE', note: 'ACTIVE | WITHDRAWN(탈퇴 유예) — soft delete']
+  withdrawn_at   timestamp    [note: '탈퇴 요청 시각. 이후 N개월(예:3) 유예 동안 복구 가능, 경과 시 배치가 본인+리뷰/찜/일지 영구 삭제']
+  created_at     timestamp    [not null, default: `now()`]
+  updated_at     timestamp    [not null, default: `now()`]
+}
+
+Table social_auths {
+  id               bigint [pk, increment]
+  user_id          bigint [not null, ref: > users.id]
+  provider         varchar(20) [not null, note: 'KAKAO | NAVER | GOOGLE | APPLE']
+  provider_user_id varchar(100) [not null]
+  access_token     text
+  created_at       timestamp [not null, default: `now()`]
+
+  indexes {
+    (provider, provider_user_id) [unique]
+  }
+}
+
+Table user_interests {
+  id       bigint [pk, increment]
+  user_id  bigint [not null, ref: > users.id]
+  category varchar(30) [not null, note: '한복 | 음식 | 체험 | 문화 | 공연']
+}
+
+Table terms {
+  id           bigint [pk, increment]
+  title        varchar(100) [not null]
+  content      text [not null]
+  type         varchar(30) [not null, note: 'SERVICE | PRIVACY | MARKETING']
+  is_required  boolean [not null, default: true]
+  effective_at timestamp [not null]
+}
+
+Table user_terms {
+  id         bigint [pk, increment]
+  user_id    bigint [not null, ref: > users.id]
+  terms_id   bigint [not null, ref: > terms.id]
+  is_agreed  boolean [not null]
+  agreed_at  timestamp [not null, default: `now()`]
+
+  indexes {
+    (user_id, terms_id) [unique]
+  }
+}
+
+
+// -----------------------------------------------
+// 장소 (공연시설 + 한복/체험/음식점 통합)
+// source 로 출처 구분
+// -----------------------------------------------
+
+Table venues {
+  id              bigint [pk, increment]
+  name            varchar(100) [not null, note: '콘텐츠는 한국어 기본. 향후 다국어는 venue_translations 분리 가능']
+  address         varchar(255) [not null]
+  lat             decimal(10,7) [not null, note: 'KOPIS 시설상세 la / 카카오 지도 핀·동선 핵심']
+  lng             decimal(10,7) [not null, note: 'KOPIS 시설상세 lo']
+  operating_hours varchar(255)
+  phone           varchar(20)  [note: '장소 상세 화면 표시']
+  homepage_url    varchar(500) [note: '장소 상세 화면 표시']
+  description     text
+  category        varchar(30) [note: 'MANUAL/USER용: 한복 | 메이크업 | 체험 | 카페 | 맛집 | 음식점 등']
+
+  // --- 한복 착용 할인 혜택 (혜택 지도 필터: "한복 입고 방문 시 할인되는 곳") ---
+  hanbok_discount      boolean [not null, default: false, note: '한복 착용 시 할인 여부 → 혜택 지도 핀 표시']
+  hanbok_discount_desc varchar(255) [note: '할인 내용 (예: 입장료 50% 할인)']
+
+  status          varchar(20) [not null, default: 'ACTIVE', note: 'ACTIVE | INACTIVE']
+
+  // --- 리뷰 평점 캐시 (장소 리뷰용, performances와 동일 패턴) ---
+  avg_rating      decimal(2,1) [not null, default: 0]
+  review_count    int [not null, default: 0]
+
+  // --- 데이터 출처 ---
+  source          varchar(20) [not null, default: 'MANUAL', note: 'KOPIS | TOURAPI | MANUAL | USER / KOPIS·TOURAPI면 상세화면에 출처 표기 의무(공공데이터 이용 조건)']
+  kopis_id        varchar(20) [note: 'KOPIS 공연시설 ID(mt10id), 그 외 null']
+  tour_content_id varchar(30) [note: 'TourAPI contentId(음식점·관광지·문화시설 등), 그 외 null']
+  synced_at       timestamp   [note: 'KOPIS/TourAPI 마지막 동기화 시각, 그 외 null']
+
+  // --- 유저 등록 장소(거지맵식 공유 지도) ---
+  created_by_user_id bigint [ref: > users.id, note: 'source=USER일 때 등록한 사용자']
+  visibility      varchar(20) [not null, default: 'PUBLIC', note: 'USER 장소: PUBLIC(공유) | PRIVATE(본인만). KOPIS/MANUAL은 항상 PUBLIC']
+
+  indexes {
+    (kopis_id) [unique]
+    (tour_content_id) [unique]
+    (source)
+    (created_by_user_id)
+  }
+}
+
+// 유저 등록 공유 장소 신고 (공개 콘텐츠 운영/검수용)
+Table venue_reports {
+  id          bigint [pk, increment]
+  venue_id    bigint [not null, ref: > venues.id]
+  user_id     bigint [not null, ref: > users.id, note: '신고한 사용자']
+  reason      varchar(50) [not null, note: '허위정보 | 폐업 | 부적절 등']
+  detail      text
+  status      varchar(20) [not null, default: 'PENDING', note: 'PENDING | REVIEWED | DISMISSED']
+  created_at  timestamp [not null, default: `now()`]
+}
+
+// -----------------------------------------------
+// 공연 / 행사 (KOPIS 공연 + 한복/체험 행사 통합)
+// -----------------------------------------------
+
+Table performances {
+  id               bigint [pk, increment]
+  venue_id         bigint [not null, ref: > venues.id]
+  title            varchar(150) [not null]
+  genre            varchar(50)
+  poster_image_url varchar(500)
+  start_date       date [not null, note: '동기화 주기 계산 기준(공연일 임박도)']
+  end_date         date [not null]
+  state            varchar(20) [not null, default: 'UPCOMING', note: 'UPCOMING | ONGOING | ENDED (KOPIS prfstate 매핑)']
+  external_booking_url varchar(500) [note: '외부 예매처 링크. 예약하기 버튼이 redirect할 주소 (KOPIS 공연상세 예매처 정보로 채움)']
+
+  // --- 리뷰 평점 캐시 (목록/상세에서 매번 집계하지 않도록) ---
+  avg_rating       decimal(2,1) [not null, default: 0, note: '리뷰 등록/수정/삭제 시 갱신']
+  review_count     int [not null, default: 0]
+
+  created_at       timestamp [not null, default: `now()`]
+
+  // --- 데이터 출처 / KOPIS 동기화 ---
+  source           varchar(20) [not null, default: 'MANUAL', note: 'KOPIS | TOURAPI | MANUAL / KOPIS·TOURAPI면 상세화면에 출처 표기 의무 (KOPIS: www.kopis.or.kr, TourAPI: 한국관광공사)']
+  kopis_id         varchar(20) [note: 'KOPIS 공연 ID(mt20id), 그 외 null']
+  tour_content_id  varchar(30) [note: 'TourAPI 축제/행사 contentId, 그 외 null']
+  synced_at        timestamp   [note: '마지막 동기화 시각, 성공 시에만 갱신(이어달리기·재시도 판단)']
+
+  indexes {
+    (kopis_id) [unique]
+    (tour_content_id) [unique]
+    (start_date)
+    (state)
+  }
+}
+
+// (삭제됨) performance_tags: 현재 화면에서 속성 태그(포토존 등) 미사용.
+//   공연 장르 단순 표시는 performances.genre로 충분.
+//   향후 KOPIS 장르/특성 기반 검색·필터가 필요해지면 그때 재추가.
+
+Table performance_medias {
+  id             bigint [pk, increment]
+  performance_id bigint [not null, ref: > performances.id]
+  media_type     varchar(20) [not null, note: 'IMAGE | VIDEO']
+  url            varchar(500) [not null]
+  sort_order     int [not null, default: 0]
+}
+
+// MANUAL(한복/체험) 콘텐츠 안내용. KOPIS 공연은 비워둠(실제 옵션 선택은 외부 예매)
+Table performance_options {
+  id             bigint [pk, increment]
+  performance_id bigint [not null, ref: > performances.id]
+  name           varchar(100) [not null, note: '코스 | 의상 사이즈 | 메이크업']
+  description    text
+  extra_price    decimal(10,2) [not null, default: 0]
+}
+
+// KOPIS 공연 기간/회차. 예매·좌석은 외부이므로 표시·일지 연결용
+Table performance_schedules {
+  id              bigint [pk, increment]
+  performance_id  bigint [not null, ref: > performances.id]
+  scheduled_at    timestamp [not null]
+  status          varchar(20) [not null, default: 'AVAILABLE', note: 'AVAILABLE | CANCELLED (좌석/잔여석은 외부에서 관리)']
+}
+
+
+// -----------------------------------------------
+// 찜 / 리뷰
+// -----------------------------------------------
+
+// 찜 대상: 공연 또는 장소(유저 등록 장소 포함). 둘 중 정확히 하나만 채움(앱/CHECK로 검증)
+Table wishlists {
+  id             bigint [pk, increment]
+  user_id        bigint [not null, ref: > users.id]
+  performance_id bigint [ref: > performances.id, note: '공연 찜 (둘 중 하나)']
+  venue_id       bigint [ref: > venues.id, note: '장소 찜 (둘 중 하나)']
+  created_at     timestamp [not null, default: `now()`]
+
+  indexes {
+    (user_id, performance_id) [unique]
+    (user_id, venue_id) [unique]
+  }
+}
+
+// 리뷰 작성 권한: 현재는 로그인만 하면 가능 (예약 검증은 협업 후 단계)
+// 리뷰 대상: 공연 또는 장소. 둘 중 정확히 하나만 채움(앱/CHECK로 검증)
+Table reviews {
+  id             bigint [pk, increment]
+  user_id        bigint [not null, ref: > users.id]
+  performance_id bigint [ref: > performances.id, note: '공연 리뷰 (둘 중 하나)']
+  venue_id       bigint [ref: > venues.id, note: '장소 리뷰 (둘 중 하나)']
+  rating         int [not null, note: '1~5']
+  content        text
+  created_at     timestamp [not null, default: `now()`]
+  updated_at     timestamp [not null, default: `now()`, note: '수정 시 갱신 → avg_rating 재계산 트리거']
+}
+
+// -----------------------------------------------
+// 방문자 코멘트 태그 (장소 전체 집계 태그: "분위기 좋음 N명")
+// -----------------------------------------------
+
+// 선택 가능한 태그 마스터 (운영자가 정의)
+Table comment_tags {
+  id        bigint [pk, increment]
+  name      varchar(30) [not null, unique, note: '분위기 좋음 | 야경 최고 | 재방문 의사 등']
+  status    varchar(20) [not null, default: 'ACTIVE', note: 'ACTIVE | INACTIVE']
+}
+
+// 사용자가 특정 장소(또는 공연)에 태그를 선택한 기록. COUNT로 "N명 선택" 집계
+// 인덱스: 한 사용자가 같은 대상에 같은 태그를 중복 선택 못하도록 (NULL 포함 → 실DDL은 조건부 인덱스)
+Table content_tag_votes {
+  id             bigint [pk, increment]
+  comment_tag_id bigint [not null, ref: > comment_tags.id]
+  user_id        bigint [not null, ref: > users.id]
+  performance_id bigint [ref: > performances.id, note: '공연 대상 (둘 중 하나)']
+  venue_id       bigint [ref: > venues.id, note: '장소 대상 (둘 중 하나)']
+  created_at     timestamp [not null, default: `now()`]
+
+  indexes {
+    (comment_tag_id, user_id, performance_id) [unique]
+    (comment_tag_id, user_id, venue_id) [unique]
+  }
+}
+
+
+// -----------------------------------------------
+// 추천 코스 (우리가 큐레이션한 템플릿)
+// -----------------------------------------------
+
+Table curated_courses {
+  id              bigint [pk, increment]
+  title           varchar(150) [not null]
+  description     text
+  theme           varchar(50) [note: '한복나들이 | 미식투어 | 반나절코스 등']
+  cover_image_url varchar(500)
+  duration_hours  decimal(4,1) [note: '예상 소요 시간']
+  status          varchar(20) [not null, default: 'ACTIVE', note: 'ACTIVE | INACTIVE']
+  created_at      timestamp [not null, default: `now()`]
+}
+
+// 추천 코스 구성 항목. performance_id 또는 venue_id 중 하나로 지정
+Table curated_course_items {
+  id               bigint [pk, increment]
+  course_id        bigint [not null, ref: > curated_courses.id]
+  performance_id   bigint [ref: > performances.id, note: '행사/관람 (둘 중 하나)']
+  venue_id         bigint [ref: > venues.id, note: '장소 직접 지정 (둘 중 하나)']
+  sort_order       int [not null, default: 0, note: '방문 순서(동선)']
+  recommended_time varchar(20) [note: '예: 오전 / 14:00']
+  note             text
+}
+
+
+// -----------------------------------------------
+// 여행 일지 (사용자의 실제 일정)
+// -----------------------------------------------
+
+Table itineraries {
+  id               bigint [pk, increment]
+  user_id          bigint [not null, ref: > users.id]
+  title            varchar(150) [not null]
+  start_date       date [not null]
+  end_date         date [not null]
+  source_type      varchar(20) [not null, default: 'CUSTOM', note: 'CUSTOM(직접) | CURATED(추천코스 복사)']
+  source_course_id bigint [ref: > curated_courses.id, note: 'CURATED일 때 원본 코스(복사 후 독립)']
+  created_at       timestamp [not null, default: `now()`]
+  updated_at       timestamp [not null, default: `now()`]
+}
+
+// 일지 안의 개별 일정 항목. performance_id 또는 venue_id 중 하나
+Table itinerary_items {
+  id             bigint [pk, increment]
+  itinerary_id   bigint [not null, ref: > itineraries.id]
+  performance_id bigint [ref: > performances.id, note: '행사/관람 (둘 중 하나)']
+  venue_id       bigint [ref: > venues.id, note: '장소 직접 지정 (둘 중 하나)']
+  visit_date     date [not null]
+  sort_order     int [not null, default: 0, note: '그날의 방문 순서(동선)']
+  planned_time   varchar(20) [note: '예: 14:00']
+  memo           text
+  created_at     timestamp [not null, default: `now()`]
+}
+
+
+// -----------------------------------------------
+// KOPIS 동기화 로그 (운영/디버깅: 배치가 언제 돌았고 성공했나)
+// -----------------------------------------------
+
+Table sync_logs {
+  id            bigint [pk, increment]
+  provider      varchar(20) [not null, default: 'KOPIS', note: 'KOPIS | TOURAPI — 어느 OpenAPI 동기화 배치인지']
+  target_type   varchar(20) [not null, note: 'PERFORMANCE | VENUE']
+  started_at    timestamp [not null]
+  finished_at   timestamp
+  processed_cnt int [not null, default: 0, note: '처리(upsert)한 건수']
+  status        varchar(20) [not null, note: 'SUCCESS | PARTIAL | FAILED']
+  message       text [note: '실패 사유 / 비고']
+}
