@@ -8,8 +8,9 @@ import { colors, radius, space } from '@/lib/theme';
 type MenuItem = { icon: string; label: string; route?: string };
 const MENU: MenuItem[] = [
   { icon: 'bookmark-outline', label: '즐겨찾기', route: '/bookmarks' },
-  { icon: 'chatbox-ellipses-outline', label: '내가 쓴 리뷰' },
-  { icon: 'location-outline', label: '내가 등록한 장소' },
+  { icon: 'map-outline', label: '내 여행 일지', route: '/itinerary' },
+  { icon: 'chatbox-ellipses-outline', label: '내가 쓴 리뷰', route: '/my/reviews' },
+  { icon: 'location-outline', label: '내가 등록한 장소', route: '/my/venues' },
   { icon: 'help-circle-outline', label: '문의하기' },
   { icon: 'information-circle-outline', label: '서비스 정보' },
 ];
@@ -36,7 +37,7 @@ export default function ProfileScreen() {
         {/* 여행 계획 프로모 */}
         <View style={styles.promo}>
           <Text style={styles.promoText}>아직 여행 계획이 없어요.{'\n'}나만의 여행 루트를 만들어 볼까요?</Text>
-          <Pressable style={styles.promoBtn} onPress={() => router.push('/(tabs)/routes')}>
+          <Pressable style={styles.promoBtn} onPress={() => router.push('/itinerary/new')}>
             <Text style={styles.promoBtnText}>내 여행 계획 만들기</Text>
             <Ionicons name="chevron-forward" size={14} color={colors.white} />
           </Pressable>

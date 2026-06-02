@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Venue } from '@/lib/api/types';
+import { useToggleWishlistMutation } from '@/lib/hooks/queries';
 import { useBookmarkStore } from '@/lib/store/bookmarkStore';
 import { colors, radius } from '@/lib/theme';
 import { Rating } from './Rating';
@@ -11,7 +12,14 @@ import { Rating } from './Rating';
 export function VenueRow({ venue }: { venue: Venue }) {
   const router = useRouter();
   const has = useBookmarkStore((s) => s.venueIds.includes(venue.id));
-  const toggle = useBookmarkStore((s) => s.toggle);
+  const toggleLocal = useBookmarkStore((s) => s.toggle);
+  const { add, remove } = useToggleWishlistMutation();
+
+  const toggle = (id: number) => {
+    const willAdd = !has;
+    toggleLocal(id);
+    (willAdd ? add : remove).mutate({ targetType: 'VENUE', targetId: id });
+  };
 
   return (
     <Pressable style={styles.row} onPress={() => router.push(`/venue/${venue.id}`)}>
