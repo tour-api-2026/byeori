@@ -13,3 +13,7 @@ docs/.verify-*.html
 # OS
 .DS_Store
 *.log
+
+# 검증 아티팩트
+.playwright-mcp/
+byeori-*.png
