@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: byeori-api
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/byeori}
+    username: ${POSTGRES_USER:byeori}
+    password: ${POSTGRES_PASSWORD:byeori}
+  jpa:
+    hibernate:
+      ddl-auto: none          # 스키마는 Flyway가 관리
+    open-in-view: false
+    properties:
+      hibernate.format_sql: true
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+server:
+  port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
