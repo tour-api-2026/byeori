@@ -14,6 +14,8 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
     @Query("update Venue v set v.avgRating = :avg, v.reviewCount = :cnt where v.id = :id")
     void updateRating(@Param("id") Long id, @Param("avg") BigDecimal avg, @Param("cnt") int cnt);
 
+    java.util.List<Venue> findByCreatedByUserIdOrderByCreatedAtDesc(Long userId);
+
     @Query("""
             select v from Venue v
             where v.status = 'ACTIVE' and v.visibility = 'PUBLIC'

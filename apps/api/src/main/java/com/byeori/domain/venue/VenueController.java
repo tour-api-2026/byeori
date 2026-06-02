@@ -38,6 +38,12 @@ public class VenueController {
         return ApiResponse.ok(PageResponse.of(result));
     }
 
+    @GetMapping("/mine")
+    public ApiResponse<List<VenueResponse>> mine(
+            @RequestHeader(name = "X-Demo-User-Id", defaultValue = "2") Long userId) {
+        return ApiResponse.ok(service.listMine(userId));
+    }
+
     @GetMapping("/{id}")
     public ApiResponse<VenueDetailResponse> detail(@PathVariable("id") Long id) {
         return ApiResponse.ok(service.detail(id));

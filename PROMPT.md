@@ -30,13 +30,13 @@
 - [x] `global/content/ContentType` 값객체 + 공용 검증
 
 ### 프론트엔드 (Figma 반영)
-- [ ] 장소 등록 폼 `app/venue/register.tsx` (→ POST /venues)
-- [ ] 여행 루트 편집 `app/itinerary/[id].tsx` + 생성 (일자별 타임라인, 항목 추가/삭제)
-- [ ] 마이페이지 "내 리뷰 목록" `app/my/reviews.tsx`
-- [ ] 마이페이지 "내가 등록한 장소" `app/my/venues.tsx`
-- [ ] 리뷰 작성 화면/모달 (장소 상세 "코멘트 작성"에서 진입)
-- [ ] 즐겨찾기를 `/wishlists` API와 연동(현재 로컬 zustand → 서버 동기화, 로컬 폴백 유지)
-- [ ] 신규 API용 훅을 `src/lib/hooks/queries.ts`에 `use...Query`/`use...Mutation`으로 추가
+- [x] 장소 등록 폼 `app/venue/register.tsx` (→ POST /venues)
+- [x] 여행 루트 편집 `app/itinerary/[id].tsx` + 생성 (일자별 타임라인, 항목 추가/삭제)
+- [x] 마이페이지 "내 리뷰 목록" `app/my/reviews.tsx`
+- [x] 마이페이지 "내가 등록한 장소" `app/my/venues.tsx`
+- [x] 리뷰 작성 화면/모달 (장소 상세 "코멘트 작성"에서 진입)
+- [x] 즐겨찾기를 `/wishlists` API와 연동(현재 로컬 zustand → 서버 동기화, 로컬 폴백 유지)
+- [x] 신규 API용 훅을 `src/lib/hooks/queries.ts`에 `use...Query`/`use...Mutation`으로 추가
 
 ## 검증 (매 반복 끝에 실행)
 ```

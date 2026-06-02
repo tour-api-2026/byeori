@@ -33,6 +33,10 @@ public class VenueService {
         return VenueDetailResponse.from(v);
     }
 
+    public java.util.List<VenueResponse> listMine(Long userId) {
+        return repo.findByCreatedByUserIdOrderByCreatedAtDesc(userId).stream().map(VenueResponse::from).toList();
+    }
+
     @Transactional
     public VenueDetailResponse createUserVenue(Long userId, VenueCreateRequest req) {
         if (req.name() == null || req.address() == null || req.lat() == null || req.lng() == null) {
