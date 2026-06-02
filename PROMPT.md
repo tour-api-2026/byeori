@@ -24,7 +24,7 @@
 ### 백엔드
 - [x] review 도메인: `GET /reviews?targetType=&targetId=`, `POST/PATCH/DELETE /reviews`, `GET /users/me/reviews` + avg_rating 동기 재계산
 - [x] wishlist 도메인: `GET /users/me/wishlists`, `POST/DELETE /wishlists`
-- [ ] itinerary 도메인: `GET /users/me/itineraries`, `POST/GET/PATCH/DELETE /itineraries`, 항목 `POST/PATCH/DELETE /itineraries/{id}/items`, CURATED 복사
+- [x] itinerary 도메인: `GET /users/me/itineraries`, `POST/GET/PATCH/DELETE /itineraries`, 항목 `POST/PATCH/DELETE /itineraries/{id}/items`, CURATED 복사
 - [ ] venue 등록/수정/삭제(USER) + `POST /venues/{id}/reports`
 - [ ] content-tag 집계 `GET /content-tags?...` + 투표 `POST/DELETE /content-tag-votes`
 - [x] `global/content/ContentType` 값객체 + 공용 검증
