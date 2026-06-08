@@ -1,14 +1,30 @@
 import axios from 'axios';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-// 데모: 웹은 localhost, 네이티브 기기는 LAN IP로 교체 필요
-const HOST = Platform.OS === 'web' ? 'localhost' : 'localhost';
-export const API_BASE = `http://${HOST}:8080/api/v1`;
+// 실기기(Expo Go)에서는 dev 머신의 IP로 API를 호출해야 한다.
+// Expo가 알려주는 hostUri(예: "192.168.0.5:8081")에서 호스트를 추출해 :8080에 붙인다.
+function resolveHost(): string {
+  if (Platform.OS === 'web') return 'localhost';
+  const hostUri =
+    Constants.expoConfig?.hostUri ??
+    (Constants as any).expoGoConfig?.debuggerHost ??
+    (Constants as any).manifest2?.extra?.expoGo?.debuggerHost ??
+    '';
+  const host = String(hostUri).split(':')[0];
+  return host || 'localhost';
+}
+
+// 빌드 시 EXPO_PUBLIC_API_URL이 주입되면(설치형 APK·터널) 그 주소를 우선 사용,
+// 아니면 dev(Expo Go/LAN)에서 호스트를 추론한다.
+export const API_BASE =
+  process.env.EXPO_PUBLIC_API_URL ?? `http://${resolveHost()}:8080/api/v1`;
 
 export const api = axios.create({
   baseURL: API_BASE,
-  headers: { 'Accept-Language': 'ko' },
-  timeout: 10000,
+  // bypass-tunnel-reminder: localtunnel(loca.lt) 안내 페이지 우회(데모 빌드용)
+  headers: { 'Accept-Language': 'ko', 'bypass-tunnel-reminder': 'true' },
+  timeout: 15000,
 });
 
 // 공통 응답 봉투 { success, data, error } → data 언랩

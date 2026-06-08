@@ -3,10 +3,19 @@ import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Calendar } from '@/components/Calendar';
 import {
   useCreateItineraryMutation, useItineraryItemMutation, useItineraryQuery, useVenuesQuery,
 } from '@/lib/hooks/queries';
 import { colors, radius, shadow, space } from '@/lib/theme';
+
+// 'YYYY-MM-DD' 두 날짜의 일수 차이(일차 계산용)
+function dayIndex(start: string, date: string): number {
+  const a = new Date(start + 'T00:00:00');
+  const b = new Date(date + 'T00:00:00');
+  return Math.round((b.getTime() - a.getTime()) / 86400000) + 1;
+}
 
 export default function ItineraryEditScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -16,36 +25,62 @@ export default function ItineraryEditScreen() {
 
 function CreateForm() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const create = useCreateItineraryMutation();
   const [title, setTitle] = useState('');
-  const [startDate, setStartDate] = useState('2026-06-10');
-  const [endDate, setEndDate] = useState('2026-06-11');
+  const [startDate, setStartDate] = useState<string | null>(null);
+  const [endDate, setEndDate] = useState<string | null>(null);
+
+  // 달력 탭 동작: 시작/종료를 순서대로 고른다.
+  const onSelect = (date: string) => {
+    if (!startDate || (startDate && endDate)) {
+      setStartDate(date);
+      setEndDate(null);
+    } else if (date < startDate) {
+      setStartDate(date);
+    } else {
+      setEndDate(date);
+    }
+  };
+
+  const nights = startDate && endDate ? dayIndex(startDate, endDate) - 1 : 0;
+  const canSubmit = !!title && !!startDate && !!endDate && !create.isPending;
 
   return (
     <View style={styles.safe}>
       <Stack.Screen options={{ title: '새 여행 일지' }} />
-      <View style={{ padding: space.lg }}>
+      <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 40 + insets.bottom }}>
         <Text style={styles.label}>일지 제목</Text>
         <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="예) 서울 1박 2일 한복 나들이" placeholderTextColor={colors.textFaint} />
-        <Text style={styles.label}>시작일</Text>
-        <TextInput style={styles.input} value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" placeholderTextColor={colors.textFaint} />
-        <Text style={styles.label}>종료일</Text>
-        <TextInput style={styles.input} value={endDate} onChangeText={setEndDate} placeholder="YYYY-MM-DD" placeholderTextColor={colors.textFaint} />
+
+        <Text style={styles.label}>여행 기간</Text>
+        <Text style={styles.rangeHint}>
+          {!startDate ? '달력에서 시작일을 선택하세요'
+            : !endDate ? '종료일을 선택하세요'
+            : `${startDate} ~ ${endDate} · ${nights}박 ${dayIndex(startDate, endDate)}일`}
+        </Text>
+        <Calendar rangeStart={startDate} rangeEnd={endDate} onSelectDate={onSelect} />
+
         <Pressable
-          style={[styles.cta, !title && styles.disabled]}
-          disabled={!title || create.isPending}
-          onPress={() => create.mutate({ title, startDate, endDate, sourceType: 'CUSTOM' }, { onSuccess: (d) => router.replace(`/itinerary/${d.id}`) })}>
+          style={[styles.cta, !canSubmit && styles.disabled]}
+          disabled={!canSubmit}
+          onPress={() => create.mutate(
+            { title, startDate: startDate!, endDate: endDate!, sourceType: 'CUSTOM' },
+            { onSuccess: (d) => router.replace(`/itinerary/${d.id}`) },
+          )}>
           <Text style={styles.ctaText}>{create.isPending ? '생성 중...' : '여행 일지 만들기'}</Text>
         </Pressable>
-      </View>
+      </ScrollView>
     </View>
   );
 }
 
 function Editor({ id }: { id: number }) {
+  const insets = useSafeAreaInsets();
   const { data, isLoading } = useItineraryQuery(id);
   const { add, remove } = useItineraryItemMutation(id);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const venues = useVenuesQuery({ size: 30 });
 
   if (isLoading || !data) return <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>;
@@ -54,18 +89,35 @@ function Editor({ id }: { id: number }) {
   const byDate: Record<string, typeof data.items> = {};
   data.items.forEach((it) => { (byDate[it.visitDate] ||= []).push(it); });
   const dates = Object.keys(byDate).sort();
+  const activeDay = selectedDay ?? data.startDate;
 
   return (
     <View style={styles.safe}>
       <Stack.Screen options={{ title: data.title }} />
-      <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 90 }}>
+      <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 90 + insets.bottom }}>
         <Text style={styles.h1}>{data.title}</Text>
         <Text style={styles.range}>{data.startDate} ~ {data.endDate} · {data.items.length}곳</Text>
 
+        {/* 여행 기간 달력 (일정 있는 날 ● 표시, 날짜 선택 시 그 날에 장소 추가) */}
+        <View style={{ marginTop: 14 }}>
+          <Calendar
+            min={data.startDate}
+            max={data.endDate}
+            initialMonth={data.startDate}
+            rangeStart={activeDay}
+            rangeEnd={activeDay}
+            marked={dates}
+            onSelectDate={setSelectedDay}
+          />
+          <Text style={styles.daySelInfo}>
+            선택: {activeDay} · {dayIndex(data.startDate, activeDay)}일차 — 추가하는 장소가 이 날짜에 들어갑니다
+          </Text>
+        </View>
+
         {dates.length === 0 && <Text style={styles.empty}>아직 일정이 없어요. 아래 + 로 장소를 추가하세요.</Text>}
-        {dates.map((d, di) => (
+        {dates.map((d) => (
           <View key={d} style={{ marginTop: 18 }}>
-            <Text style={styles.dayTitle}>{di + 1}일차 · {d}</Text>
+            <Text style={styles.dayTitle}>{dayIndex(data.startDate, d)}일차 · {d}</Text>
             {byDate[d].map((it) => (
               <View key={it.id} style={styles.stop}>
                 <Image source={it.imageUrl} style={styles.stopImg} contentFit="cover" />
@@ -83,7 +135,7 @@ function Editor({ id }: { id: number }) {
       </ScrollView>
 
       {/* FAB */}
-      <Pressable style={styles.fab} onPress={() => setPickerOpen(true)}>
+      <Pressable style={[styles.fab, { bottom: 24 + insets.bottom }]} onPress={() => setPickerOpen(true)}>
         <Ionicons name="add" size={28} color={colors.white} />
       </Pressable>
 
@@ -101,7 +153,7 @@ function Editor({ id }: { id: number }) {
                   key={v.id}
                   style={styles.pickRow}
                   onPress={() => {
-                    add.mutate({ targetType: 'VENUE', targetId: v.id, visitDate: data.startDate });
+                    add.mutate({ targetType: 'VENUE', targetId: v.id, visitDate: activeDay });
                     setPickerOpen(false);
                   }}>
                   <Image source={v.imageUrl} style={styles.pickImg} contentFit="cover" />
@@ -125,6 +177,8 @@ const styles = StyleSheet.create({
   cta: { backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 16, alignItems: 'center', marginTop: 24 },
   disabled: { backgroundColor: colors.textFaint },
   ctaText: { color: colors.white, fontSize: 15, fontWeight: '800' },
+  rangeHint: { fontSize: 13, color: colors.textSub, marginBottom: 10, fontWeight: '600' },
+  daySelInfo: { fontSize: 12, color: colors.textSub, marginTop: 8, fontWeight: '600' },
   h1: { fontSize: 22, fontWeight: '900', color: colors.text },
   range: { fontSize: 13, color: colors.textFaint, marginTop: 4 },
   empty: { fontSize: 14, color: colors.textFaint, marginTop: 24, textAlign: 'center' },

@@ -1,22 +1,46 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { colors } from '@/lib/theme';
+import { applyGlobalFont } from '@/lib/font';
+import { colors, fonts } from '@/lib/theme';
+
+applyGlobalFont();
 
 export default function RootLayout() {
   const [client] = useState(() => new QueryClient());
+  const [loaded] = useFonts({
+    'Pretendard-Regular': require('../../assets/fonts/Pretendard-Regular.ttf'),
+    'Pretendard-Medium': require('../../assets/fonts/Pretendard-Medium.ttf'),
+    'Pretendard-SemiBold': require('../../assets/fonts/Pretendard-SemiBold.ttf'),
+    'Pretendard-Bold': require('../../assets/fonts/Pretendard-Bold.ttf'),
+  });
+
+  useEffect(() => {
+    if (loaded) applyGlobalFont();
+  }, [loaded]);
+
+  if (!loaded) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
 
   return (
     <QueryClientProvider client={client}>
       <SafeAreaProvider>
         <StatusBar style="dark" />
-        <Stack screenOptions={{ headerTintColor: colors.text, headerStyle: { backgroundColor: colors.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: colors.bg } }}>
+        <Stack
+          screenOptions={{
+            headerTintColor: colors.text,
+            headerStyle: { backgroundColor: colors.bg },
+            headerTitleStyle: { fontFamily: fonts.bold, color: colors.text },
+            headerShadowVisible: false,
+            contentStyle: { backgroundColor: colors.bg },
+          }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="venue/[id]" options={{ headerShown: false }} />
-          <Stack.Screen name="login" options={{ title: '로그인', presentation: 'modal' }} />
-          <Stack.Screen name="onboarding" options={{ title: '취향 조사' }} />
+          <Stack.Screen name="login" options={{ headerShown: false, presentation: 'modal' }} />
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
           <Stack.Screen name="bookmarks" options={{ title: '즐겨찾기' }} />
         </Stack>
       </SafeAreaProvider>

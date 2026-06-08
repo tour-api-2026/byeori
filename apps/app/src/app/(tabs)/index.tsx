@@ -1,101 +1,112 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Chip } from '@/components/Chip';
-import { Rating } from '@/components/Rating';
 import { SectionHeader } from '@/components/SectionHeader';
 import { VenueCard } from '@/components/VenueCard';
+import { Venue } from '@/lib/api/types';
 import { usePerformancesQuery, useVenuesQuery } from '@/lib/hooks/queries';
-import { colors, radius, shadow, space } from '@/lib/theme';
+import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
-const KEYWORDS = ['전체', '한복', '카페', '체험', '문화', '맛집'];
+const KEYWORDS = ['전체', '문화', '카페', '체험', '맛집'];
+const REGIONS = ['전체', '종로구', '중구', '용산구'];
 
 export default function HomeScreen() {
   const router = useRouter();
   const [keyword, setKeyword] = useState('전체');
+  const [region, setRegion] = useState('전체');
 
   const banner = usePerformancesQuery({ state: 'ONGOING', size: 5 });
-  const recommended = useVenuesQuery({ size: 10 });
-  const keyworded = useVenuesQuery({ category: keyword === '전체' ? undefined : keyword, size: 10 });
-  const recent = usePerformancesQuery({ size: 10 });
+  const recommended = useVenuesQuery({ size: 6 });
+  const keyworded = useVenuesQuery({ category: keyword === '전체' ? undefined : keyword, size: 6 });
+  const all = useVenuesQuery({ size: 50 });
 
   const top = banner.data?.content?.[0];
+  const regionVenues = useMemo(() => {
+    const list = all.data?.content ?? [];
+    return (region === '전체' ? list : list.filter((v) => v.address?.includes(region))).slice(0, 4);
+  }, [all.data, region]);
+  const recent = (all.data?.content ?? []).slice(-4).reverse();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-        {/* 헤더 */}
-        <View style={styles.header}>
-          <Text style={styles.logo}>벼리</Text>
-          <Pressable onPress={() => router.push('/login')}>
-            <Ionicons name="person-circle-outline" size={28} color={colors.text} />
-          </Pressable>
-        </View>
+        {/* 헤더 (중앙 타이틀) */}
+        <View style={styles.header}><Text style={styles.title}>벼리</Text></View>
+
+        {/* 검색창 */}
         <Pressable style={styles.search} onPress={() => router.push('/search')}>
-          <Ionicons name="search" size={18} color={colors.textFaint} />
+          <Ionicons name="search" size={18} color={colors.accent} />
           <Text style={styles.searchText}>전통 매장·코스를 검색해보세요</Text>
         </Pressable>
 
-        {/* 오늘의 추천 배너 */}
+        {/* 오늘의 추천 (히어로) */}
         <View style={styles.section}>
           <SectionHeader title="오늘의 추천" />
           {top ? (
-            <Pressable style={styles.banner} onPress={() => router.push(`/venue/${top.venueId}`)}>
-              <Image source={top.posterImageUrl} style={styles.bannerImg} contentFit="cover" transition={250} />
-              <View style={styles.bannerOverlay}>
-                <View style={styles.bannerBadge}><Text style={styles.bannerBadgeText}>{top.genre ?? '추천'}</Text></View>
-                <Text style={styles.bannerTitle} numberOfLines={2}>{top.title}</Text>
-                <Rating value={top.avgRating} count={top.reviewCount} />
+            <Pressable style={styles.hero} onPress={() => router.push(`/venue/${top.venueId}`)}>
+              <Image source={top.posterImageUrl} style={styles.heroImg} contentFit="cover" transition={250} />
+              <View style={styles.heroOverlay}>
+                <Text style={styles.heroTitle} numberOfLines={1}>{top.title}</Text>
+                <Text style={styles.heroSub} numberOfLines={1}>{top.genre ?? '추천 행사'} · 지금 만나보세요</Text>
+                <View style={styles.heroBtn}><Text style={styles.heroBtnText}>보러가기</Text></View>
               </View>
             </Pressable>
-          ) : (
-            <Loading />
-          )}
+          ) : <Loading />}
         </View>
 
         {/* 맞춤 추천 */}
         <View style={styles.section}>
           <SectionHeader title="맞춤 추천" onMore={() => router.push('/search')} />
-          {recommended.isLoading ? <Loading /> : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hList}>
-              {recommended.data?.content.map((v) => <VenueCard key={v.id} venue={v} />)}
-            </ScrollView>
-          )}
+          {recommended.isLoading ? <Loading /> : <Grid venues={recommended.data?.content ?? []} />}
         </View>
 
         {/* 키워드로 탐색 */}
         <View style={styles.section}>
-          <SectionHeader title="키워드로 탐색" />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chips}>
-            {KEYWORDS.map((k) => <Chip key={k} label={k} selected={k === keyword} onPress={() => setKeyword(k)} />)}
-          </ScrollView>
-          {keyworded.isLoading ? <Loading /> : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.hList, { marginTop: 12 }]}>
-              {keyworded.data?.content.length
-                ? keyworded.data.content.map((v) => <VenueCard key={v.id} venue={v} />)
-                : <Text style={styles.empty}>해당 키워드의 장소가 아직 없어요</Text>}
-            </ScrollView>
-          )}
+          <SectionHeader title="키워드로 탐색" onMore={() => router.push('/search')} />
+          <Chips items={KEYWORDS} value={keyword} onChange={setKeyword} />
+          {keyworded.isLoading
+            ? <Loading />
+            : (keyworded.data?.content.length
+              ? <Grid venues={keyworded.data.content} />
+              : <Text style={styles.empty}>해당 키워드의 장소가 아직 없어요</Text>)}
         </View>
 
-        {/* 최근 콘텐츠 */}
+        {/* 지역으로 탐색 */}
         <View style={styles.section}>
-          <SectionHeader title="최근 콘텐츠" onMore={() => router.push('/routes')} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hList}>
-            {recent.data?.content.map((p) => (
-              <Pressable key={p.id} style={styles.perfCard} onPress={() => router.push(`/venue/${p.venueId}`)}>
-                <Image source={p.posterImageUrl} style={styles.perfImg} contentFit="cover" transition={200} />
-                <Text style={styles.perfTitle} numberOfLines={1}>{p.title}</Text>
-                <Rating value={p.avgRating} count={p.reviewCount} />
-              </Pressable>
-            ))}
-          </ScrollView>
+          <SectionHeader title="지역으로 탐색" onMore={() => router.push('/search')} />
+          <Chips items={REGIONS} value={region} onChange={setRegion} />
+          {regionVenues.length
+            ? <Grid venues={regionVenues} />
+            : <Text style={styles.empty}>해당 지역의 장소가 아직 없어요</Text>}
+        </View>
+
+        {/* 최근 본 장소 */}
+        <View style={styles.section}>
+          <SectionHeader title="최근 본 장소" onMore={() => router.push('/search')} />
+          <Grid venues={recent} />
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function Grid({ venues }: { venues: Venue[] }) {
+  return (
+    <View style={styles.grid}>
+      {venues.map((v) => <VenueCard key={v.id} venue={v} />)}
+    </View>
+  );
+}
+
+function Chips({ items, value, onChange }: { items: string[]; value: string; onChange: (s: string) => void }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chips}>
+      {items.map((k) => <Chip key={k} label={k} selected={k === value} onPress={() => onChange(k)} />)}
+    </ScrollView>
   );
 }
 
@@ -105,26 +116,25 @@ function Loading() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.lg, paddingTop: 8, paddingBottom: 4 },
-  logo: { fontSize: 24, fontWeight: '900', color: colors.primary, letterSpacing: -0.5 },
+  header: { alignItems: 'center', paddingTop: 10, paddingBottom: 6 },
+  title: { fontSize: 20, fontFamily: fonts.bold, fontWeight: '800', color: colors.text, letterSpacing: 1 },
   search: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: space.lg, marginVertical: 10,
-    backgroundColor: colors.bgSoft, borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: space.lg, marginVertical: 8,
+    backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.accent, borderRadius: radius.pill,
+    paddingHorizontal: 16, paddingVertical: 11,
   },
   searchText: { color: colors.textFaint, fontSize: 14 },
-  section: { paddingHorizontal: space.lg, marginTop: 18 },
-  banner: { borderRadius: radius.lg, overflow: 'hidden', ...shadow.card },
-  bannerImg: { width: '100%', height: 168, backgroundColor: colors.bgSoft },
-  bannerOverlay: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 16, backgroundColor: 'rgba(0,0,0,0.32)' },
-  bannerBadge: { alignSelf: 'flex-start', backgroundColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 6 },
-  bannerBadgeText: { color: colors.white, fontSize: 11, fontWeight: '700' },
-  bannerTitle: { color: colors.white, fontSize: 19, fontWeight: '800', marginBottom: 6 },
-  hList: { gap: 12, paddingRight: 8 },
-  chipsScroll: { flexGrow: 0, flexShrink: 0 },
+  section: { paddingHorizontal: space.lg, marginTop: 22 },
+  hero: { borderRadius: radius.lg, overflow: 'hidden', ...shadow.card },
+  heroImg: { width: '100%', height: 180, backgroundColor: colors.bgSoft },
+  heroOverlay: { position: 'absolute', left: 0, right: 0, bottom: 0, top: 0, padding: 18, justifyContent: 'flex-end', backgroundColor: 'rgba(20,24,45,0.34)' },
+  heroTitle: { color: colors.white, fontSize: 20, fontFamily: fonts.bold, fontWeight: '800' },
+  heroSub: { color: 'rgba(255,255,255,0.9)', fontSize: 13, marginTop: 4 },
+  heroBtn: { alignSelf: 'flex-start', backgroundColor: colors.white, borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 8, marginTop: 12 },
+  heroBtnText: { color: colors.primary, fontSize: 13, fontFamily: fonts.bold, fontWeight: '800' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  chipsScroll: { flexGrow: 0, flexShrink: 0, marginBottom: 14 },
   chips: { gap: 8, paddingRight: 8, alignItems: 'center' },
-  empty: { color: colors.textFaint, fontSize: 13, paddingVertical: 20 },
-  perfCard: { width: 150 },
-  perfImg: { width: 150, height: 100, borderRadius: radius.md, backgroundColor: colors.bgSoft, marginBottom: 6 },
-  perfTitle: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 2 },
+  empty: { color: colors.textFaint, fontSize: 13, paddingVertical: 16 },
   loading: { paddingVertical: 30, alignItems: 'center' },
 });

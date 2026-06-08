@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "app",
+    "name": "벼리",
     "slug": "app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,6 +11,7 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.byeori.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -40,6 +41,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "55882a29-adab-4d08-991e-37e7e371a116"
+      }
+    },
+    "owner": "hidi_16"
   }
 }

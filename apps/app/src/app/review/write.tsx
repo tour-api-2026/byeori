@@ -2,11 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCreateReviewMutation } from '@/lib/hooks/queries';
 import { colors, radius, space } from '@/lib/theme';
 
 export default function ReviewWriteScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { targetType = 'VENUE', targetId, targetName } = useLocalSearchParams<{ targetType: string; targetId: string; targetName: string }>();
   const create = useCreateReviewMutation();
   const [rating, setRating] = useState(5);
@@ -20,7 +22,7 @@ export default function ReviewWriteScreen() {
   };
 
   return (
-    <View style={styles.safe}>
+    <View style={[styles.safe, { paddingBottom: space.lg + insets.bottom }]}>
       <Stack.Screen options={{ title: '리뷰 작성' }} />
       {!!targetName && <Text style={styles.target}>{targetName}</Text>}
 

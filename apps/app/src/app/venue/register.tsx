@@ -1,6 +1,7 @@
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Chip } from '@/components/Chip';
 import { useCreateVenueMutation } from '@/lib/hooks/queries';
 import { colors, radius, space } from '@/lib/theme';
@@ -9,6 +10,7 @@ const CATEGORIES = ['한복', '메이크업', '체험', '카페', '맛집', '음
 
 export default function VenueRegisterScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const create = useCreateVenueMutation();
   const [form, setForm] = useState({
     name: '', address: '', category: '카페', phone: '', homepageUrl: '', operatingHours: '', imageUrl: '', description: '',
@@ -31,7 +33,7 @@ export default function VenueRegisterScreen() {
   };
 
   return (
-    <ScrollView style={styles.safe} contentContainerStyle={{ padding: space.lg, paddingBottom: 40 }}>
+    <ScrollView style={styles.safe} contentContainerStyle={{ padding: space.lg, paddingBottom: 40 + insets.bottom }}>
       <Stack.Screen options={{ title: '장소 등록' }} />
       <Field label="장소 이름 *" value={form.name} onChange={(v) => set('name', v)} placeholder="장소 이름을 입력하세요" />
       <Field label="주소 *" value={form.address} onChange={(v) => set('address', v)} placeholder="도로명 주소를 입력하세요" />

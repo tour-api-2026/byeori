@@ -1,12 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors } from '@/lib/theme';
+import { colors, fonts } from '@/lib/theme';
 
-export function Rating({ value, count }: { value: number; count?: number }) {
+// 골드 별 5개 + 평점 숫자 (Figma 리디자인)
+export function Rating({ value, count, size = 12 }: { value: number; count?: number; size?: number }) {
+  const v = Number(value) || 0;
+  const full = Math.round(v);
   return (
     <View style={styles.row}>
-      <Ionicons name="star" size={12} color={colors.star} />
-      <Text style={styles.value}>{Number(value).toFixed(1)}</Text>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Ionicons key={n} name={n <= full ? 'star' : 'star-outline'} size={size} color={colors.star} />
+      ))}
+      <Text style={[styles.value, { fontSize: size }]}>{v.toFixed(1)}</Text>
       {count != null && <Text style={styles.count}>({count.toLocaleString()})</Text>}
     </View>
   );
@@ -14,6 +19,6 @@ export function Rating({ value, count }: { value: number; count?: number }) {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  value: { fontSize: 12, fontWeight: '700', color: colors.text },
+  value: { fontFamily: fonts.semibold, fontWeight: '600', color: colors.textSub, marginLeft: 3 },
   count: { fontSize: 11, color: colors.textFaint, marginLeft: 2 },
 });

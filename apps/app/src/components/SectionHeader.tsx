@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors } from '@/lib/theme';
+import { colors, fonts } from '@/lib/theme';
 
 export function SectionHeader({ title, onMore }: { title: string; onMore?: () => void }) {
   return (
@@ -18,7 +18,7 @@ export function SectionHeader({ title, onMore }: { title: string; onMore?: () =>
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  title: { fontSize: 18, fontWeight: '800', color: colors.text },
+  title: { fontSize: 18, fontFamily: fonts.bold, fontWeight: '800', color: colors.text },
   more: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   moreText: { fontSize: 12, color: colors.textFaint },
 });

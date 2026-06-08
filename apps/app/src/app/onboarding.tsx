@@ -1,12 +1,14 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, space } from '@/lib/theme';
 
 const INTERESTS = ['한복', '음식', '체험', '문화', '공연'];
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<string[]>([]);
 
   const toggle = (i: string) =>
@@ -28,7 +30,7 @@ export default function OnboardingScreen() {
           );
         })}
       </View>
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: space.lg + insets.bottom }]}>
         <Pressable
           style={[styles.cta, selected.length === 0 && styles.ctaDisabled]}
           disabled={selected.length === 0}

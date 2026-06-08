@@ -22,3 +22,6 @@ byeori-*.png
 .claude/ralph-loop.local.md
 .claude/.ralph-loop*
 .gstack/
+
+# 로컬 API 터널 임시 스크립트
+apps/app/apitun.mjs
