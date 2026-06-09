@@ -30,7 +30,8 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files (secrets — .env.example만 커밋)
+.env
 .env*.local
 
 # typescript

@@ -26,10 +26,14 @@ function buildHtml(key: string): string {
        font-family:-apple-system,system-ui,sans-serif;border:2px solid #fff}
 </style></head>
 <body><div id="map"></div>
-<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false"></script>
+<script>
+  function post(msg){ try{ if(window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(msg)); }catch(e){} }
+  window.onerror = function(m){ post({type:'error', msg:String(m)}); };
+</script>
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false"
+  onerror="post({type:'error', msg:'카카오 SDK 스크립트 로드 실패'})"></script>
 <script>
   var map, overlays=[], ready=false, pending=null;
-  function post(msg){ if(window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(msg)); }
   function sel(id){ post({type:'select', id:id}); }
   window.sel = sel;
   function clear(){ overlays.forEach(function(o){o.setMap(null)}); overlays=[]; }
@@ -66,6 +70,7 @@ export default function MapScreen() {
   const [selected, setSelected] = useState<Venue | null>(null);
   const webRef = useRef<WebView>(null);
   const [ready, setReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
 
   const { data } = useVenuesQuery({
     category: cat === '전체' ? undefined : cat,
@@ -108,7 +113,8 @@ export default function MapScreen() {
   const onMessage = (e: { nativeEvent: { data: string } }) => {
     try {
       const msg = JSON.parse(e.nativeEvent.data);
-      if (msg.type === 'ready') setReady(true);
+      if (msg.type === 'ready') { setReady(true); setMapError(null); }
+      if (msg.type === 'error') setMapError(String(msg.msg));
       if (msg.type === 'select') {
         const v = venues.find((x) => x.id === msg.id);
         if (v) setSelected(v);
@@ -141,16 +147,27 @@ export default function MapScreen() {
 
       {/* 카카오 지도 */}
       <View style={styles.map}>
-        {KAKAO_JS_KEY ? (
-          <WebView
-            ref={webRef}
-            originWhitelist={['*']}
-            source={{ html: buildHtml(KAKAO_JS_KEY), baseUrl: 'https://localhost' }}
-            onMessage={onMessage}
-            javaScriptEnabled
-            domStorageEnabled
-            style={{ flex: 1, backgroundColor: '#EAF0E6' }}
-          />
+        {KAKAO_JS_KEY && !mapError ? (
+          <>
+            <WebView
+              ref={webRef}
+              originWhitelist={['*']}
+              source={{ html: buildHtml(KAKAO_JS_KEY), baseUrl: 'https://localhost' }}
+              onMessage={onMessage}
+              javaScriptEnabled
+              domStorageEnabled
+              mixedContentMode="always"
+              setSupportMultipleWindows={false}
+              onError={(e) => setMapError('WebView 오류: ' + e.nativeEvent.description)}
+              onHttpError={(e) => setMapError('HTTP 오류: ' + e.nativeEvent.statusCode)}
+              style={{ flex: 1, backgroundColor: '#EAF0E6' }}
+            />
+            {!ready && (
+              <View style={styles.mapOverlay} pointerEvents="none">
+                <Text style={styles.mapOverlayText}>{mapError ?? '지도 불러오는 중…'}</Text>
+              </View>
+            )}
+          </>
         ) : (
           // 카카오 키 미설정 시 폴백: 좌표 정규화 핀 오버레이
           <View style={styles.fallback}>
@@ -201,6 +218,8 @@ const styles = StyleSheet.create({
   chipsScroll: { flexGrow: 0, flexShrink: 0 },
   chips: { gap: 8, paddingHorizontal: space.lg, paddingVertical: 10, alignItems: 'center' },
   map: { flex: 1, margin: space.lg, marginTop: 0, borderRadius: radius.lg, backgroundColor: '#EAF0E6', overflow: 'hidden' },
+  mapOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', padding: 20 },
+  mapOverlayText: { fontSize: 13, color: colors.textSub, textAlign: 'center', fontFamily: fonts.medium, fontWeight: '500' },
   fallback: { flex: 1 },
   grid: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#E7EEE2' },
   mapHint: { position: 'absolute', top: 10, left: 12, fontSize: 11, color: '#7C8B72', fontWeight: '700' },
