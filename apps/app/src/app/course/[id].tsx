@@ -1,16 +1,32 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useCourseDetailQuery } from '@/lib/hooks/queries';
-import { colors, radius, space } from '@/lib/theme';
+import { useCourseDetailQuery, useCreateItineraryMutation } from '@/lib/hooks/queries';
+import { colors, fonts, radius, space } from '@/lib/theme';
+
+const pad = (n: number) => String(n).padStart(2, '0');
+function todayIso() { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
 
 export default function CourseDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data, isLoading } = useCourseDetailQuery(Number(id));
+  const create = useCreateItineraryMutation();
+
+  const copyToItinerary = () => {
+    if (!data) return;
+    const today = todayIso();
+    create.mutate(
+      { title: data.title, startDate: today, endDate: today, sourceType: 'CURATED', sourceCourseId: data.id },
+      {
+        onSuccess: (it) => router.push(`/itinerary/${it.id}`),
+        onError: (e: any) => Alert.alert('담기 실패', e?.message ?? '오류'),
+      },
+    );
+  };
 
   return (
     <View style={styles.safe}>
@@ -51,7 +67,9 @@ export default function CourseDetailScreen() {
             ))}
           </View>
 
-          <Pressable style={styles.cta}><Text style={styles.ctaText}>내 여행 일지로 담기</Text></Pressable>
+          <Pressable style={[styles.cta, create.isPending && { opacity: 0.6 }]} disabled={create.isPending} onPress={copyToItinerary}>
+            <Text style={styles.ctaText}>{create.isPending ? '담는 중...' : '내 루트로 담기'}</Text>
+          </Pressable>
         </ScrollView>
       )}
     </View>
