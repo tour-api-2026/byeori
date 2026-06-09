@@ -1,96 +1,168 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { SectionHeader } from '@/components/SectionHeader';
-import { useCoursesQuery, useMyItinerariesQuery } from '@/lib/hooks/queries';
+import { ItinerarySummary } from '@/lib/api/itineraries';
+import { useItineraryQuery, useMyItinerariesQuery } from '@/lib/hooks/queries';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
+
+const pad = (n: number) => String(n).padStart(2, '0');
+function todayIso() { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+function dayLabel(start: string, end: string) {
+  const t = todayIso();
+  if (t < start) return { big: 'D-' + Math.round((+new Date(start) - +new Date(t)) / 86400000), small: '여행 전' };
+  if (t > end) return { big: '완료', small: '지난 여행' };
+  const n = Math.round((+new Date(t + 'T00:00:00') - +new Date(start + 'T00:00:00')) / 86400000) + 1;
+  return { big: `${n}일차`, small: '오늘' };
+}
 
 export default function RoutesScreen() {
   const router = useRouter();
-  const courses = useCoursesQuery();
   const mine = useMyItinerariesQuery();
+  const list = mine.data ?? [];
+  const featured = list[0];
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <Text style={styles.h1}>루트</Text>
-      <ScrollView contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-        {/* 루트 만들기 CTA */}
-        <Pressable style={styles.create} onPress={() => router.push('/itinerary/new')}>
-          <View style={styles.createIcon}><Ionicons name="add" size={22} color={colors.white} /></View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.createTitle}>새 여행 루트 만들기</Text>
-            <Text style={styles.createSub}>달력으로 일정을 짜고 장소를 담아보세요</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.white} />
-        </Pressable>
+      <Text style={styles.h1}>내 여행 루트</Text>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
+        {mine.isLoading ? <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} /> : (
+          <>
+            <Text style={styles.lead}>지금 나의 여행 루트는?</Text>
+            {featured ? <Featured summary={featured} /> : (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>아직 만든 여행 루트가 없어요</Text>
+              </View>
+            )}
 
-        {/* 내 여행 일지 */}
-        <View style={styles.section}>
-          <SectionHeader title="내 여행 일지" onMore={() => router.push('/itinerary')} />
-          {mine.isLoading ? <ActivityIndicator color={colors.primary} /> : (
-            mine.data?.length ? mine.data.slice(0, 3).map((it) => (
-              <Pressable key={it.id} style={styles.itinRow} onPress={() => router.push(`/itinerary/${it.id}`)}>
-                <View style={styles.itinIcon}><Ionicons name="map" size={18} color={colors.primary} /></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.itinTitle}>{it.title}</Text>
-                  <Text style={styles.itinMeta}>{it.startDate} ~ {it.endDate} · {it.itemCount}곳</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
-              </Pressable>
-            )) : <Text style={styles.empty}>아직 만든 여행 일지가 없어요</Text>
-          )}
-        </View>
+            <Pressable style={styles.addBtn} onPress={() => router.push('/itinerary/new')}>
+              <Text style={styles.addBtnText}>추가하기</Text>
+            </Pressable>
 
-        {/* 추천 루트 */}
-        <View style={styles.section}>
-          <SectionHeader title="추천 루트" />
-          {courses.isLoading ? <ActivityIndicator color={colors.primary} /> : (
-            <View style={{ gap: 16 }}>
-              {courses.data?.map((c) => (
-                <Pressable key={c.id} style={styles.card} onPress={() => router.push(`/course/${c.id}`)}>
-                  <Image source={c.coverImageUrl} style={styles.cover} contentFit="cover" transition={200} />
-                  <View style={styles.body}>
-                    <View style={styles.themeBadge}><Text style={styles.themeText}>{c.theme}</Text></View>
-                    <Text style={styles.title}>{c.title}</Text>
-                    <Text style={styles.desc} numberOfLines={2}>{c.description}</Text>
-                    <View style={styles.metaRow}>
-                      <Ionicons name="time-outline" size={14} color={colors.textFaint} />
-                      <Text style={styles.meta}>약 {c.durationHours}시간</Text>
-                      <Ionicons name="chevron-forward" size={16} color={colors.textFaint} style={{ marginLeft: 'auto' }} />
-                    </View>
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          )}
-        </View>
+            {list.map((it) => <RouteCard key={it.id} summary={it} />)}
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function Featured({ summary }: { summary: ItinerarySummary }) {
+  const router = useRouter();
+  const { data } = useItineraryQuery(summary.id);
+  const stops = (data?.items ?? []).slice(0, 3);
+  const d = dayLabel(summary.startDate, summary.endDate);
+
+  return (
+    <View style={styles.featured}>
+      <View style={styles.featuredLeft}>
+        <Text style={styles.featuredName} numberOfLines={2}>{summary.title}</Text>
+        <View style={{ alignItems: 'center', marginVertical: 12 }}>
+          <Text style={styles.featuredSmall}>{d.small}</Text>
+          <Text style={styles.featuredBig}>{d.big}</Text>
+        </View>
+        <Pressable style={styles.confirmBtn} onPress={() => router.push(`/itinerary/${summary.id}`)}>
+          <Text style={styles.confirmText}>전체 루트 확인</Text>
+          <Ionicons name="chevron-forward" size={13} color={colors.white} />
+        </Pressable>
+      </View>
+      <View style={styles.featuredRight}>
+        {stops.length ? stops.map((s, i, arr) => (
+          <View key={s.id} style={styles.tRow}>
+            <View style={styles.rail}>
+              {i > 0 && <View style={[styles.rLine, styles.rTop]} />}
+              {i < arr.length - 1 && <View style={[styles.rLine, styles.rBot]} />}
+              <View style={styles.tlNum}><Text style={styles.tlNumText}>{i + 1}</Text></View>
+            </View>
+            <Text style={styles.tlName} numberOfLines={1}>{s.name ?? '장소'}</Text>
+          </View>
+        )) : <Text style={styles.tlEmpty}>장소를 추가해보세요</Text>}
+      </View>
+    </View>
+  );
+}
+
+function RouteCard({ summary }: { summary: ItinerarySummary }) {
+  const router = useRouter();
+  const { data } = useItineraryQuery(summary.id);
+  const stops = data?.items ?? [];
+
+  const share = () => Share.share({ message: `[벼리] '${summary.title}' 여행 루트를 함께 보아요! (${summary.startDate} ~ ${summary.endDate})` });
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHead}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.cardTitle} numberOfLines={1}>{summary.title}</Text>
+          <Text style={styles.cardMeta}>{summary.itemCount}곳 · {summary.startDate} ~ {summary.endDate}</Text>
+        </View>
+        <Pressable style={styles.shareBtn} onPress={share}>
+          <Text style={styles.shareText}>공유하기</Text>
+        </Pressable>
+      </View>
+      <View style={styles.cardBody}>
+        {stops.length ? (
+          <View>
+            {stops.slice(0, 5).map((s, i, arr) => (
+              <View key={s.id} style={styles.tRow}>
+                <View style={styles.rail}>
+                  {i > 0 && <View style={[styles.rLine, styles.rTop]} />}
+                  {i < arr.length - 1 && <View style={[styles.rLine, styles.rBot]} />}
+                  <View style={styles.stopNum}><Text style={styles.stopNumText}>{i + 1}</Text></View>
+                </View>
+                <Text style={styles.stopName} numberOfLines={1}>{s.name ?? '장소'}</Text>
+              </View>
+            ))}
+          </View>
+        ) : <Text style={styles.stopEmpty}>아직 담은 장소가 없어요</Text>}
+        <Pressable style={styles.editBtn} onPress={() => router.push(`/itinerary/${summary.id}`)}>
+          <Text style={styles.editText}>루트 편집</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   h1: { fontSize: 17, fontFamily: fonts.bold, fontWeight: '800', color: colors.text, textAlign: 'center', paddingVertical: 14 },
-  create: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: space.lg, backgroundColor: colors.primary, borderRadius: radius.lg, padding: 16, ...shadow.card },
-  createIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
-  createTitle: { color: colors.white, fontSize: 15, fontFamily: fonts.bold, fontWeight: '800' },
-  createSub: { color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 2 },
-  section: { paddingHorizontal: space.lg, marginTop: 24 },
-  itinRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.bgCard, borderRadius: radius.md, padding: 14, marginBottom: 10, ...shadow.card },
-  itinIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  itinTitle: { fontSize: 15, fontFamily: fonts.semibold, fontWeight: '600', color: colors.text },
-  itinMeta: { fontSize: 12, color: colors.textFaint, marginTop: 2 },
-  empty: { fontSize: 13, color: colors.textFaint, paddingVertical: 8 },
-  card: { borderRadius: radius.lg, backgroundColor: colors.bgCard, overflow: 'hidden', ...shadow.card },
-  cover: { width: '100%', height: 150, backgroundColor: colors.bgSoft },
-  body: { padding: 14 },
-  themeBadge: { alignSelf: 'flex-start', backgroundColor: colors.primarySoft, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 6 },
-  themeText: { color: colors.primary, fontSize: 11, fontFamily: fonts.bold, fontWeight: '800' },
-  title: { fontSize: 17, fontFamily: fonts.bold, fontWeight: '800', color: colors.text },
-  desc: { fontSize: 13, color: colors.textSub, marginTop: 4 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 },
-  meta: { fontSize: 12, color: colors.textFaint },
+  lead: { fontSize: 16, fontFamily: fonts.bold, fontWeight: '800', color: colors.text, marginTop: 6, marginBottom: 12 },
+  emptyCard: { backgroundColor: colors.bgCard, borderRadius: radius.lg, padding: 28, alignItems: 'center', ...shadow.card },
+  emptyText: { fontSize: 14, color: colors.textFaint },
+  // featured
+  featured: { flexDirection: 'row', backgroundColor: colors.bgCard, borderRadius: radius.lg, padding: 16, ...shadow.card },
+  featuredLeft: { width: 128, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderRightColor: colors.border, paddingRight: 12 },
+  featuredName: { fontSize: 14, fontFamily: fonts.bold, fontWeight: '800', color: colors.text, textAlign: 'center' },
+  featuredSmall: { fontSize: 12, color: colors.textFaint },
+  featuredBig: { fontSize: 26, fontFamily: fonts.bold, fontWeight: '800', color: colors.text, marginTop: 2 },
+  confirmBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 7 },
+  confirmText: { color: colors.white, fontSize: 11, fontFamily: fonts.bold, fontWeight: '800' },
+  featuredRight: { flex: 1, paddingLeft: 8, justifyContent: 'center' },
+  // 타임라인 (번호 + 연결선)
+  tRow: { flexDirection: 'row', alignItems: 'center', minHeight: 40 },
+  rail: { width: 26, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center', marginRight: 6 },
+  rLine: { position: 'absolute', width: 2, left: 12, backgroundColor: colors.border },
+  rTop: { top: 0, bottom: '50%' },
+  rBot: { top: '50%', bottom: 0 },
+  tlNum: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  tlNumText: { color: colors.white, fontSize: 11, fontFamily: fonts.bold, fontWeight: '800' },
+  tlName: { flex: 1, fontSize: 13, color: colors.textSub, fontFamily: fonts.medium, fontWeight: '500' },
+  tlEmpty: { fontSize: 13, color: colors.textFaint },
+  // 추가하기
+  addBtn: { alignSelf: 'center', backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: 36, paddingVertical: 12, marginVertical: 22 },
+  addBtnText: { color: colors.white, fontSize: 14, fontFamily: fonts.bold, fontWeight: '800' },
+  // route card
+  card: { backgroundColor: colors.bgCard, borderRadius: radius.lg, marginBottom: 16, overflow: 'hidden', ...shadow.card },
+  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 12 },
+  cardTitle: { fontSize: 15, fontFamily: fonts.bold, fontWeight: '800', color: colors.white },
+  cardMeta: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+  shareBtn: { backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: radius.sm, paddingHorizontal: 10, paddingVertical: 6 },
+  shareText: { color: colors.white, fontSize: 12, fontFamily: fonts.semibold, fontWeight: '600' },
+  cardBody: { padding: 16 },
+  stopNum: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  stopNumText: { color: colors.white, fontSize: 12, fontFamily: fonts.bold, fontWeight: '800' },
+  stopName: { flex: 1, fontSize: 14, fontFamily: fonts.medium, fontWeight: '500', color: colors.text },
+  stopEmpty: { fontSize: 13, color: colors.textFaint },
+  editBtn: { alignSelf: 'flex-end', borderWidth: 1, borderColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 7, marginTop: 4 },
+  editText: { color: colors.primary, fontSize: 12, fontFamily: fonts.semibold, fontWeight: '600' },
 });

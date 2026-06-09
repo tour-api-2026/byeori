@@ -96,9 +96,9 @@ export default function HomeScreen() {
 
 function Grid({ venues }: { venues: Venue[] }) {
   return (
-    <View style={styles.grid}>
-      {venues.map((v) => <VenueCard key={v.id} venue={v} />)}
-    </View>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rowScroll} contentContainerStyle={styles.row}>
+      {venues.map((v) => <VenueCard key={v.id} venue={v} width={150} />)}
+    </ScrollView>
   );
 }
 
@@ -132,7 +132,8 @@ const styles = StyleSheet.create({
   heroSub: { color: 'rgba(255,255,255,0.9)', fontSize: 13, marginTop: 4 },
   heroBtn: { alignSelf: 'flex-start', backgroundColor: colors.white, borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 8, marginTop: 12 },
   heroBtnText: { color: colors.primary, fontSize: 13, fontFamily: fonts.bold, fontWeight: '800' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  rowScroll: { flexGrow: 0, flexShrink: 0, marginHorizontal: -space.lg },
+  row: { gap: 12, paddingHorizontal: space.lg },
   chipsScroll: { flexGrow: 0, flexShrink: 0, marginBottom: 14 },
   chips: { gap: 8, paddingRight: 8, alignItems: 'center' },
   empty: { color: colors.textFaint, fontSize: 13, paddingVertical: 16 },
