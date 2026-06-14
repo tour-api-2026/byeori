@@ -10,7 +10,7 @@ export function VenueCard({ venue, width = '48.5%' }: { venue: Venue; width?: Di
   const router = useRouter();
   const tags: string[] = [];
   if (venue.hanbokDiscount) tags.push('한복');
-  if (venue.category) tags.push(venue.category);
+  if (venue.category && venue.category !== '한복') tags.push(venue.category);
 
   return (
     <Pressable style={[styles.card, { width }]} onPress={() => router.push(`/venue/${venue.id}`)}>

@@ -7,7 +7,7 @@ import { VenueCard } from '@/components/VenueCard';
 import { useVenuesQuery } from '@/lib/hooks/queries';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
-const CATS = ['전체', '문화', '카페', '체험', '맛집'];
+const CATS = ['전체', '문화', '카페', '체험', '맛집', '한복'];
 const REGIONS = ['전체', '서울', '부산', '대구', '전주', '제주'];
 const PER_PAGE = 6;
 

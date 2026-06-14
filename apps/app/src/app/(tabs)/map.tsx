@@ -11,7 +11,7 @@ import { Venue } from '@/lib/api/types';
 import { useVenuesQuery } from '@/lib/hooks/queries';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
-const CATS = ['전체', '문화', '카페', '체험', '맛집'];
+const CATS = ['전체', '문화', '카페', '체험', '맛집', '한복'];
 const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
 
 // 카카오 지도 JS SDK를 WebView로 렌더링한다(네이티브 앱 안에서 실제 카카오 지도).

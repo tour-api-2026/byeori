@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,7 +12,11 @@ export default function LoginScreen() {
     <View style={[styles.safe, { paddingTop: insets.top + 20, paddingBottom: 32 + insets.bottom }]}>
       {/* 로고 */}
       <View style={styles.hero}>
-        <View style={styles.logoBox}><Text style={styles.logoText}>벼리</Text></View>
+        <View style={styles.logoBox}>
+          <Image source={require('../../assets/images/logo-hat.png')} style={styles.logoImg} contentFit="contain" />
+        </View>
+        <Text style={styles.brand}>벼리</Text>
+        <Text style={styles.brandSub}>한국 전통의 멋, 벼리에서</Text>
       </View>
 
       {/* 로그인 */}
@@ -38,9 +43,11 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg, justifyContent: 'space-between' },
-  hero: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  logoBox: { width: 160, height: 160, borderRadius: 28, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', ...shadowLogo() },
-  logoText: { fontSize: 40, fontFamily: fonts.bold, fontWeight: '800', color: colors.primary, letterSpacing: 1 },
+  hero: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  logoBox: { width: 160, height: 160, borderRadius: 36, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', ...shadowLogo() },
+  logoImg: { width: 132, height: 132 },
+  brand: { fontSize: 30, fontFamily: fonts.bold, fontWeight: '800', color: colors.primary, letterSpacing: 2, marginTop: 18 },
+  brandSub: { fontSize: 13, fontFamily: fonts.medium, fontWeight: '500', color: colors.textFaint, marginTop: 2 },
   bottom: { paddingHorizontal: space.lg, gap: 10 },
   heading: { textAlign: 'center', fontSize: 18, fontFamily: fonts.bold, fontWeight: '800', color: colors.text, marginBottom: 8 },
   btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radius.md, paddingVertical: 16 },
