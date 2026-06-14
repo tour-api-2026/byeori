@@ -35,10 +35,15 @@ export default function RoutesScreen() {
               </View>
             )}
 
-            <Pressable style={styles.addBtn} onPress={() => router.push('/itinerary/new')}>
-              <Text style={styles.addBtnText}>추가하기</Text>
-            </Pressable>
+            <View style={styles.makeCard}>
+              <Text style={styles.makeText}>나만의 새로운 루트를{'\n'}만들어 보세요!</Text>
+              <Pressable style={styles.makeBtn} onPress={() => router.push('/itinerary/new')}>
+                <Text style={styles.makeBtnText}>새 루트 만들기</Text>
+                <Ionicons name="chevron-forward" size={13} color={colors.white} />
+              </Pressable>
+            </View>
 
+            {list.length > 0 && <Text style={styles.listLabel}>내 여행 루트 목록</Text>}
             {list.map((it) => <RouteCard key={it.id} summary={it} />)}
           </>
         )}
@@ -148,9 +153,12 @@ const styles = StyleSheet.create({
   tlNumText: { color: colors.white, fontSize: 11, fontFamily: fonts.bold, fontWeight: '800' },
   tlName: { flex: 1, fontSize: 13, color: colors.textSub, fontFamily: fonts.medium, fontWeight: '500' },
   tlEmpty: { fontSize: 13, color: colors.textFaint },
-  // 추가하기
-  addBtn: { alignSelf: 'center', backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: 36, paddingVertical: 12, marginVertical: 22 },
-  addBtnText: { color: colors.white, fontSize: 14, fontFamily: fonts.bold, fontWeight: '800' },
+  // 새 루트 만들기 카드
+  makeCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.bgCard, borderRadius: radius.lg, padding: 16, marginVertical: 18, ...shadow.card },
+  makeText: { fontSize: 14, fontFamily: fonts.bold, fontWeight: '800', color: colors.text, lineHeight: 20 },
+  makeBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 10 },
+  makeBtnText: { color: colors.white, fontSize: 13, fontFamily: fonts.bold, fontWeight: '800' },
+  listLabel: { fontSize: 16, fontFamily: fonts.bold, fontWeight: '800', color: colors.text, marginTop: 6, marginBottom: 12 },
   // route card
   card: { backgroundColor: colors.bgCard, borderRadius: radius.lg, marginBottom: 16, overflow: 'hidden', ...shadow.card },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 12 },

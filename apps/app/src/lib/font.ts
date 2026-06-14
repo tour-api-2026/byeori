@@ -21,7 +21,10 @@ function patch(Comp: any) {
       if (!el || !React.isValidElement(el)) return el;
       const flat = StyleSheet.flatten((el.props as any).style) || {};
       const fam = FAMILY[String((flat as any).fontWeight ?? '400')] || 'Pretendard-Regular';
-      return React.cloneElement(el, { style: [{ fontFamily: fam }, (el.props as any).style] } as any);
+      // 평탄화된 단일 객체로 머지한다. (배열을 넘기면 중첩 <Text>가 raw <span>으로
+      // 렌더되는 react-native-web에서 style 배열이 그대로 DOM에 전달돼
+      // "indexed property [0] on CSSStyleDeclaration" 에러가 난다)
+      return React.cloneElement(el, { style: { fontFamily: fam, ...flat } } as any);
     } catch {
       return el;
     }
