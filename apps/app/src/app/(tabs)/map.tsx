@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { Chip } from '@/components/Chip';
@@ -26,33 +26,61 @@ function buildHtml(key: string): string {
   .pin{display:inline-block;min-width:30px;text-align:center;padding:3px 8px;border-radius:999px;
        color:#fff;font-size:12px;font-weight:800;box-shadow:0 2px 6px rgba(0,0,0,.25);
        font-family:-apple-system,system-ui,sans-serif;border:2px solid #fff}
+  .pinK{display:inline-block;min-width:24px;height:24px;line-height:24px;text-align:center;border-radius:999px;
+       background:#3177D5;color:#fff;font-size:12px;font-weight:800;border:2px solid #fff;
+       box-shadow:0 2px 6px rgba(0,0,0,.3);font-family:-apple-system,system-ui,sans-serif}
 </style></head>
 <body><div id="map"></div>
 <script>
   function post(msg){ try{ if(window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(msg)); }catch(e){} }
   window.onerror = function(m){ post({type:'error', msg:String(m)}); };
 </script>
-<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false"
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false&libraries=services"
   onerror="post({type:'error', msg:'카카오 SDK 스크립트 로드 실패'})"></script>
 <script>
-  var map, overlays=[], ready=false, pending=null;
+  var map, venueOv=[], kakaoOv=[], ready=false, pending=null, places=null, kakaoData=[];
   function sel(id){ post({type:'select', id:id}); }
-  window.sel = sel;
-  function clear(){ overlays.forEach(function(o){o.setMap(null)}); overlays=[]; }
+  function selK(i){ post({type:'selectKakao', place:kakaoData[i]}); }
+  window.sel = sel; window.selK = selK;
+  function clearArr(a){ a.forEach(function(o){o.setMap(null)}); a.length=0; }
+  function fitAll(){
+    var all=venueOv.concat(kakaoOv);
+    if(!all.length) return;
+    var b=new kakao.maps.LatLngBounds();
+    all.forEach(function(o){ b.extend(o.getPosition()); });
+    map.setBounds(b);
+  }
   window.setMarkers = function(list){
     if(!ready){ pending=list; return; }
-    clear();
-    if(!list.length) return;
-    var bounds=new kakao.maps.LatLngBounds();
+    clearArr(venueOv);
     list.forEach(function(v){
       var pos=new kakao.maps.LatLng(v.lat, v.lng);
       var bg=v.hanbok ? '#E5484D' : '#263176';
       var html='<div class="pin" style="background:'+bg+'" onclick="sel('+v.id+')">'+v.rating+'</div>';
       var ov=new kakao.maps.CustomOverlay({position:pos, content:html, yAnchor:1, clickable:true});
-      ov.setMap(map); overlays.push(ov); bounds.extend(pos);
+      ov.setMap(map); venueOv.push(ov);
     });
-    map.setBounds(bounds);
+    fitAll();
   };
+  window.searchKakao = function(q){
+    if(!ready || !q) return;
+    if(!places) places=new kakao.maps.services.Places();
+    places.keywordSearch(q, function(data, status){
+      clearArr(kakaoOv); kakaoData=[];
+      if(status!==kakao.maps.services.Status.OK){ post({type:'kakaoResults', count:0}); fitAll(); return; }
+      data.forEach(function(p, i){
+        kakaoData.push({ name:p.place_name, address:(p.road_address_name||p.address_name||''),
+          lat:Number(p.y), lng:Number(p.x), category:(p.category_group_name||''), phone:(p.phone||''), url:(p.place_url||'') });
+        var pos=new kakao.maps.LatLng(Number(p.y), Number(p.x));
+        var html='<div class="pinK" onclick="selK('+i+')">'+(i+1)+'</div>';
+        var ov=new kakao.maps.CustomOverlay({position:pos, content:html, yAnchor:1, clickable:true});
+        ov.setMap(map); kakaoOv.push(ov);
+      });
+      post({type:'kakaoResults', count:data.length});
+      fitAll();
+    });
+  };
+  window.clearKakao = function(){ clearArr(kakaoOv); kakaoData=[]; fitAll(); };
   function boot(){
     if(typeof kakao==='undefined'||!kakao.maps){ post({type:'error', msg:'SDK_LOAD_FAIL'}); return; }
     kakao.maps.load(function(){
@@ -65,21 +93,49 @@ function buildHtml(key: string): string {
 </script></body></html>`;
 }
 
+// 카카오 키워드 검색 결과 1건
+type KakaoPlace = { name: string; address: string; lat: number; lng: number; category: string; phone: string; url: string };
+
 export default function MapScreen() {
   const router = useRouter();
   const [cat, setCat] = useState('전체');
   const [hanbokOnly, setHanbokOnly] = useState(false);
   const [selected, setSelected] = useState<Venue | null>(null);
+  const [selectedKakao, setSelectedKakao] = useState<KakaoPlace | null>(null);
+  const [query, setQuery] = useState('');
+  const [keyword, setKeyword] = useState(''); // 확정된 검색어(우리 장소 필터)
+  const [kakaoCount, setKakaoCount] = useState<number | null>(null);
   const webRef = useRef<WebView>(null);
   const [ready, setReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
 
   const { data } = useVenuesQuery({
+    keyword: keyword || undefined,
     category: cat === '전체' ? undefined : cat,
     hanbokDiscount: hanbokOnly || undefined,
     size: 50,
   });
   const venues = data?.content ?? [];
+
+  // 검색 실행: 우리 장소는 쿼리 키워드로, 카카오 장소는 WebView keywordSearch로.
+  const runSearch = () => {
+    const q = query.trim();
+    setKeyword(q);
+    setSelected(null);
+    setSelectedKakao(null);
+    if (Platform.OS !== 'web') {
+      webRef.current?.injectJavaScript(q ? `window.searchKakao(${JSON.stringify(q)}); true;` : 'window.clearKakao(); true;');
+    }
+    if (!q) setKakaoCount(null);
+  };
+  const clearSearch = () => {
+    setQuery('');
+    setKeyword('');
+    setKakaoCount(null);
+    setSelected(null);
+    setSelectedKakao(null);
+    if (Platform.OS !== 'web') webRef.current?.injectJavaScript('window.clearKakao(); true;');
+  };
 
   // 키 없을 때 폴백(좌표 정규화 핀 오버레이)용 경계
   const bounds = useMemo(() => {
@@ -119,8 +175,10 @@ export default function MapScreen() {
       if (msg.type === 'error') setMapError(String(msg.msg));
       if (msg.type === 'select') {
         const v = venues.find((x) => x.id === msg.id);
-        if (v) setSelected(v);
+        if (v) { setSelectedKakao(null); setSelected(v); }
       }
+      if (msg.type === 'kakaoResults') setKakaoCount(Number(msg.count));
+      if (msg.type === 'selectKakao' && msg.place) { setSelected(null); setSelectedKakao(msg.place as KakaoPlace); }
     } catch {
       /* ignore */
     }
@@ -128,11 +186,24 @@ export default function MapScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* 검색창 */}
-      <Pressable style={styles.search} onPress={() => router.push('/search')}>
+      {/* 검색창 (카카오 전체 장소 + 우리 장소 검색) */}
+      <View style={styles.search}>
         <Ionicons name="search" size={18} color={colors.accent} />
-        <Text style={styles.searchText}>장소를 검색해보세요</Text>
-      </Pressable>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="장소·주소 검색 (예: 경복궁, 전주 한옥마을)"
+          placeholderTextColor={colors.textFaint}
+          value={query}
+          onChangeText={setQuery}
+          onSubmitEditing={runSearch}
+          returnKeyType="search"
+        />
+        {query.length > 0 && (
+          <Pressable hitSlop={8} onPress={clearSearch}>
+            <Ionicons name="close-circle" size={18} color={colors.textFaint} />
+          </Pressable>
+        )}
+      </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chips}>
         {CATS.map((c) => <Chip key={c} label={c} selected={c === cat} onPress={() => setCat(c)} />)}
       </ScrollView>
@@ -146,6 +217,13 @@ export default function MapScreen() {
           thumbColor={colors.white}
         />
       </Pressable>
+
+      {/* 검색 결과 요약 */}
+      {keyword.length > 0 && (
+        <Text style={styles.resultHint}>
+          '{keyword}' 검색 · 카카오 <Text style={styles.resultNum}>{kakaoCount ?? 0}</Text>곳 · 우리 장소 <Text style={styles.resultNum}>{venues.length}</Text>곳
+        </Text>
+      )}
 
       {/* 카카오 지도 (WebView는 네이티브 전용 — 웹에서는 핀 폴백) */}
       <View style={styles.map}>
@@ -184,7 +262,7 @@ export default function MapScreen() {
         )}
       </View>
 
-      {/* 선택된 장소 미니 카드 */}
+      {/* 선택된 우리 장소 미니 카드 */}
       {selected && (
         <Pressable style={styles.miniCard} onPress={() => router.push(`/venue/${selected.id}`)}>
           <Image source={selected.imageUrl} style={styles.miniImg} contentFit="cover" />
@@ -199,6 +277,24 @@ export default function MapScreen() {
           <Ionicons name="chevron-forward" size={20} color={colors.textFaint} />
         </Pressable>
       )}
+
+      {/* 선택된 카카오 장소 미니 카드 */}
+      {selectedKakao && (
+        <Pressable
+          style={styles.miniCard}
+          onPress={() => selectedKakao.url && Linking.openURL(selectedKakao.url)}>
+          <View style={styles.kakaoThumb}><Ionicons name="location" size={24} color={colors.accent} /></View>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.miniName} numberOfLines={1}>{selectedKakao.name}</Text>
+              <View style={styles.kakaoBadge}><Text style={styles.kakaoBadgeText}>카카오</Text></View>
+            </View>
+            <Text style={styles.miniAddr} numberOfLines={1}>{selectedKakao.address || '주소 정보 없음'}</Text>
+            {!!selectedKakao.category && <Text style={styles.kakaoCat}>{selectedKakao.category}{selectedKakao.phone ? ` · ${selectedKakao.phone}` : ''}</Text>}
+          </View>
+          <Pressable hitSlop={8} onPress={() => setSelectedKakao(null)}><Ionicons name="close" size={20} color={colors.textFaint} /></Pressable>
+        </Pressable>
+      )}
     </SafeAreaView>
   );
 }
@@ -210,7 +306,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.accent, borderRadius: radius.pill,
     paddingHorizontal: 16, paddingVertical: 11,
   },
-  searchText: { color: colors.textFaint, fontSize: 14 },
+  searchInput: { flex: 1, fontSize: 14, color: colors.text, padding: 0 },
+  resultHint: { fontSize: 12, color: colors.textSub, marginHorizontal: space.lg, marginTop: 6, marginBottom: 2, fontFamily: fonts.medium, fontWeight: '500' },
+  resultNum: { color: colors.accent, fontFamily: fonts.bold, fontWeight: '800' },
   toggleWrap: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#FDECEC', borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 8,
@@ -241,4 +339,8 @@ const styles = StyleSheet.create({
   miniName: { fontSize: 15, fontWeight: '700', color: colors.text },
   miniAddr: { fontSize: 12, color: colors.textFaint, marginTop: 2 },
   miniHanbok: { fontSize: 10, fontWeight: '800', color: colors.hanbok, backgroundColor: '#FDECEC', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
+  kakaoThumb: { width: 60, height: 60, borderRadius: radius.md, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  kakaoBadge: { backgroundColor: colors.accentSoft, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
+  kakaoBadgeText: { fontSize: 10, fontWeight: '800', color: colors.accent },
+  kakaoCat: { fontSize: 11, color: colors.textFaint, marginTop: 3 },
 });

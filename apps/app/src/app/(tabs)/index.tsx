@@ -37,10 +37,10 @@ export default function HomeScreen() {
         {/* 헤더 (중앙 타이틀) */}
         <View style={styles.header}><Text style={styles.title}>벼리</Text></View>
 
-        {/* 검색창 */}
-        <Pressable style={styles.search} onPress={() => router.push('/search')}>
+        {/* 검색창 — 카카오 장소 검색(내 주변 지도)로 이동 */}
+        <Pressable style={styles.search} onPress={() => router.push('/(tabs)/map')}>
           <Ionicons name="search" size={18} color={colors.accent} />
-          <Text style={styles.searchText}>전통 매장·코스를 검색해보세요</Text>
+          <Text style={styles.searchText}>장소·주소로 검색해보세요</Text>
         </Pressable>
 
         {/* 오늘의 추천 (히어로) */}
