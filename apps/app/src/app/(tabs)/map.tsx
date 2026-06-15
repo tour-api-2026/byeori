@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { Chip } from '@/components/Chip';
@@ -147,9 +147,9 @@ export default function MapScreen() {
         />
       </Pressable>
 
-      {/* 카카오 지도 */}
+      {/* 카카오 지도 (WebView는 네이티브 전용 — 웹에서는 핀 폴백) */}
       <View style={styles.map}>
-        {KAKAO_JS_KEY && !mapError ? (
+        {KAKAO_JS_KEY && !mapError && Platform.OS !== 'web' ? (
           <>
             <WebView
               ref={webRef}
