@@ -13,6 +13,8 @@ import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 const CATS = ['전체', '문화', '카페', '체험', '맛집', '한복'];
 const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
+// WebView 문서의 origin. 카카오 개발자센터 Web 플랫폼 사이트 도메인에 등록된 값과 일치해야 한다.
+const KAKAO_WEB_ORIGIN = 'https://byeori.seoulride.site';
 
 // 카카오 지도 JS SDK를 WebView로 렌더링한다(네이티브 앱 안에서 실제 카카오 지도).
 // 핀(마커)은 RN에서 venues를 주입하고, 마커 클릭 시 postMessage로 RN에 알린다.
@@ -152,7 +154,7 @@ export default function MapScreen() {
             <WebView
               ref={webRef}
               originWhitelist={['*']}
-              source={{ html: buildHtml(KAKAO_JS_KEY), baseUrl: 'https://localhost' }}
+              source={{ html: buildHtml(KAKAO_JS_KEY), baseUrl: KAKAO_WEB_ORIGIN }}
               onMessage={onMessage}
               javaScriptEnabled
               domStorageEnabled
