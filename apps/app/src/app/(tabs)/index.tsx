@@ -8,6 +8,7 @@ import { Chip } from '@/components/Chip';
 import { SectionHeader } from '@/components/SectionHeader';
 import { VenueCard } from '@/components/VenueCard';
 import { Venue } from '@/lib/api/types';
+import { sized } from '@/lib/img';
 import { usePerformancesQuery, useVenuesQuery } from '@/lib/hooks/queries';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
@@ -48,7 +49,7 @@ export default function HomeScreen() {
           <SectionHeader title="오늘의 추천" />
           {top ? (
             <Pressable style={styles.hero} onPress={() => router.push(`/venue/${top.venueId}`)}>
-              <Image source={top.posterImageUrl} style={styles.heroImg} contentFit="cover" transition={250} />
+              <Image source={sized(top.posterImageUrl, 760, 380)} style={styles.heroImg} contentFit="cover" transition={250} cachePolicy="memory-disk" />
               <View style={styles.heroOverlay}>
                 <Text style={styles.heroTitle} numberOfLines={1}>{top.title}</Text>
                 <Text style={styles.heroSub} numberOfLines={1}>{top.genre ?? '추천 행사'} · 지금 만나보세요</Text>

@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { DimensionValue, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Venue } from '@/lib/api/types';
+import { sized } from '@/lib/img';
 import { colors, fonts, radius, shadow } from '@/lib/theme';
 import { Rating } from './Rating';
 
@@ -14,7 +15,7 @@ export function VenueCard({ venue, width = '48.5%' }: { venue: Venue; width?: Di
 
   return (
     <Pressable style={[styles.card, { width }]} onPress={() => router.push(`/venue/${venue.id}`)}>
-      <Image source={venue.imageUrl} style={styles.img} contentFit="cover" transition={200} />
+      <Image source={sized(venue.imageUrl, 360, 240)} style={styles.img} contentFit="cover" transition={200} cachePolicy="memory-disk" recyclingKey={String(venue.id)} />
       <View style={styles.body}>
         <Text style={styles.name} numberOfLines={1}>{venue.name}</Text>
         <Rating value={venue.avgRating} />
