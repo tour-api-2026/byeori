@@ -1,5 +1,9 @@
-# 벼리 데모 인프라 — 로컬 개발/데모용 PostgreSQL
-# 전체 운영 구성(nginx·api·web·minio)은 docs/byeori-tech-spec.pdf §4 참고
+# 벼리 데모/운영 인프라 — PostgreSQL + Spring API
+# nginx(80/443)는 호스트의 공용 nginx(seoulride-nginx)가 단독 점유하므로,
+# 벼리 API는 그 nginx가 붙어있는 외부 네트워크(infra_seoulride-net)에 합류해
+# byeori.seoulride.site/api 로 프록시된다.
+# 주의: 이 compose의 프로젝트명은 "infra"로 다른 스택과 공유된다.
+#       절대 `--remove-orphans` 를 쓰지 말 것(타 스택 컨테이너 삭제 위험).
 services:
   postgres:
     image: postgres:16-alpine
@@ -17,6 +21,33 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    networks:
+      - default
+
+  api:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    image: byeori-api:latest
+    container_name: byeori-api
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/byeori
+      POSTGRES_USER: byeori
+      POSTGRES_PASSWORD: byeori
+      SERVER_PORT: "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - default          # postgres 접근
+      - seoulride-net    # 공용 nginx가 byeori-api:8080 으로 프록시
+
+networks:
+  default:
+  seoulride-net:
+    external: true
+    name: infra_seoulride-net
 
 volumes:
   pgdata:

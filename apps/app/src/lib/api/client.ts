@@ -15,8 +15,8 @@ function resolveHost(): string {
   return host || 'localhost';
 }
 
-// 빌드 시 EXPO_PUBLIC_API_URL이 주입되면(설치형 APK·터널) 그 주소를 우선 사용,
-// 아니면 dev(Expo Go/LAN)에서 호스트를 추론한다.
+// EXPO_PUBLIC_API_URL이 설정되면(웹·네이티브 공통) 그 주소를 사용,
+// 없으면 dev에서 호스트를 추론한다.
 export const API_BASE =
   process.env.EXPO_PUBLIC_API_URL ?? `http://${resolveHost()}:8080/api/v1`;
 
