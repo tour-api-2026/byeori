@@ -11,6 +11,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface PerformanceRepository extends JpaRepository<Performance, Long> {
 
+    java.util.Optional<Performance> findByKopisId(String kopisId);
+
     @Modifying(clearAutomatically = true)
     @Query("update Performance p set p.avgRating = :avg, p.reviewCount = :cnt where p.id = :id")
     void updateRating(@Param("id") Long id, @Param("avg") BigDecimal avg, @Param("cnt") int cnt);

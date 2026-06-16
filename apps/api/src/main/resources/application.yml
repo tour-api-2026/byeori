@@ -15,6 +15,12 @@ spring:
     enabled: true
     baseline-on-migrate: true
 
+# 외부 실데이터 동기화 키(백엔드 환경변수). 미설정 시 동기화 skip.
+byeori:
+  sync:
+    tourapi-key: ${TOURAPI_KEY:}
+    kopis-key: ${KOPIS_KEY:}
+
 server:
   port: ${SERVER_PORT:8080}
 

@@ -16,6 +16,8 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
 
     java.util.List<Venue> findByCreatedByUserIdOrderByCreatedAtDesc(Long userId);
 
+    java.util.Optional<Venue> findByTourContentId(String tourContentId);
+
     @Query("""
             select v from Venue v
             where v.status = 'ACTIVE' and v.visibility = 'PUBLIC'

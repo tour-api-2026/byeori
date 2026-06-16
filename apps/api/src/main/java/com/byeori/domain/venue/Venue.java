@@ -84,4 +84,40 @@ public class Venue {
     public boolean isOwnedBy(Long userId) {
         return "USER".equals(this.source) && userId != null && userId.equals(this.createdByUserId);
     }
+
+    /** TourAPI 항목으로 신규 생성 */
+    public static Venue fromTourApi(String tourContentId, String name, String address, BigDecimal lat, BigDecimal lng,
+                                    String category, String imageUrl, String phone) {
+        Venue v = new Venue();
+        v.tourContentId = tourContentId;
+        v.name = name;
+        v.address = address;
+        v.lat = lat;
+        v.lng = lng;
+        v.category = category;
+        v.imageUrl = imageUrl;
+        v.phone = phone;
+        v.source = "TOURAPI";
+        v.visibility = "PUBLIC";
+        v.status = "ACTIVE";
+        v.hanbokDiscount = false;
+        v.avgRating = BigDecimal.ZERO;
+        v.reviewCount = 0;
+        v.createdAt = LocalDateTime.now();
+        v.syncedAt = LocalDateTime.now();
+        return v;
+    }
+
+    /** TourAPI 재동기화 갱신(한복혜택 등 큐레이션 필드는 보존) */
+    public void updateFromTourApi(String name, String address, BigDecimal lat, BigDecimal lng,
+                                  String category, String imageUrl, String phone) {
+        if (name != null) this.name = name;
+        if (address != null) this.address = address;
+        if (lat != null) this.lat = lat;
+        if (lng != null) this.lng = lng;
+        if (category != null) this.category = category;
+        if (imageUrl != null) this.imageUrl = imageUrl;
+        if (phone != null) this.phone = phone;
+        this.syncedAt = LocalDateTime.now();
+    }
 }
