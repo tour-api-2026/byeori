@@ -5,6 +5,7 @@ import com.byeori.domain.review.dto.ReviewResponse;
 import com.byeori.domain.review.dto.ReviewUpdateRequest;
 import com.byeori.global.response.ApiResponse;
 import java.util.List;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -26,20 +27,20 @@ public class ReviewController {
 
     @GetMapping("/users/me/reviews")
     public ApiResponse<List<ReviewResponse>> listMine(
-            @RequestHeader(name = "X-Demo-User-Id", defaultValue = "2") Long userId) {
+            @AuthenticationPrincipal Long userId) {
         return ApiResponse.ok(service.listMine(userId));
     }
 
     @PostMapping("/reviews")
     public ApiResponse<ReviewResponse> create(
-            @RequestHeader(name = "X-Demo-User-Id", defaultValue = "2") Long userId,
+            @AuthenticationPrincipal Long userId,
             @RequestBody ReviewRequest req) {
         return ApiResponse.ok(service.create(userId, req));
     }
 
     @PatchMapping("/reviews/{id}")
     public ApiResponse<ReviewResponse> update(
-            @RequestHeader(name = "X-Demo-User-Id", defaultValue = "2") Long userId,
+            @AuthenticationPrincipal Long userId,
             @PathVariable("id") Long id,
             @RequestBody ReviewUpdateRequest req) {
         return ApiResponse.ok(service.update(userId, id, req));
@@ -47,7 +48,7 @@ public class ReviewController {
 
     @DeleteMapping("/reviews/{id}")
     public ApiResponse<Void> delete(
-            @RequestHeader(name = "X-Demo-User-Id", defaultValue = "2") Long userId,
+            @AuthenticationPrincipal Long userId,
             @PathVariable("id") Long id) {
         service.delete(userId, id);
         return ApiResponse.ok(null);

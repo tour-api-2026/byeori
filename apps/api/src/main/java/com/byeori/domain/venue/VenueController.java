@@ -7,6 +7,7 @@ import com.byeori.domain.venue.dto.VenueDetailResponse;
 import com.byeori.domain.venue.dto.VenueReportRequest;
 import com.byeori.domain.venue.dto.VenueResponse;
 import com.byeori.global.response.ApiResponse;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.byeori.global.response.PageResponse;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -40,7 +41,7 @@ public class VenueController {
 
     @GetMapping("/mine")
     public ApiResponse<List<VenueResponse>> mine(
-            @RequestHeader(name = "X-Demo-User-Id", defaultValue = "2") Long userId) {
+            @AuthenticationPrincipal Long userId) {
         return ApiResponse.ok(service.listMine(userId));
     }
 
@@ -56,21 +57,21 @@ public class VenueController {
 
     @PostMapping
     public ApiResponse<VenueDetailResponse> create(
-            @RequestHeader(name = "X-Demo-User-Id", defaultValue = "2") Long userId,
+            @AuthenticationPrincipal Long userId,
             @RequestBody VenueCreateRequest req) {
         return ApiResponse.ok(service.createUserVenue(userId, req));
     }
 
     @PatchMapping("/{id}")
     public ApiResponse<VenueDetailResponse> update(
-            @RequestHeader(name = "X-Demo-User-Id", defaultValue = "2") Long userId,
+            @AuthenticationPrincipal Long userId,
             @PathVariable("id") Long id, @RequestBody VenueCreateRequest req) {
         return ApiResponse.ok(service.updateUserVenue(userId, id, req));
     }
 
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(
-            @RequestHeader(name = "X-Demo-User-Id", defaultValue = "2") Long userId,
+            @AuthenticationPrincipal Long userId,
             @PathVariable("id") Long id) {
         service.deleteUserVenue(userId, id);
         return ApiResponse.ok(null);
@@ -78,7 +79,7 @@ public class VenueController {
 
     @PostMapping("/{id}/reports")
     public ApiResponse<Void> report(
-            @RequestHeader(name = "X-Demo-User-Id", defaultValue = "2") Long userId,
+            @AuthenticationPrincipal Long userId,
             @PathVariable("id") Long id, @RequestBody VenueReportRequest req) {
         service.report(userId, id, req);
         return ApiResponse.ok(null);
