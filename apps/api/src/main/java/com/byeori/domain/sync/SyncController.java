@@ -5,6 +5,7 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -18,10 +19,11 @@ public class SyncController {
 
     private final SyncService syncService;
 
+    /** only=all(기본)|venues|performances 로 대상 선택. */
     @PostMapping("/trigger")
-    public ApiResponse<Map<String, Integer>> trigger() {
-        int venues = syncService.syncVenues();
-        int performances = syncService.syncPerformances();
+    public ApiResponse<Map<String, Integer>> trigger(@RequestParam(name = "only", defaultValue = "all") String only) {
+        int venues = only.equals("performances") ? -1 : syncService.syncVenues();
+        int performances = only.equals("venues") ? -1 : syncService.syncPerformances();
         return ApiResponse.ok(Map.of("venues", venues, "performances", performances));
     }
 }

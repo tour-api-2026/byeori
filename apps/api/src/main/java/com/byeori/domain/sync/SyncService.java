@@ -25,8 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class SyncService {
 
     private static final int[] CONTENT_TYPES = {12, 14, 39}; // 관광지/문화시설/음식점
-    private static final int ROWS = 50;
-    private static final int MAX_PAGES = 4;
+    private static final int ROWS = 100;       // 페이지당(최대)
+    private static final int MAX_PAGES = 50;    // 안전 상한(끝 페이지 도달 시 조기 종료)
     private static final DateTimeFormatter KOPIS_DATE = DateTimeFormatter.ofPattern("yyyy.MM.dd");
 
     private final SyncProperties props;
@@ -50,6 +50,7 @@ public class SyncService {
                     if (items.isEmpty()) break;
                     for (TourItem it : items) count += upsertVenue(it);
                     throttle();
+                    if (items.size() < ROWS) break; // 마지막 페이지
                 }
             }
         }
@@ -90,6 +91,7 @@ public class SyncService {
             if (items.isEmpty()) break;
             for (KopisItem it : items) count += upsertPerformance(it);
             throttle();
+            if (items.size() < ROWS) break; // 마지막 페이지
         }
         log.info("공연 동기화 완료: {}건", count);
         return count;
