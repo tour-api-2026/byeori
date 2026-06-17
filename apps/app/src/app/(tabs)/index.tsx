@@ -48,7 +48,7 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <SectionHeader title="오늘의 추천" />
           {top ? (
-            <Pressable style={styles.hero} onPress={() => router.push(`/venue/${top.venueId}`)}>
+            <Pressable style={styles.hero} onPress={() => top.venueId ? router.push(`/venue/${top.venueId}`) : router.push('/search')}>
               <Image source={sized(top.posterImageUrl, 760, 380)} style={styles.heroImg} contentFit="cover" transition={250} cachePolicy="memory-disk" />
               <View style={styles.heroOverlay}>
                 <Text style={styles.heroTitle} numberOfLines={1}>{top.title}</Text>

@@ -32,21 +32,21 @@ public class SyncService {
     private final SyncProperties props;
     private final TourApiClient tourClient;
     private final KopisClient kopisClient;
+    private final RegionResolver regionResolver;
     private final VenueRepository venueRepo;
     private final PerformanceRepository perfRepo;
 
-    /** 장소(관광지·문화시설·음식점) 동기화. 반환=처리 건수. */
-    @Transactional
+    /** 장소(관광지·문화시설·음식점) 동기화. 항목별 독립 저장(실패 시 해당 항목만 skip). */
     public int syncVenues() {
         if (!props.tourApiEnabled()) {
             log.info("TOURAPI_KEY 미설정 → 장소 동기화 skip");
             return 0;
         }
         int count = 0;
-        for (SyncProperties.Area area : SyncProperties.AREAS) {
+        for (RegionResolver.Region region : regionResolver.resolve()) {
             for (int contentType : CONTENT_TYPES) {
                 for (int page = 1; page <= MAX_PAGES; page++) {
-                    List<TourItem> items = tourClient.areaBasedList(area.areaCode(), area.sigunguCode(), contentType, page, ROWS);
+                    List<TourItem> items = tourClient.areaBasedList(region.regnCd(), region.signguCd(), contentType, page, ROWS);
                     if (items.isEmpty()) break;
                     for (TourItem it : items) count += upsertVenue(it);
                     throttle();
@@ -59,18 +59,24 @@ public class SyncService {
 
     private int upsertVenue(TourItem it) {
         if (it.contentId() == null || it.title() == null) return 0;
+        if (it.addr1() == null || it.addr1().isBlank()) return 0; // 주소 없으면 skip
         BigDecimal lat = num(it.mapy());
         BigDecimal lng = num(it.mapx());
-        String category = CategoryMapper.fromTour(it.contentTypeId(), it.cat3());
-        venueRepo.findByTourContentId(it.contentId())
-                .ifPresentOrElse(
-                        v -> v.updateFromTourApi(it.title(), it.addr1(), lat, lng, category, it.firstImage(), it.tel()),
-                        () -> venueRepo.save(Venue.fromTourApi(it.contentId(), it.title(), it.addr1(), lat, lng, category, it.firstImage(), it.tel())));
-        return 1;
+        if (lat == null || lng == null || lat.signum() == 0 || lng.signum() == 0) return 0; // 좌표 없으면 skip(지도용)
+        String category = CategoryMapper.fromTour(it.contentTypeId(), it.lclsSystm2(), it.lclsSystm3());
+        try {
+            venueRepo.findByTourContentId(it.contentId())
+                    .ifPresentOrElse(
+                            v -> { v.updateFromTourApi(it.title(), it.addr1(), lat, lng, category, it.firstImage(), it.tel()); venueRepo.save(v); },
+                            () -> venueRepo.save(Venue.fromTourApi(it.contentId(), it.title(), it.addr1(), lat, lng, category, it.firstImage(), it.tel())));
+            return 1;
+        } catch (Exception e) {
+            log.debug("venue upsert skip {}: {}", it.contentId(), e.getMessage());
+            return 0;
+        }
     }
 
-    /** 공연(KOPIS) 동기화. 향후 1년 범위. 반환=처리 건수. */
-    @Transactional
+    /** 공연(KOPIS) 동기화. 항목별 독립 저장(실패 시 해당 항목만 skip). */
     public int syncPerformances() {
         if (!props.kopisEnabled()) {
             log.info("KOPIS_KEY 미설정 → 공연 동기화 skip");
@@ -94,11 +100,16 @@ public class SyncService {
         LocalDate start = date(it.prfpdfrom());
         LocalDate end = date(it.prfpdto());
         String state = stateOf(it.prfstate());
-        perfRepo.findByKopisId(it.mt20id())
-                .ifPresentOrElse(
-                        p -> p.updateFromKopis(it.prfnm(), it.genrenm(), it.poster(), start, end, state),
-                        () -> perfRepo.save(Performance.fromKopis(it.mt20id(), it.prfnm(), it.genrenm(), it.poster(), start, end, state, null)));
-        return 1;
+        try {
+            perfRepo.findByKopisId(it.mt20id())
+                    .ifPresentOrElse(
+                            p -> { p.updateFromKopis(it.prfnm(), it.genrenm(), it.poster(), start, end, state); perfRepo.save(p); },
+                            () -> perfRepo.save(Performance.fromKopis(it.mt20id(), it.prfnm(), it.genrenm(), it.poster(), start, end, state, null)));
+            return 1;
+        } catch (Exception e) {
+            log.debug("performance upsert skip {}: {}", it.mt20id(), e.getMessage());
+            return 0;
+        }
     }
 
     private static String stateOf(String prfstate) {

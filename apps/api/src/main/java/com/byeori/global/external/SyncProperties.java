@@ -22,14 +22,18 @@ public class SyncProperties {
     public boolean tourApiEnabled() { return tourApiKey != null && !tourApiKey.isBlank(); }
     public boolean kopisEnabled() { return kopisKey != null && !kopisKey.isBlank(); }
 
-    /** TourAPI 지역코드(areaCode) + 시군구코드(sigunguCode, 없으면 null). 실제 코드는 키 발급 후 응답으로 보정. */
-    public record Area(int areaCode, Integer sigunguCode, String label) {}
+    /**
+     * 동기화 대상 도시. 법정동코드는 런타임에 ldongCode2로 동적 조회(RegionResolver).
+     * sidoKeywords: 시도명 매칭 후보(개명 대응), sigunguKeyword: 시군구명(null이면 시도 전체).
+     */
+    public record Target(String[] sidoKeywords, String sigunguKeyword, String label) {}
 
-    public static final List<Area> AREAS = List.of(
-            new Area(1, null, "서울"),
-            new Area(6, null, "부산"),
-            new Area(39, null, "제주"),
-            new Area(35, 2, "경주"),   // 경북(35)·경주 sigungu — 보정 필요
-            new Area(37, 1, "전주")    // 전북(37)·전주 sigungu — 보정 필요
+    public static final List<Target> TARGETS = List.of(
+            new Target(new String[]{"서울"}, null, "서울"),
+            new Target(new String[]{"부산"}, null, "부산"),
+            new Target(new String[]{"대구"}, null, "대구"),
+            new Target(new String[]{"제주"}, null, "제주"),
+            new Target(new String[]{"경상북", "경북"}, "경주", "경주"),
+            new Target(new String[]{"전북", "전라북"}, "전주", "전주")
     );
 }
