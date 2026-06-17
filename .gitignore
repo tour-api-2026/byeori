@@ -25,3 +25,7 @@ byeori-*.png
 
 # 로컬 API 터널 임시 스크립트
 apps/app/apitun.mjs
+
+# 시크릿 env (TOURAPI/KOPIS 등 백엔드 키 — .env.example만 커밋)
+**/.env
+infra/.env

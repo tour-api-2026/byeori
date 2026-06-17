@@ -31,6 +31,10 @@ services:
     image: byeori-api:latest
     container_name: byeori-api
     restart: unless-stopped
+    # 시크릿 키(TOURAPI_KEY/KOPIS_KEY 등)는 infra/.env(gitignore)에서 주입
+    env_file:
+      - path: .env
+        required: false
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/byeori
       POSTGRES_USER: byeori
