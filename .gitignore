@@ -13,3 +13,12 @@ docs/.verify-*.html
 # OS
 .DS_Store
 *.log
+
+# 검증 아티팩트
+.playwright-mcp/
+byeori-*.png
+
+# ralph 루프 상태
+.claude/ralph-loop.local.md
+.claude/.ralph-loop*
+.gstack/

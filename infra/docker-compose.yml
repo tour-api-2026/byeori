@@ -1,0 +1,22 @@
+# 벼리 데모 인프라 — 로컬 개발/데모용 PostgreSQL
+# 전체 운영 구성(nginx·api·web·minio)은 docs/byeori-tech-spec.pdf §4 참고
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: byeori-postgres
+    environment:
+      POSTGRES_DB: byeori
+      POSTGRES_USER: byeori
+      POSTGRES_PASSWORD: byeori
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U byeori"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
