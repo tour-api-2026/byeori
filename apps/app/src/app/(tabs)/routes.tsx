@@ -2,8 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import LoginRequired from '@/components/LoginRequired';
 import { ItinerarySummary } from '@/lib/api/itineraries';
 import { useItineraryQuery, useMyItinerariesQuery } from '@/lib/hooks/queries';
+import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -18,9 +20,19 @@ function dayLabel(start: string, end: string) {
 
 export default function RoutesScreen() {
   const router = useRouter();
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const mine = useMyItinerariesQuery();
   const list = mine.data ?? [];
   const featured = list[0];
+
+  if (!isLoggedIn) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <Text style={styles.h1}>내 여행 루트</Text>
+        <LoginRequired description="나만의 여행 루트는 로그인 후에 만들 수 있어요." />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

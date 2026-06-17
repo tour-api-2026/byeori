@@ -12,6 +12,7 @@ import {
   reportVenue, VenueFilter,
 } from '../api/venues';
 import { addWishlist, fetchMyWishlists, removeWishlist } from '../api/wishlists';
+import { useAuthStore } from '../store/authStore';
 
 // ---------- 장소 ----------
 export function useVenuesQuery(filter: VenueFilter = {}) {
@@ -24,7 +25,8 @@ export function useVenuePerformancesQuery(id: number) {
   return useQuery({ queryKey: ['venue', id, 'performances'], queryFn: () => fetchVenuePerformances(id), enabled: !!id });
 }
 export function useMyVenuesQuery() {
-  return useQuery({ queryKey: ['venues', 'mine'], queryFn: fetchMyVenues });
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  return useQuery({ queryKey: ['venues', 'mine'], queryFn: fetchMyVenues, enabled: isLoggedIn });
 }
 export function useCreateVenueMutation() {
   const qc = useQueryClient();
@@ -68,7 +70,8 @@ export function useReviewsQuery(targetType: string, targetId: number) {
   return useQuery({ queryKey: ['reviews', targetType, targetId], queryFn: () => fetchReviews(targetType, targetId), enabled: !!targetId });
 }
 export function useMyReviewsQuery() {
-  return useQuery({ queryKey: ['reviews', 'mine'], queryFn: fetchMyReviews });
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  return useQuery({ queryKey: ['reviews', 'mine'], queryFn: fetchMyReviews, enabled: isLoggedIn });
 }
 export function useCreateReviewMutation() {
   const qc = useQueryClient();
@@ -87,7 +90,8 @@ export function useDeleteReviewMutation() {
 
 // ---------- 찜 ----------
 export function useMyWishlistsQuery() {
-  return useQuery({ queryKey: ['wishlists'], queryFn: fetchMyWishlists });
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  return useQuery({ queryKey: ['wishlists'], queryFn: fetchMyWishlists, enabled: isLoggedIn });
 }
 export function useToggleWishlistMutation() {
   const qc = useQueryClient();
@@ -100,7 +104,8 @@ export function useToggleWishlistMutation() {
 
 // ---------- 여행일지 ----------
 export function useMyItinerariesQuery() {
-  return useQuery({ queryKey: ['itineraries'], queryFn: fetchMyItineraries });
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  return useQuery({ queryKey: ['itineraries'], queryFn: fetchMyItineraries, enabled: isLoggedIn });
 }
 export function useItineraryQuery(id: number) {
   return useQuery({ queryKey: ['itinerary', id], queryFn: () => fetchItinerary(id), enabled: !!id });

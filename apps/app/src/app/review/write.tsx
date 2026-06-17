@@ -3,16 +3,28 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import LoginRequired from '@/components/LoginRequired';
 import { useCreateReviewMutation } from '@/lib/hooks/queries';
+import { useAuthStore } from '@/lib/store/authStore';
 import { colors, radius, space } from '@/lib/theme';
 
 export default function ReviewWriteScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { targetType = 'VENUE', targetId, targetName } = useLocalSearchParams<{ targetType: string; targetId: string; targetName: string }>();
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const create = useCreateReviewMutation();
   const [rating, setRating] = useState(5);
   const [content, setContent] = useState('');
+
+  if (!isLoggedIn) {
+    return (
+      <View style={styles.safe}>
+        <Stack.Screen options={{ title: '리뷰 작성' }} />
+        <LoginRequired description="리뷰 작성은 로그인 후에 이용할 수 있어요." />
+      </View>
+    );
+  }
 
   const submit = () => {
     create.mutate(

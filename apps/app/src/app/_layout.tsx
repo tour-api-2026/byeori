@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { applyGlobalFont } from '@/lib/font';
+import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts } from '@/lib/theme';
 
 applyGlobalFont();
@@ -19,11 +20,19 @@ export default function RootLayout() {
     'Pretendard-Bold': require('../../assets/fonts/Pretendard-Bold.ttf'),
   });
 
+  // 앱 시작 시 저장된 세션 복원
+  const hydrated = useAuthStore((s) => s.hydrated);
+  const hydrate = useAuthStore((s) => s.hydrate);
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
   useEffect(() => {
     if (loaded) applyGlobalFont();
   }, [loaded]);
 
-  if (!loaded) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+  // 폰트 + 세션 복원이 모두 끝날 때까지 렌더 게이트
+  if (!loaded || !hydrated) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
 
   return (
     <QueryClientProvider client={client}>

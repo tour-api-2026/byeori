@@ -2,14 +2,26 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import LoginRequired from '@/components/LoginRequired';
 import { Rating } from '@/components/Rating';
 import { Wishlist } from '@/lib/api/wishlists';
 import { useMyWishlistsQuery, useVenueDetailQuery } from '@/lib/hooks/queries';
+import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 export default function BookmarksScreen() {
   const router = useRouter();
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const { data, isLoading } = useMyWishlistsQuery();
+
+  if (!isLoggedIn) {
+    return (
+      <View style={styles.safe}>
+        <Stack.Screen options={{ title: '찜한 장소' }} />
+        <LoginRequired description="찜한 장소는 로그인 후에 확인할 수 있어요." />
+      </View>
+    );
+  }
 
   if (isLoading) return <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>;
 

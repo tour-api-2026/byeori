@@ -3,13 +3,25 @@ import { Image } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import LoginRequired from '@/components/LoginRequired';
 import { Review } from '@/lib/api/reviews';
 import { useDeleteReviewMutation, useMyReviewsQuery, useVenueDetailQuery } from '@/lib/hooks/queries';
+import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 export default function MyReviewsScreen() {
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const { data, isLoading } = useMyReviewsQuery();
   const [tab, setTab] = useState<'place' | 'route'>('place');
+
+  if (!isLoggedIn) {
+    return (
+      <View style={styles.safe}>
+        <Stack.Screen options={{ title: '내가 쓴 리뷰' }} />
+        <LoginRequired description="내가 쓴 리뷰는 로그인 후에 확인할 수 있어요." />
+      </View>
+    );
+  }
 
   const placeReviews = (data ?? []).filter((r) => r.targetType === 'VENUE');
   const shown = tab === 'place' ? placeReviews : [];

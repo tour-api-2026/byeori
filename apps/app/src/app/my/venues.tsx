@@ -3,9 +3,11 @@ import { Image } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import LoginRequired from '@/components/LoginRequired';
 import { Rating } from '@/components/Rating';
 import { Venue } from '@/lib/api/types';
 import { useMyVenuesQuery } from '@/lib/hooks/queries';
+import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 type StatusKey = 'approved' | 'review' | 'rejected';
@@ -17,8 +19,18 @@ const TABS: { key: StatusKey; label: string; color: string; soft: string }[] = [
 
 export default function MyVenuesScreen() {
   const router = useRouter();
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const { data, isLoading } = useMyVenuesQuery();
   const [tab, setTab] = useState<StatusKey>('approved');
+
+  if (!isLoggedIn) {
+    return (
+      <View style={styles.safe}>
+        <Stack.Screen options={{ title: '내가 등록한 장소' }} />
+        <LoginRequired description="내가 등록한 장소는 로그인 후에 확인할 수 있어요." />
+      </View>
+    );
+  }
   // 목록에 승인상태 필드가 없어 현재 등록분은 승인완료로 표시(검토중·거절됨은 BE 확장 시 연동)
   const shown = tab === 'approved' ? (data ?? []) : [];
   const cfg = TABS.find((t) => t.key === tab)!;

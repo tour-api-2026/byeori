@@ -3,7 +3,9 @@ import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import LoginRequired from '@/components/LoginRequired';
 import { useCreateVenueMutation } from '@/lib/hooks/queries';
+import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 const CATEGORIES = ['관람', '체험', '식사', '카페', '한복', '공예', '문화'];
@@ -13,7 +15,17 @@ const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
 export default function VenueRegisterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const create = useCreateVenueMutation();
+
+  if (!isLoggedIn) {
+    return (
+      <View style={styles.safe}>
+        <Stack.Screen options={{ title: '장소등록' }} />
+        <LoginRequired description="장소 등록은 로그인 후에 이용할 수 있어요." />
+      </View>
+    );
+  }
 
   const [name, setName] = useState('');
   const [category, setCategory] = useState('관람');
