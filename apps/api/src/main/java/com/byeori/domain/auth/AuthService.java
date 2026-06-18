@@ -30,7 +30,9 @@ public class AuthService {
             throw new BadRequestException("PROVIDER_REQUIRED", "provider가 필요합니다.");
         }
         SocialProfile profile = switch (req.provider().toLowerCase()) {
-            case "kakao" -> kakaoClient.verify(req.code(), req.redirectUri());
+            case "kakao" -> (req.accessToken() != null && !req.accessToken().isBlank())
+                    ? kakaoClient.verifyToken(req.accessToken())        // 네이티브 SDK 경로
+                    : kakaoClient.verify(req.code(), req.redirectUri()); // 웹 OAuth 경로
             case "google" -> googleClient.verify(req.idToken());
             default -> throw new BadRequestException("UNSUPPORTED_PROVIDER",
                     "지원하지 않는 제공자입니다: " + req.provider());

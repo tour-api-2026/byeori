@@ -51,6 +51,21 @@ public class KakaoClient {
         }
     }
 
+    /** 네이티브 SDK 등에서 받은 access_token으로 바로 사용자 정보 조회(코드 교환 생략). */
+    public SocialProfile verifyToken(String accessToken) {
+        if (accessToken == null || accessToken.isBlank()) {
+            throw new BadRequestException("KAKAO_TOKEN_REQUIRED", "카카오 accessToken이 필요합니다.");
+        }
+        try {
+            return requestProfile(accessToken);
+        } catch (BadRequestException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("카카오 토큰 검증 실패: {}", e.getMessage());
+            throw new BadRequestException("KAKAO_VERIFY_FAILED", "카카오 인증에 실패했습니다.");
+        }
+    }
+
     private String requestToken(String code, String redirectUri) throws Exception {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", "authorization_code");
