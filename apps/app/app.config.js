@@ -14,7 +14,12 @@ module.exports = () => {
     // 카카오 SDK maven 저장소를 프로젝트에 직접 추가해야 com.kakao.sdk 해석됨
     if (p === 'expo-build-properties') {
       return ['expo-build-properties', {
-        android: { extraMavenRepos: ['https://devrepo.kakao.com/nexus/content/groups/public/'] },
+        android: {
+          // kakao-login이 기본 Kotlin 1.5.10을 끌어와 expo-root-project(KSP)와 충돌 →
+          // 지원 버전으로 강제. (rootProject.ext.kotlinVersion 설정)
+          kotlinVersion: '2.0.21',
+          extraMavenRepos: ['https://devrepo.kakao.com/nexus/content/groups/public/'],
+        },
       }];
     }
     return p;
