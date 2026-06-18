@@ -23,11 +23,6 @@ export function isCancelled(e: unknown) {
   return e instanceof AuthCancelledError;
 }
 
-const KAKAO_DISCOVERY: AuthSession.DiscoveryDocument = {
-  authorizationEndpoint: 'https://kauth.kakao.com/oauth/authorize',
-  tokenEndpoint: 'https://kauth.kakao.com/oauth/token',
-};
-
 const GOOGLE_DISCOVERY: AuthSession.DiscoveryDocument = {
   authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
   tokenEndpoint: 'https://oauth2.googleapis.com/token',
@@ -38,6 +33,7 @@ async function exchangeWithBackend(body: {
   provider: 'kakao' | 'google';
   code?: string;
   idToken?: string;
+  accessToken?: string;
   redirectUri?: string;
 }) {
   const res = await api.post<ApiEnvelope<Session>>('/auth/social', body);
@@ -48,29 +44,29 @@ async function exchangeWithBackend(body: {
   return res.data.data.user;
 }
 
-/** 카카오 로그인: 인가코드(code) 획득 → 백엔드 교환 */
+/**
+ * 카카오 로그인: 네이티브 SDK로 accessToken 획득 → 백엔드 검증.
+ * 네이티브 모듈이라 Expo Go/웹에선 동작하지 않음(APK/dev build 전용).
+ * lazy require로 모듈 로드 — Expo Go 브라우징은 영향받지 않게.
+ */
 export async function loginKakao() {
-  const clientId = process.env.EXPO_PUBLIC_KAKAO_REST_KEY;
-  if (!clientId) {
-    throw new Error('카카오 로그인 설정이 필요해요. (EXPO_PUBLIC_KAKAO_REST_KEY 미설정)');
+  let KakaoLogin: typeof import('@react-native-seoul/kakao-login');
+  try {
+    KakaoLogin = require('@react-native-seoul/kakao-login');
+  } catch {
+    throw new Error('카카오 로그인은 설치형 앱(APK)에서만 가능해요.');
   }
-
-  const request = new AuthSession.AuthRequest({
-    clientId,
-    redirectUri,
-    responseType: AuthSession.ResponseType.Code,
-    // 카카오 토큰 교환은 백엔드(redirectUri 포함)에서 수행하므로 PKCE 비활성화
-    usePKCE: false,
-    scopes: ['account_email', 'profile_nickname'],
-  });
-
-  const result = await request.promptAsync(KAKAO_DISCOVERY);
-  if (result.type === 'cancel' || result.type === 'dismiss') throw new AuthCancelledError();
-  if (result.type !== 'success' || !result.params.code) {
-    throw new Error(result.type === 'error' ? (result.error?.message ?? '카카오 인증 오류') : '카카오 인증에 실패했습니다.');
+  try {
+    const token = await KakaoLogin.login();
+    if (!token?.accessToken) throw new Error('카카오 토큰을 받지 못했습니다.');
+    return exchangeWithBackend({ provider: 'kakao', accessToken: token.accessToken });
+  } catch (e: any) {
+    // 사용자가 카카오 화면에서 취소
+    const msg = String(e?.message ?? e?.code ?? '');
+    if (/cancel/i.test(msg) || e?.code === 'E_CANCELLED_OPERATION') throw new AuthCancelledError();
+    if (e instanceof AuthCancelledError) throw e;
+    throw new Error('카카오 로그인에 실패했습니다. (앱에서만 동작)');
   }
-
-  return exchangeWithBackend({ provider: 'kakao', code: result.params.code, redirectUri });
 }
 
 /** 구글 로그인: id_token 획득 → 백엔드 교환 */
