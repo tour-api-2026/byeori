@@ -8,6 +8,7 @@ import com.byeori.global.external.KopisClient;
 import com.byeori.global.external.SyncProperties;
 import com.byeori.global.external.TourApiClient;
 import com.byeori.global.external.dto.KopisItem;
+import com.byeori.global.external.dto.TourFestivalItem;
 import com.byeori.global.external.dto.TourItem;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -25,9 +26,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class SyncService {
 
     private static final int[] CONTENT_TYPES = {12, 14, 39}; // 관광지/문화시설/음식점
-    private static final int ROWS = 100;       // 페이지당(최대)
-    private static final int MAX_PAGES = 50;    // 안전 상한(끝 페이지 도달 시 조기 종료)
+    private static final int ROWS = 100;        // 페이지당(최대)
+    private static final int MAX_PAGES = 50;     // 장소(지역×타입별) 안전 상한
+    private static final int KOPIS_MAX_PAGES = 300;  // 공연: 전국 단일 스트림이라 상한을 크게(최대 3만건)
+    private static final int KOPIS_MONTHS = 12;  // 공연 수집 기간(개월)
     private static final DateTimeFormatter KOPIS_DATE = DateTimeFormatter.ofPattern("yyyy.MM.dd");
+    private static final DateTimeFormatter TOUR_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private final SyncProperties props;
     private final TourApiClient tourClient;
@@ -84,9 +88,9 @@ public class SyncService {
             return 0;
         }
         LocalDate from = LocalDate.now();
-        LocalDate to = from.plusMonths(6);
+        LocalDate to = from.plusMonths(KOPIS_MONTHS);
         int count = 0;
-        for (int page = 1; page <= MAX_PAGES; page++) {
+        for (int page = 1; page <= KOPIS_MAX_PAGES; page++) {
             List<KopisItem> items = kopisClient.performances(from, to, page, ROWS);
             if (items.isEmpty()) break;
             for (KopisItem it : items) count += upsertPerformance(it);
@@ -95,6 +99,58 @@ public class SyncService {
         }
         log.info("공연 동기화 완료: {}건", count);
         return count;
+    }
+
+    /** 축제/행사(TourAPI searchFestival2) 동기화. 공연과 같은 Performance 테이블에 source=TOURAPI로 저장. */
+    public int syncFestivals() {
+        if (!props.tourApiEnabled()) {
+            log.info("TOURAPI_KEY 미설정 → 축제 동기화 skip");
+            return 0;
+        }
+        String eventStart = LocalDate.now().format(TOUR_DATE); // 오늘 이후 진행/예정 행사
+        int count = 0;
+        for (RegionResolver.Region region : regionResolver.resolve()) {
+            for (int page = 1; page <= MAX_PAGES; page++) {
+                List<TourFestivalItem> items = tourClient.searchFestival(eventStart, region.regnCd(), region.signguCd(), page, ROWS);
+                if (items.isEmpty()) break;
+                for (TourFestivalItem it : items) count += upsertFestival(it);
+                throttle();
+                if (items.size() < ROWS) break; // 마지막 페이지
+            }
+        }
+        log.info("축제 동기화 완료: {}건", count);
+        return count;
+    }
+
+    private int upsertFestival(TourFestivalItem it) {
+        if (it.contentId() == null || it.title() == null) return 0;
+        LocalDate start = tourDate(it.eventStartDate());
+        LocalDate end = tourDate(it.eventEndDate());
+        String state = festivalState(start, end);
+        try {
+            perfRepo.findByTourContentId(it.contentId())
+                    .ifPresentOrElse(
+                            p -> { p.updateFromTour(it.title(), "축제", it.firstImage(), start, end, state); perfRepo.save(p); },
+                            () -> perfRepo.save(Performance.fromTour(it.contentId(), it.title(), "축제", it.firstImage(), start, end, state)));
+            return 1;
+        } catch (Exception e) {
+            log.debug("festival upsert skip {}: {}", it.contentId(), e.getMessage());
+            return 0;
+        }
+    }
+
+    /** 행사 기간 기준 상태 산출. 기간 정보 없으면 예정으로 처리. */
+    private static String festivalState(LocalDate start, LocalDate end) {
+        LocalDate today = LocalDate.now();
+        if (end != null && end.isBefore(today)) return "ENDED";
+        if (start != null && start.isAfter(today)) return "UPCOMING";
+        if (start != null && end != null) return "ONGOING"; // start<=today<=end
+        return "UPCOMING";
+    }
+
+    private static LocalDate tourDate(String s) {
+        try { return (s == null || s.isBlank()) ? null : LocalDate.parse(s, TOUR_DATE); }
+        catch (Exception e) { return null; }
     }
 
     private int upsertPerformance(KopisItem it) {

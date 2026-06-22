@@ -18,5 +18,6 @@ public class SyncScheduler {
         log.info("정기 동기화 시작");
         syncService.syncVenues();
         syncService.syncPerformances();
+        syncService.syncFestivals();
     }
 }

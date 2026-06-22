@@ -1,6 +1,7 @@
 package com.byeori.global.external;
 
 import com.byeori.global.external.dto.RegionCode;
+import com.byeori.global.external.dto.TourFestivalItem;
 import com.byeori.global.external.dto.TourItem;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -61,6 +62,35 @@ public class TourApiClient {
         }
     }
 
+    /**
+     * 축제/행사 목록(searchFestival2). eventStartDate(yyyyMMdd) 이후 진행/예정 행사 검색.
+     * areaBasedList2와 동일하게 법정동코드(lDongRegnCd/lDongSignguCd) 사용.
+     */
+    public List<TourFestivalItem> searchFestival(String eventStartDate, String lDongRegnCd, String lDongSignguCd, int page, int rows) {
+        if (!props.tourApiEnabled()) return List.of();
+        try {
+            URI uri = UriComponentsBuilder.fromUriString(BASE + "/searchFestival2")
+                    .queryParam("serviceKey", encKey())
+                    .queryParam("MobileOS", "ETC")
+                    .queryParam("MobileApp", "byeori")
+                    .queryParam("_type", "json")
+                    .queryParam("arrange", "A")
+                    .queryParam("eventStartDate", eventStartDate)
+                    .queryParam("lDongRegnCd", lDongRegnCd)
+                    .queryParamIfPresent("lDongSignguCd", Optional.ofNullable(lDongSignguCd))
+                    .queryParam("numOfRows", rows)
+                    .queryParam("pageNo", page)
+                    .build(true)
+                    .toUri();
+            String body = http.get().uri(uri).retrieve().body(String.class);
+            return parseFestivals(body);
+        } catch (Exception e) {
+            log.warn("TourAPI searchFestival 실패 regn={} signgu={} page={}: {}",
+                    lDongRegnCd, lDongSignguCd, page, e.getMessage());
+            return List.of();
+        }
+    }
+
     /** 법정동 코드 조회(ldongCode2). parentRegnCd=null이면 시도 목록, 있으면 그 시도의 시군구 목록. */
     public List<RegionCode> ldongCodes(String parentRegnCd) {
         if (!props.tourApiEnabled()) return List.of();
@@ -108,6 +138,17 @@ public class TourApiClient {
                     text(n, "contentid"), text(n, "title"), text(n, "addr1"),
                     text(n, "mapy"), text(n, "mapx"), text(n, "firstimage"),
                     text(n, "contenttypeid"), text(n, "lclsSystm2"), text(n, "lclsSystm3"), text(n, "tel")));
+        }
+        return out;
+    }
+
+    private List<TourFestivalItem> parseFestivals(String json) throws Exception {
+        List<TourFestivalItem> out = new ArrayList<>();
+        for (JsonNode n : items(json)) {
+            out.add(new TourFestivalItem(
+                    text(n, "contentid"), text(n, "title"), text(n, "addr1"),
+                    text(n, "mapy"), text(n, "mapx"), text(n, "firstimage"), text(n, "tel"),
+                    text(n, "eventstartdate"), text(n, "eventenddate")));
         }
         return out;
     }

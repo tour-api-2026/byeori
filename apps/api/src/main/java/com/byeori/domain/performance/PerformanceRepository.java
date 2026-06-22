@@ -13,6 +13,8 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
 
     java.util.Optional<Performance> findByKopisId(String kopisId);
 
+    java.util.Optional<Performance> findByTourContentId(String tourContentId);
+
     @Modifying(clearAutomatically = true)
     @Query("update Performance p set p.avgRating = :avg, p.reviewCount = :cnt where p.id = :id")
     void updateRating(@Param("id") Long id, @Param("avg") BigDecimal avg, @Param("cnt") int cnt);
