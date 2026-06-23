@@ -36,4 +36,24 @@ public final class ItineraryDtos {
             return new Detail(i.getId(), i.getTitle(), i.getStartDate(), i.getEndDate(), i.getSourceType(), items);
         }
     }
+
+    // ── 길찾기(여러 경유지 경로) ─────────────────────────────
+
+    /** 경유지(방문지) 한 곳. order는 방문 순서(0부터). */
+    public record RouteStop(
+            int order, String targetType, Long targetId, String name, double lat, double lng) {}
+
+    /** 구간(경유지 간) 거리·시간. */
+    public record RouteLeg(int distance, int duration) {}
+
+    /**
+     * 경로 응답.
+     * - distance: 총 거리(m), duration: 총 소요시간(초)
+     * - stops: 좌표가 있어 경로에 포함된 방문지(순서대로)
+     * - legs: 구간별 거리/시간
+     * - path: 지도에 그릴 polyline 좌표열, 각 원소 [위도(lat), 경도(lng)]
+     */
+    public record RouteResponse(
+            int distance, int duration, String priority,
+            List<RouteStop> stops, List<RouteLeg> legs, List<double[]> path) {}
 }

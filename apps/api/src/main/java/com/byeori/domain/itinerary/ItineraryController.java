@@ -33,6 +33,14 @@ public class ItineraryController {
         return ApiResponse.ok(service.get(userId, id));
     }
 
+    /** 방문지들을 순서대로 잇는 도로 경로(polyline·거리·시간). priority=RECOMMEND|TIME|DISTANCE */
+    @GetMapping("/itineraries/{id}/route")
+    public ApiResponse<RouteResponse> route(@AuthenticationPrincipal Long userId,
+                                            @PathVariable("id") Long id,
+                                            @RequestParam(name = "priority", defaultValue = "RECOMMEND") String priority) {
+        return ApiResponse.ok(service.route(userId, id, priority));
+    }
+
     @PatchMapping("/itineraries/{id}")
     public ApiResponse<Detail> update(@AuthenticationPrincipal Long userId,
                                       @PathVariable("id") Long id, @RequestBody UpdateRequest req) {
