@@ -1,15 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { Chip } from '@/components/Chip';
 import { Rating } from '@/components/Rating';
 import { Venue } from '@/lib/api/types';
-import { useVenuesQuery } from '@/lib/hooks/queries';
+import { useItineraryRouteQuery, useVenuesQuery } from '@/lib/hooks/queries';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
+
+const fmtKm = (m: number) => (m / 1000).toFixed(1);
+const fmtMin = (s: number) => {
+  const m = Math.round(s / 60);
+  return m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${m}분`;
+};
 
 const CATS = ['전체', '문화', '카페', '체험', '맛집', '한복'];
 const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
@@ -29,6 +35,9 @@ function buildHtml(key: string): string {
   .pinK{display:inline-block;min-width:24px;height:24px;line-height:24px;text-align:center;border-radius:999px;
        background:#3177D5;color:#fff;font-size:12px;font-weight:800;border:2px solid #fff;
        box-shadow:0 2px 6px rgba(0,0,0,.3);font-family:-apple-system,system-ui,sans-serif}
+  .pinR{display:inline-block;min-width:26px;height:26px;line-height:26px;text-align:center;border-radius:999px;
+       background:#263176;color:#fff;font-size:13px;font-weight:800;border:2px solid #fff;
+       box-shadow:0 2px 6px rgba(0,0,0,.35);font-family:-apple-system,system-ui,sans-serif}
 </style></head>
 <body><div id="map"></div>
 <script>
@@ -39,6 +48,7 @@ function buildHtml(key: string): string {
   onerror="post({type:'error', msg:'카카오 SDK 스크립트 로드 실패'})"></script>
 <script>
   var map, venueOv=[], kakaoOv=[], ready=false, pending=null, places=null, kakaoData=[];
+  var routeLine=null, routeOv=[], pendingRoute=null;
   function sel(id){ post({type:'select', id:id}); }
   function selK(i){ post({type:'selectKakao', place:kakaoData[i]}); }
   window.sel = sel; window.selK = selK;
@@ -81,12 +91,38 @@ function buildHtml(key: string): string {
     });
   };
   window.clearKakao = function(){ clearArr(kakaoOv); kakaoData=[]; fitAll(); };
+  // 여행 경로: polyline(도로 경로선) + 번호 마커. data={path:[[lat,lng]...], stops:[{order,lat,lng}...]}
+  window.drawRoute = function(data){
+    if(!ready){ pendingRoute=data; return; }
+    window.clearRoute();
+    clearArr(venueOv); clearArr(kakaoOv); // 경로 모드에선 다른 핀 정리
+    var pathLL=(data.path||[]).map(function(p){ return new kakao.maps.LatLng(p[0], p[1]); });
+    if(pathLL.length){
+      routeLine=new kakao.maps.Polyline({path:pathLL, strokeWeight:5, strokeColor:'#3177D5', strokeOpacity:0.9, strokeStyle:'solid'});
+      routeLine.setMap(map);
+    }
+    (data.stops||[]).forEach(function(s){
+      var pos=new kakao.maps.LatLng(s.lat, s.lng);
+      var html='<div class="pinR">'+(s.order+1)+'</div>';
+      var ov=new kakao.maps.CustomOverlay({position:pos, content:html, yAnchor:1});
+      ov.setMap(map); routeOv.push(ov);
+    });
+    var b=new kakao.maps.LatLngBounds();
+    if(pathLL.length) pathLL.forEach(function(ll){ b.extend(ll); });
+    else (data.stops||[]).forEach(function(s){ b.extend(new kakao.maps.LatLng(s.lat, s.lng)); });
+    if(routeOv.length) map.setBounds(b);
+  };
+  window.clearRoute = function(){
+    if(routeLine){ routeLine.setMap(null); routeLine=null; }
+    clearArr(routeOv);
+  };
   function boot(){
     if(typeof kakao==='undefined'||!kakao.maps){ post({type:'error', msg:'SDK_LOAD_FAIL'}); return; }
     kakao.maps.load(function(){
       map=new kakao.maps.Map(document.getElementById('map'),{center:new kakao.maps.LatLng(37.5759,126.9769), level:6});
       ready=true; post({type:'ready'});
-      if(pending){ window.setMarkers(pending); pending=null; }
+      if(pendingRoute){ window.drawRoute(pendingRoute); pendingRoute=null; }
+      else if(pending){ window.setMarkers(pending); pending=null; }
     });
   }
   if(document.readyState==='complete') boot(); else window.addEventListener('load', boot);
@@ -98,6 +134,11 @@ type KakaoPlace = { name: string; address: string; lat: number; lng: number; cat
 
 export default function MapScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ itineraryId?: string }>();
+  const itineraryId = params.itineraryId ? Number(params.itineraryId) : undefined;
+  const routeMode = !!itineraryId && !Number.isNaN(itineraryId);
+  const routeQuery = useItineraryRouteQuery(routeMode ? (itineraryId as number) : 0);
+  const exitRouteMode = () => router.setParams({ itineraryId: undefined });
   const [cat, setCat] = useState('전체');
   const [hanbokOnly, setHanbokOnly] = useState(false);
   const [selected, setSelected] = useState<Venue | null>(null);
@@ -163,10 +204,16 @@ export default function MapScreen() {
   );
 
   useEffect(() => {
-    if (ready && webRef.current) {
-      webRef.current.injectJavaScript(`window.setMarkers(${markerPayload}); true;`);
+    if (!ready || !webRef.current) return;
+    if (routeMode) {
+      if (routeQuery.data) {
+        const payload = JSON.stringify({ path: routeQuery.data.path, stops: routeQuery.data.stops });
+        webRef.current.injectJavaScript(`window.drawRoute(${payload}); true;`);
+      }
+    } else {
+      webRef.current.injectJavaScript(`window.clearRoute(); window.setMarkers(${markerPayload}); true;`);
     }
-  }, [ready, markerPayload]);
+  }, [ready, routeMode, routeQuery.data, markerPayload]);
 
   const onMessage = (e: { nativeEvent: { data: string } }) => {
     try {
@@ -186,7 +233,30 @@ export default function MapScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      {/* 경로 모드 배너 (여행 일지 경로 보기) */}
+      {routeMode && (
+        <View style={styles.routeBanner}>
+          <Ionicons name="navigate" size={18} color={colors.white} />
+          <View style={{ flex: 1 }}>
+            {routeQuery.isLoading ? (
+              <Text style={styles.routeBannerText}>경로 계산 중…</Text>
+            ) : routeQuery.data ? (
+              <Text style={styles.routeBannerText}>
+                총 {fmtKm(routeQuery.data.distance)}km · 약 {fmtMin(routeQuery.data.duration)} · {routeQuery.data.stops.length}곳
+              </Text>
+            ) : (
+              <Text style={styles.routeBannerText}>경로를 불러오지 못했어요</Text>
+            )}
+          </View>
+          <Pressable hitSlop={8} onPress={exitRouteMode} style={styles.routeClose}>
+            <Ionicons name="close" size={16} color={colors.white} />
+            <Text style={styles.routeCloseText}>닫기</Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* 검색창 (카카오 전체 장소 + 우리 장소 검색) */}
+      {!routeMode && (<>
       <View style={styles.search}>
         <Ionicons name="search" size={18} color={colors.accent} />
         <TextInput
@@ -224,6 +294,7 @@ export default function MapScreen() {
           '{keyword}' 검색 · 카카오 <Text style={styles.resultNum}>{kakaoCount ?? 0}</Text>곳 · 우리 장소 <Text style={styles.resultNum}>{venues.length}</Text>곳
         </Text>
       )}
+      </>)}
 
       {/* 카카오 지도 (WebView는 네이티브 전용 — 웹에서는 핀 폴백) */}
       <View style={styles.map}>
@@ -307,6 +378,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 11,
   },
   searchInput: { flex: 1, fontSize: 14, color: colors.text, padding: 0 },
+  routeBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: space.lg, marginTop: 8,
+    backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 11, ...shadow.card,
+  },
+  routeBannerText: { color: colors.white, fontSize: 14, fontFamily: fonts.bold, fontWeight: '800' },
+  routeClose: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  routeCloseText: { color: colors.white, fontSize: 12, fontFamily: fonts.semibold, fontWeight: '600' },
   resultHint: { fontSize: 12, color: colors.textSub, marginHorizontal: space.lg, marginTop: 6, marginBottom: 2, fontFamily: fonts.medium, fontWeight: '500' },
   resultNum: { color: colors.accent, fontFamily: fonts.bold, fontWeight: '800' },
   toggleWrap: {

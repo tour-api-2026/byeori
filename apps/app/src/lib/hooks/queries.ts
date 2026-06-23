@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchCourseDetail, fetchCourses } from '../api/courses';
 import {
   addItineraryItem, createItinerary, deleteItinerary, deleteItineraryItem,
-  fetchItinerary, fetchMyItineraries,
+  fetchItinerary, fetchItineraryRoute, fetchMyItineraries,
 } from '../api/itineraries';
 import { fetchPerformances, PerformanceFilter } from '../api/performances';
 import { createReview, deleteReview, fetchMyReviews, fetchReviews } from '../api/reviews';
@@ -109,6 +109,9 @@ export function useMyItinerariesQuery() {
 }
 export function useItineraryQuery(id: number) {
   return useQuery({ queryKey: ['itinerary', id], queryFn: () => fetchItinerary(id), enabled: !!id });
+}
+export function useItineraryRouteQuery(id: number, priority = 'RECOMMEND') {
+  return useQuery({ queryKey: ['itinerary', id, 'route', priority], queryFn: () => fetchItineraryRoute(id, priority), enabled: !!id });
 }
 export function useCreateItineraryMutation() {
   const qc = useQueryClient();

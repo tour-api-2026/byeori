@@ -132,9 +132,17 @@ function RouteCard({ summary }: { summary: ItinerarySummary }) {
             ))}
           </View>
         ) : <Text style={styles.stopEmpty}>아직 담은 장소가 없어요</Text>}
-        <Pressable style={styles.editBtn} onPress={() => router.push(`/itinerary/${summary.id}`)}>
-          <Text style={styles.editText}>루트 편집</Text>
-        </Pressable>
+        <View style={styles.cardActions}>
+          {stops.length >= 2 && (
+            <Pressable style={styles.routeBtn} onPress={() => router.push({ pathname: '/map', params: { itineraryId: String(summary.id) } })}>
+              <Ionicons name="navigate-outline" size={13} color={colors.white} />
+              <Text style={styles.routeBtnText}>지도에서 경로 보기</Text>
+            </Pressable>
+          )}
+          <Pressable style={styles.editBtn} onPress={() => router.push(`/itinerary/${summary.id}`)}>
+            <Text style={styles.editText}>루트 편집</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -183,6 +191,9 @@ const styles = StyleSheet.create({
   stopNumText: { color: colors.white, fontSize: 12, fontFamily: fonts.bold, fontWeight: '800' },
   stopName: { flex: 1, fontSize: 14, fontFamily: fonts.medium, fontWeight: '500', color: colors.text },
   stopEmpty: { fontSize: 13, color: colors.textFaint },
-  editBtn: { alignSelf: 'flex-end', borderWidth: 1, borderColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 7, marginTop: 4 },
+  cardActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 8 },
+  routeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 8 },
+  routeBtnText: { color: colors.white, fontSize: 12, fontFamily: fonts.semibold, fontWeight: '700' },
+  editBtn: { borderWidth: 1, borderColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 7 },
   editText: { color: colors.primary, fontSize: 12, fontFamily: fonts.semibold, fontWeight: '600' },
 });
