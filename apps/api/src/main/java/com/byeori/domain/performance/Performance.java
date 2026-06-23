@@ -22,6 +22,8 @@ public class Performance {
     private LocalDate startDate;
     private LocalDate endDate;
     private String state;
+    private BigDecimal lat;
+    private BigDecimal lng;
     private String externalBookingUrl;
     private BigDecimal avgRating;
     private Integer reviewCount;
@@ -65,7 +67,8 @@ public class Performance {
 
     /** TourAPI 축제/행사로 신규 생성 */
     public static Performance fromTour(String tourContentId, String title, String genre, String posterImageUrl,
-                                       LocalDate startDate, LocalDate endDate, String state) {
+                                       LocalDate startDate, LocalDate endDate, String state,
+                                       BigDecimal lat, BigDecimal lng) {
         Performance p = new Performance();
         p.tourContentId = tourContentId;
         p.title = title;
@@ -74,6 +77,8 @@ public class Performance {
         p.startDate = startDate;
         p.endDate = endDate;
         p.state = state;
+        p.lat = lat;
+        p.lng = lng;
         p.source = "TOURAPI";
         p.avgRating = BigDecimal.ZERO;
         p.reviewCount = 0;
@@ -84,13 +89,27 @@ public class Performance {
 
     /** TourAPI 재동기화 갱신 */
     public void updateFromTour(String title, String genre, String posterImageUrl,
-                               LocalDate startDate, LocalDate endDate, String state) {
+                               LocalDate startDate, LocalDate endDate, String state,
+                               BigDecimal lat, BigDecimal lng) {
         if (title != null) this.title = title;
         if (genre != null) this.genre = genre;
         if (posterImageUrl != null) this.posterImageUrl = posterImageUrl;
         if (startDate != null) this.startDate = startDate;
         if (endDate != null) this.endDate = endDate;
         if (state != null) this.state = state;
+        if (lat != null) this.lat = lat;
+        if (lng != null) this.lng = lng;
         this.syncedAt = LocalDateTime.now();
+    }
+
+    /** 좌표 보강(KOPIS 공연: 공연시설상세에서 위경도 확보 후 설정). */
+    public void setCoordinates(BigDecimal lat, BigDecimal lng) {
+        if (lat != null) this.lat = lat;
+        if (lng != null) this.lng = lng;
+        this.syncedAt = LocalDateTime.now();
+    }
+
+    public boolean hasCoordinates() {
+        return lat != null && lng != null;
     }
 }

@@ -13,7 +13,9 @@ import com.byeori.global.external.dto.TourItem;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -89,11 +91,13 @@ public class SyncService {
         }
         LocalDate from = LocalDate.now();
         LocalDate to = from.plusMonths(KOPIS_MONTHS);
+        // 공연시설(mt10id) 좌표 캐시 — 여러 공연이 같은 공연장을 공유하므로 중복 호출 방지.
+        Map<String, BigDecimal[]> facilityCoords = new HashMap<>();
         int count = 0;
         for (int page = 1; page <= KOPIS_MAX_PAGES; page++) {
             List<KopisItem> items = kopisClient.performances(from, to, page, ROWS);
             if (items.isEmpty()) break;
-            for (KopisItem it : items) count += upsertPerformance(it);
+            for (KopisItem it : items) count += upsertPerformance(it, facilityCoords);
             throttle();
             if (items.size() < ROWS) break; // 마지막 페이지
         }
@@ -130,8 +134,8 @@ public class SyncService {
         try {
             perfRepo.findByTourContentId(it.contentId())
                     .ifPresentOrElse(
-                            p -> { p.updateFromTour(it.title(), "축제", it.firstImage(), start, end, state); perfRepo.save(p); },
-                            () -> perfRepo.save(Performance.fromTour(it.contentId(), it.title(), "축제", it.firstImage(), start, end, state)));
+                            p -> { p.updateFromTour(it.title(), "축제", it.firstImage(), start, end, state, num(it.mapy()), num(it.mapx())); perfRepo.save(p); },
+                            () -> perfRepo.save(Performance.fromTour(it.contentId(), it.title(), "축제", it.firstImage(), start, end, state, num(it.mapy()), num(it.mapx()))));
             return 1;
         } catch (Exception e) {
             log.debug("festival upsert skip {}: {}", it.contentId(), e.getMessage());
@@ -153,21 +157,38 @@ public class SyncService {
         catch (Exception e) { return null; }
     }
 
-    private int upsertPerformance(KopisItem it) {
+    private int upsertPerformance(KopisItem it, Map<String, BigDecimal[]> facilityCoords) {
         if (it.mt20id() == null || it.prfnm() == null) return 0;
         LocalDate start = date(it.prfpdfrom());
         LocalDate end = date(it.prfpdto());
         String state = stateOf(it.prfstate());
         try {
-            perfRepo.findByKopisId(it.mt20id())
-                    .ifPresentOrElse(
-                            p -> { p.updateFromKopis(it.prfnm(), it.genrenm(), it.poster(), start, end, state); perfRepo.save(p); },
-                            () -> perfRepo.save(Performance.fromKopis(it.mt20id(), it.prfnm(), it.genrenm(), it.poster(), start, end, state, null)));
+            Performance p = perfRepo.findByKopisId(it.mt20id())
+                    .map(existing -> { existing.updateFromKopis(it.prfnm(), it.genrenm(), it.poster(), start, end, state); return existing; })
+                    .orElseGet(() -> Performance.fromKopis(it.mt20id(), it.prfnm(), it.genrenm(), it.poster(), start, end, state, null));
+            // 좌표 미보유 시에만 공연시설상세에서 위경도 보강(재동기화 비용 최소화).
+            if (!p.hasCoordinates()) {
+                BigDecimal[] coords = resolvePerformanceCoords(it.mt20id(), facilityCoords);
+                if (coords != null) p.setCoordinates(coords[0], coords[1]);
+            }
+            perfRepo.save(p);
             return 1;
         } catch (Exception e) {
             log.debug("performance upsert skip {}: {}", it.mt20id(), e.getMessage());
             return 0;
         }
+    }
+
+    /** 공연 → 공연시설ID → 공연장 좌표. 공연장 좌표는 캐시(null도 캐시해 재조회 방지). */
+    private BigDecimal[] resolvePerformanceCoords(String mt20id, Map<String, BigDecimal[]> cache) {
+        String mt10id = kopisClient.facilityId(mt20id);
+        throttle();
+        if (mt10id == null) return null;
+        if (cache.containsKey(mt10id)) return cache.get(mt10id);
+        BigDecimal[] coords = kopisClient.facilityCoords(mt10id);
+        throttle();
+        cache.put(mt10id, coords);
+        return coords;
     }
 
     private static String stateOf(String prfstate) {

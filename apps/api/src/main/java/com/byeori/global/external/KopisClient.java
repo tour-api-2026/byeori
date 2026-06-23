@@ -53,6 +53,51 @@ public class KopisClient {
         }
     }
 
+    /** 공연상세(pblprfr/{mt20id}) → 공연시설ID(mt10id). 좌표 보강용. */
+    public String facilityId(String mt20id) {
+        if (!props.kopisEnabled() || mt20id == null) return null;
+        try {
+            String url = UriComponentsBuilder.fromUriString(BASE + "/pblprfr/" + mt20id)
+                    .queryParam("service", props.getKopisKey())
+                    .encode().build().toUriString();
+            String xml = http.get().uri(url).retrieve().body(String.class);
+            return firstTag(xml, "mt10id");
+        } catch (Exception e) {
+            log.debug("KOPIS 공연상세 실패 {}: {}", mt20id, e.getMessage());
+            return null;
+        }
+    }
+
+    /** 공연시설상세(prfplc/{mt10id}) → [위도(la), 경도(lo)]. 좌표 없으면 null. */
+    public java.math.BigDecimal[] facilityCoords(String mt10id) {
+        if (!props.kopisEnabled() || mt10id == null) return null;
+        try {
+            String url = UriComponentsBuilder.fromUriString(BASE + "/prfplc/" + mt10id)
+                    .queryParam("service", props.getKopisKey())
+                    .encode().build().toUriString();
+            String xml = http.get().uri(url).retrieve().body(String.class);
+            String la = firstTag(xml, "la");
+            String lo = firstTag(xml, "lo");
+            if (la == null || lo == null) return null;
+            return new java.math.BigDecimal[]{new java.math.BigDecimal(la), new java.math.BigDecimal(lo)};
+        } catch (Exception e) {
+            log.debug("KOPIS 공연시설상세 실패 {}: {}", mt10id, e.getMessage());
+            return null;
+        }
+    }
+
+    /** XML에서 첫 번째 태그 텍스트 추출(단건 응답용). */
+    private String firstTag(String xml, String name) throws Exception {
+        if (xml == null || xml.isBlank()) return null;
+        DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
+        f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        Document doc = f.newDocumentBuilder().parse(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
+        NodeList n = doc.getElementsByTagName(name);
+        if (n.getLength() == 0 || n.item(0).getTextContent() == null) return null;
+        String v = n.item(0).getTextContent().trim();
+        return v.isBlank() ? null : v;
+    }
+
     private List<KopisItem> parse(String xml) throws Exception {
         List<KopisItem> out = new ArrayList<>();
         if (xml == null || xml.isBlank()) return out;
