@@ -11,6 +11,7 @@ import com.byeori.global.exception.NotFoundException;
 import com.byeori.global.security.JwtTokenProvider;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,11 @@ public class AuthService {
     private final KakaoClient kakaoClient;
     private final GoogleClient googleClient;
     private final JwtTokenProvider tokenProvider;
+
+    @Value("${byeori.auth.admin-id:admin}")
+    private String adminId;
+    @Value("${byeori.auth.admin-password:byeori1234}")
+    private String adminPassword;
 
     @Transactional
     public TokenResponse socialLogin(SocialLoginRequest req) {
@@ -48,6 +54,25 @@ public class AuthService {
                         profile.provider(), profile.providerUserId(),
                         profile.nickname(), profile.email(), profile.imageUrl())));
 
+        String access = tokenProvider.generateAccess(user.getId(), user.getRole());
+        String refresh = tokenProvider.generateRefresh(user.getId(), user.getRole());
+        return new TokenResponse(access, refresh, toSummary(user));
+    }
+
+    /**
+     * 아이디/비밀번호 로그인. 현재는 설정된 관리자 계정만 통과.
+     * 자격증명은 byeori.auth.admin-id/admin-password(기본 admin/byeori1234, 운영은 ADMIN_* 환경변수로 덮어쓰기).
+     */
+    @Transactional
+    public TokenResponse login(LoginRequest req) {
+        String id = (req != null && req.id() != null) ? req.id().trim() : null;
+        String pw = (req != null) ? req.password() : null;
+        if (id == null || pw == null || !adminId.equals(id) || !adminPassword.equals(pw)) {
+            throw new BadRequestException("INVALID_CREDENTIALS", "아이디 또는 비밀번호가 올바르지 않습니다.");
+        }
+        User user = userRepository
+                .findByAuthProviderAndProviderUserId("ADMIN", adminId)
+                .orElseGet(() -> userRepository.save(User.admin(adminId, "관리자")));
         String access = tokenProvider.generateAccess(user.getId(), user.getRole());
         String refresh = tokenProvider.generateRefresh(user.getId(), user.getRole());
         return new TokenResponse(access, refresh, toSummary(user));

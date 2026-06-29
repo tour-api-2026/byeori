@@ -8,6 +8,9 @@ public final class AuthDtos {
     /** POST /auth/social 요청. provider="kakao"|"google". 카카오: code(웹) 또는 accessToken(네이티브 SDK). */
     public record SocialLoginRequest(String provider, String code, String idToken, String accessToken, String redirectUri) {}
 
+    /** POST /auth/login 요청(아이디/비밀번호 로그인). 현재 관리자 계정 전용. */
+    public record LoginRequest(String id, String password) {}
+
     /** POST /auth/token/refresh 요청. */
     public record RefreshRequest(String refreshToken) {}
 

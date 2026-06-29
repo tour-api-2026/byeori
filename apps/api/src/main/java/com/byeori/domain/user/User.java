@@ -72,6 +72,22 @@ public class User {
         return u;
     }
 
+    /** 관리자 계정(아이디/비밀번호 로그인). role=ADMIN. */
+    public static User admin(String providerUserId, String name) {
+        User u = new User();
+        u.authProvider = "ADMIN";
+        u.providerUserId = providerUserId;
+        u.name = (name != null && !name.isBlank()) ? name : "관리자";
+        u.role = "ADMIN";
+        u.status = "ACTIVE";
+        u.language = "ko";
+        u.phoneVerified = false;
+        u.emailVerified = false;
+        u.createdAt = LocalDateTime.now();
+        u.updatedAt = LocalDateTime.now();
+        return u;
+    }
+
     /** 재로그인 시 변경된 프로필 동기화. */
     public void updateProfile(String name, String email, String profileImageUrl) {
         if (name != null && !name.isBlank()) this.name = name;

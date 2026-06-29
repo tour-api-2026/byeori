@@ -19,6 +19,12 @@ public class AuthController {
         return ApiResponse.ok(service.socialLogin(req));
     }
 
+    /** 아이디/비밀번호 로그인(현재 관리자 계정 전용). */
+    @PostMapping("/auth/login")
+    public ApiResponse<TokenResponse> login(@RequestBody LoginRequest req) {
+        return ApiResponse.ok(service.login(req));
+    }
+
     @PostMapping("/auth/token/refresh")
     public ApiResponse<TokenPair> refresh(@RequestBody RefreshRequest req) {
         return ApiResponse.ok(service.refresh(req));

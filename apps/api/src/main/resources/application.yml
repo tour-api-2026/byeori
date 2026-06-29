@@ -25,6 +25,9 @@ byeori:
     kakao-rest-key: ${KAKAO_REST_KEY:}
     kakao-redirect-uri: ${KAKAO_REDIRECT_URI:}
     google-client-id: ${GOOGLE_CLIENT_ID:}
+    # 아이디/비밀번호 로그인용 관리자 계정(운영은 ADMIN_* 환경변수로 덮어쓸 것)
+    admin-id: ${ADMIN_ID:admin}
+    admin-password: ${ADMIN_PASSWORD:byeori1234}
   maps:
     # 카카오모빌리티 길찾기(여러 경유지) REST 키 — 로그인 키와 동일 값 재사용. 서버 전용.
     kakao-rest-key: ${KAKAO_REST_KEY:}
