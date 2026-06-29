@@ -69,6 +69,19 @@ export async function loginKakao() {
   }
 }
 
+/**
+ * 아이디/비밀번호 로그인(현재 관리자 계정 전용).
+ * 카카오/구글과 달리 네이티브 모듈·외부 인증이 필요 없어 Expo Go·웹에서도 동작.
+ */
+export async function loginAdmin(id: string, password: string) {
+  const res = await api.post<ApiEnvelope<Session>>('/auth/login', { id: id?.trim(), password });
+  if (!res.data.success || !res.data.data?.accessToken) {
+    throw new Error(res.data.error?.message ?? '로그인에 실패했습니다.');
+  }
+  await useAuthStore.getState().setSession(res.data.data);
+  return res.data.data.user;
+}
+
 /** 구글 로그인: id_token 획득 → 백엔드 교환 */
 export async function loginGoogle() {
   const clientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;

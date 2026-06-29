@@ -49,6 +49,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="venue/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="login" options={{ headerShown: false, presentation: 'modal' }} />
+          <Stack.Screen name="email-login" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
           <Stack.Screen name="bookmarks" options={{ title: '즐겨찾기' }} />
         </Stack>

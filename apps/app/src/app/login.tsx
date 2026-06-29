@@ -76,6 +76,15 @@ export default function LoginScreen() {
           )}
         </Pressable>
 
+        {/* 이메일(아이디/비밀번호) 로그인 — 누르면 입력 화면으로 */}
+        <Pressable
+          style={[styles.btn, styles.btnBorder, { backgroundColor: colors.white }, !!busy && styles.btnDisabled]}
+          disabled={!!busy}
+          onPress={() => router.push('/email-login')}>
+          <Ionicons name="mail-outline" size={18} color={colors.text} />
+          <Text style={[styles.btnText, { color: colors.text }]}>이메일로 로그인하기</Text>
+        </Pressable>
+
         <Pressable disabled={!!busy} onPress={() => router.replace('/(tabs)')}>
           <Text style={styles.skip}>둘러보기</Text>
         </Pressable>

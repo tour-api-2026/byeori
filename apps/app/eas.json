@@ -28,7 +28,15 @@
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://byeori.seoulride.site/api/v1",
+        "EXPO_PUBLIC_KAKAO_JS_KEY": "c67499ab00bd0367a2de44ba3990169d",
+        "EXPO_PUBLIC_KAKAO_NATIVE_KEY": "7f769acfbde8a4f7d9dedba42e0580a4"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {
