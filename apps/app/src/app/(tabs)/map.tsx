@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -168,6 +168,17 @@ export default function MapScreen() {
     routeMode ? (itineraryId as number) : 0,
   );
   const exitRouteMode = () => router.setParams({ itineraryId: undefined });
+
+  // '내 주변' 탭을 떠나면 경로 모드를 해제한다.
+  // (여행 루트에서 넘어온 itineraryId 파라미터가 남아 다시 들어왔을 때
+  //  경로가 그대로 그려지는 문제 방지)
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        if (params.itineraryId) router.setParams({ itineraryId: undefined });
+      };
+    }, [params.itineraryId, router]),
+  );
   const [cat, setCat] = useState("전체");
   const [hanbokOnly, setHanbokOnly] = useState(false);
   const [selected, setSelected] = useState<Venue | null>(null);
