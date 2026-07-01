@@ -1,12 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LoginRequired from '@/components/LoginRequired';
+import { uploadImage, type PickedImage } from '@/lib/api/uploads';
 import { useCreateVenueMutation } from '@/lib/hooks/queries';
 import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius, space } from '@/lib/theme';
+
+const MAX_PHOTOS = 3;
 
 const CATEGORIES = ['관람', '체험', '식사', '카페', '한복', '공예', '문화'];
 const REGIONS = ['서울', '제주', '부산', '대전', '대구', '경주', '전주', '강릉', '속초', '통영'];
@@ -37,13 +42,48 @@ export default function VenueRegisterScreen() {
   const [closeTime, setCloseTime] = useState('');
   const [phone, setPhone] = useState('');
   const [description, setDescription] = useState('');
+  const [photos, setPhotos] = useState<PickedImage[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   const toggleDay = (d: string) => setDays((s) => (s.includes(d) ? s.filter((x) => x !== d) : [...s, d]));
 
-  const submit = () => {
+  const pickPhoto = async () => {
+    if (photos.length >= MAX_PHOTOS) return;
+    // 네이티브는 갤러리 권한 필요(웹은 자동 허용)
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('권한 필요', '사진을 첨부하려면 갤러리 접근을 허용해주세요.');
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+    });
+    if (res.canceled || !res.assets?.length) return;
+    const a = res.assets[0];
+    setPhotos((p) => [...p, { uri: a.uri, mimeType: a.mimeType, fileName: a.fileName }].slice(0, MAX_PHOTOS));
+  };
+  const removePhoto = (i: number) => setPhotos((p) => p.filter((_, idx) => idx !== i));
+
+  const submit = async () => {
+    if (create.isPending || uploading) return;
     if (!name || !address) {
       Alert.alert('필수 입력', '장소명과 주소는 필수입니다.');
       return;
+    }
+    // 사진이 있으면 먼저 업로드해 첫 장을 대표 이미지로 사용
+    let imageUrl = '';
+    if (photos.length) {
+      setUploading(true);
+      try {
+        const urls = await Promise.all(photos.map(uploadImage));
+        imageUrl = urls[0] ?? '';
+      } catch (e: any) {
+        setUploading(false);
+        Alert.alert('사진 업로드 실패', e?.message ?? '사진을 올리지 못했습니다.');
+        return;
+      }
+      setUploading(false);
     }
     const operatingHours = [days.join('·'), openTime && closeTime ? `${openTime}~${closeTime}` : '']
       .filter(Boolean).join(' ');
@@ -56,7 +96,7 @@ export default function VenueRegisterScreen() {
         operatingHours,
         description,
         homepageUrl: '',
-        imageUrl: '',
+        imageUrl,
         lat: 37.5759,
         lng: 126.9769,
       },
@@ -66,6 +106,8 @@ export default function VenueRegisterScreen() {
       },
     );
   };
+
+  const busy = create.isPending || uploading;
 
   return (
     <View style={styles.safe}>
@@ -121,14 +163,26 @@ export default function VenueRegisterScreen() {
         </View>
 
         <Label text="사진등록" />
-        <View style={styles.photoBox}>
-          <Ionicons name="add" size={26} color={colors.textFaint} />
-          <Text style={styles.photoText}>0/3</Text>
+        <View style={styles.photoRow}>
+          {photos.map((p, i) => (
+            <View key={p.uri} style={styles.thumbWrap}>
+              <Image source={{ uri: p.uri }} style={styles.thumb} contentFit="cover" />
+              <Pressable style={styles.thumbX} hitSlop={6} onPress={() => removePhoto(i)}>
+                <Ionicons name="close" size={14} color={colors.white} />
+              </Pressable>
+            </View>
+          ))}
+          {photos.length < MAX_PHOTOS && (
+            <Pressable style={styles.photoBox} onPress={pickPhoto} disabled={busy}>
+              <Ionicons name="add" size={26} color={colors.textFaint} />
+              <Text style={styles.photoText}>{photos.length}/{MAX_PHOTOS}</Text>
+            </Pressable>
+          )}
         </View>
-        <Text style={styles.photoHint}>최대 3장까지 등록할 수 있어요</Text>
+        <Text style={styles.photoHint}>최대 {MAX_PHOTOS}장까지 등록할 수 있어요 (첫 번째 사진이 대표 이미지)</Text>
 
-        <Pressable style={[styles.submit, create.isPending && styles.submitDisabled]} disabled={create.isPending} onPress={submit}>
-          <Text style={styles.submitText}>{create.isPending ? '등록 중...' : '등록 신청하기'}</Text>
+        <Pressable style={[styles.submit, busy && styles.submitDisabled]} disabled={busy} onPress={submit}>
+          <Text style={styles.submitText}>{uploading ? '사진 올리는 중...' : create.isPending ? '등록 중...' : '등록 신청하기'}</Text>
         </Pressable>
       </ScrollView>
     </View>
@@ -169,8 +223,12 @@ const styles = StyleSheet.create({
   timeDash: { fontSize: 16, color: colors.textFaint },
   textarea: { height: 100, textAlignVertical: 'top', paddingTop: 12 },
   counter: { position: 'absolute', right: 12, bottom: 10, fontSize: 11, color: colors.textFaint },
+  photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   photoBox: { width: 96, height: 96, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white },
   photoText: { fontSize: 11, color: colors.textFaint, marginTop: 2 },
+  thumbWrap: { width: 96, height: 96 },
+  thumb: { width: 96, height: 96, borderRadius: radius.md, backgroundColor: colors.bgSoft },
+  thumbX: { position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
   photoHint: { fontSize: 12, color: colors.textFaint, marginTop: 8 },
   submit: { backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 16, alignItems: 'center', marginTop: 28 },
   submitDisabled: { backgroundColor: colors.textFaint },

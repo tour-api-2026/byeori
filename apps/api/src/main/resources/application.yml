@@ -14,6 +14,10 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+  servlet:
+    multipart:
+      max-file-size: 10MB      # 업로드 1장 최대
+      max-request-size: 32MB   # 다중 업로드 대비 요청 전체 한도
 
 # 외부 실데이터 동기화 키(백엔드 환경변수). 미설정 시 동기화 skip.
 byeori:
