@@ -22,6 +22,28 @@ function todayIso() {
   const d = new Date();
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+
+type Phase = "ongoing" | "upcoming" | "past";
+function phaseOf(start: string, end: string, today: string): Phase {
+  if (today < start) return "upcoming";
+  if (today > end) return "past";
+  return "ongoing";
+}
+const isPastTrip = (it: ItinerarySummary) =>
+  phaseOf(it.startDate, it.endDate, todayIso()) === "past";
+
+// "지금에 가장 가까운" 순으로 정렬하기 위한 키.
+// 1순위: 진행중(0) < 예정(1) < 지난여행(2)
+// 2순위: 같은 단계 안에서 오늘과 가까운 순
+//  - 진행중: 곧 끝나는 순 / 예정: 시작 임박 순 / 지난: 최근에 끝난 순
+function sortKey(it: ItinerarySummary, today: string): [number, number] {
+  const t = +new Date(today + "T00:00:00");
+  const ph = phaseOf(it.startDate, it.endDate, today);
+  if (ph === "ongoing") return [0, +new Date(it.endDate) - t];
+  if (ph === "upcoming") return [1, +new Date(it.startDate) - t];
+  return [2, t - +new Date(it.endDate)];
+}
+
 function dayLabel(start: string, end: string) {
   const t = todayIso();
   if (t < start)
@@ -41,7 +63,13 @@ export default function RoutesScreen() {
   const router = useRouter();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const mine = useMyItinerariesQuery();
-  const list = mine.data ?? [];
+  const today = todayIso();
+  // 지금에 가까운 순으로 정렬: 대표(상단)·목록 모두 이 순서를 따른다.
+  const list = [...(mine.data ?? [])].sort((a, b) => {
+    const ka = sortKey(a, today);
+    const kb = sortKey(b, today);
+    return ka[0] - kb[0] || ka[1] - kb[1];
+  });
   const featured = list[0];
 
   if (!isLoggedIn) {
@@ -160,6 +188,7 @@ function RouteCard({ summary }: { summary: ItinerarySummary }) {
   const router = useRouter();
   const { data } = useItineraryQuery(summary.id);
   const stops = data?.items ?? [];
+  const past = isPastTrip(summary); // 지난 여행은 물빠진 색으로 흐리게
 
   const share = () =>
     Share.share({
@@ -167,13 +196,14 @@ function RouteCard({ summary }: { summary: ItinerarySummary }) {
     });
 
   return (
-    <View style={styles.card}>
-      <View style={styles.cardHead}>
+    <View style={[styles.card, past && styles.cardPast]}>
+      <View style={[styles.cardHead, past && styles.cardHeadPast]}>
         <View style={{ flex: 1 }}>
           <Text style={styles.cardTitle} numberOfLines={1}>
             {summary.title}
           </Text>
           <Text style={styles.cardMeta}>
+            {past ? "지난 여행 · " : ""}
             {summary.itemCount}곳 · {summary.startDate} ~ {summary.endDate}
           </Text>
         </View>
@@ -396,6 +426,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     ...shadow.card,
   },
+  // 지난 여행: 전체적으로 물빠진(흐린) 느낌
+  cardPast: { opacity: 0.55 },
   cardHead: {
     flexDirection: "row",
     alignItems: "center",
@@ -404,6 +436,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
+  // 지난 여행 헤더: 진한 남색 대신 흐린 회색
+  cardHeadPast: { backgroundColor: colors.textFaint },
   cardTitle: {
     fontSize: 15,
     fontFamily: fonts.bold,
