@@ -20,9 +20,12 @@ public class JwtTokenProvider {
 
     public JwtTokenProvider(AuthProperties props) {
         String secret = props.getJwtSecret();
+        // HS256은 최소 256bit(32byte) 키 필요. 하드코딩 폴백은 토큰 위조 위험이라 금지 —
+        // 미설정/취약 시 조용히 넘어가지 말고 부팅을 실패시킨다(JWT_SECRET 환경변수 필수).
         if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < 32) {
-            // HS256은 최소 256bit(32byte) 키 필요. 부팅은 막지 않되 안전한 기본값으로 패딩.
-            secret = (secret == null ? "" : secret) + "dev-only-secret-please-change-min-32-bytes-long-xxxxx";
+            throw new IllegalStateException(
+                    "JWT_SECRET(byeori.auth.jwt-secret) 미설정 또는 32바이트 미만. "
+                    + "운영 배포에는 32바이트 이상의 안전한 시크릿을 환경변수로 주입해야 합니다.");
         }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }

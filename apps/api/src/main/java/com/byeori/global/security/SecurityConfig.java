@@ -55,10 +55,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/venues/**").authenticated()
                         // 이미지 업로드(POST)는 로그인 필요. 서빙(GET)은 아래 공개.
                         .requestMatchers(HttpMethod.POST, "/api/v1/uploads/**").authenticated()
+                        // 데이터 동기화 트리거는 관리자 전용(무인증 공개 금지).
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
 
                         // --- 공개 경로(permitAll) ---
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/sync/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/reviews").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/uploads/**").permitAll()
