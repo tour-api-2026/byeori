@@ -12,8 +12,10 @@ services:
       POSTGRES_DB: byeori
       POSTGRES_USER: byeori
       POSTGRES_PASSWORD: byeori
+    # 5432는 호스트 로컬(127.0.0.1)에만 바인딩 — 인터넷/LAN 노출 차단.
+    # API는 도커 내부 네트워크(postgres:5432)로 붙으므로 영향 없음.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
