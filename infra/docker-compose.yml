@@ -42,6 +42,10 @@ services:
       POSTGRES_USER: byeori
       POSTGRES_PASSWORD: byeori
       SERVER_PORT: "8080"
+    # 로컬 웹 미리보기(EXPO_PUBLIC_API_URL=http://localhost:8080)용 — 127.0.0.1 전용 바인딩.
+    # 인터넷 노출(0.0.0.0)이 아니라 로컬 전용이라 안전. 외부는 nginx(443) 프록시로만 접근.
+    ports:
+      - "127.0.0.1:8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
