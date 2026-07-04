@@ -135,10 +135,11 @@ function buildHtml(key: string, segColors: string[]): string {
     clearArr(routeOv);
   };
   // 현재 위치로 지도 중심 이동 + 내 위치 점 표시(RN에서 좌표 주입).
-  window.moveTo = function(lat,lng){
+  window.moveTo = function(lat,lng,level){
     if(!map) return;
     var ll=new kakao.maps.LatLng(lat,lng);
     map.setCenter(ll);
+    if(level){ map.setLevel(level); }
     if(window.__me){ window.__me.setMap(null); }
     window.__me=new kakao.maps.CustomOverlay({position:ll, xAnchor:0.5, yAnchor:0.5,
       content:'<div style="width:16px;height:16px;border-radius:50%;background:#3177D5;border:3px solid #fff;box-shadow:0 0 0 3px rgba(49,119,213,.35)"></div>'});
@@ -287,12 +288,16 @@ export default function MapScreen() {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") return;
+        const moveTo = (lat: number, lng: number) =>
+          webRef.current?.injectJavaScript(`window.moveTo(${lat}, ${lng}, 4); true;`);
+        // 1) 캐시된 최근 위치로 즉시 이동(GPS 픽스 대기 없이 바로 반응)
+        const last = await Location.getLastKnownPositionAsync();
+        if (last) moveTo(last.coords.latitude, last.coords.longitude);
+        // 2) 정확한 현재 위치로 갱신
         const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        webRef.current?.injectJavaScript(
-          `window.moveTo(${pos.coords.latitude}, ${pos.coords.longitude}); true;`,
-        );
+        moveTo(pos.coords.latitude, pos.coords.longitude);
       } catch {
-        // 위치 실패 시 기본 중심(서울) 유지
+        // 위치 실패/권한 거부 시 기본 중심(서울) 유지
       }
     })();
   }, [ready, routeMode]);
