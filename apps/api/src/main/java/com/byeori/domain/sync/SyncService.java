@@ -69,7 +69,11 @@ public class SyncService {
         if (it.addr1() == null || it.addr1().isBlank()) return 0; // 주소 없으면 skip
         BigDecimal lat = num(it.mapy());
         BigDecimal lng = num(it.mapx());
-        if (lat == null || lng == null || lat.signum() == 0 || lng.signum() == 0) return 0; // 좌표 없으면 skip(지도용)
+        // 좌표 없거나 한국 범위(위도 33~38.7, 경도 124.5~132) 밖이면 skip.
+        // 지오코딩 실패 placeholder(예: 19.69,117.99 / 9.99,9.99)가 지도를 외국까지 넓히는 것 방지.
+        if (lat == null || lng == null) return 0;
+        double latD = lat.doubleValue(), lngD = lng.doubleValue();
+        if (latD < 33.0 || latD > 38.7 || lngD < 124.5 || lngD > 132.0) return 0;
         String category = CategoryMapper.fromTour(it.contentTypeId(), it.lclsSystm2(), it.lclsSystm3());
         try {
             venueRepo.findByTourContentId(it.contentId())

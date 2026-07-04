@@ -46,6 +46,9 @@ function buildHtml(key: string, segColors: string[]): string {
   .pin{display:inline-block;min-width:30px;text-align:center;padding:3px 8px;border-radius:999px;
        color:#fff;font-size:12px;font-weight:800;box-shadow:0 2px 6px rgba(0,0,0,.25);
        font-family:-apple-system,system-ui,sans-serif;border:2px solid #fff}
+  .pinE{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;
+       background:#fff;font-size:18px;box-shadow:0 2px 6px rgba(0,0,0,.3);border:2px solid #fff;
+       font-family:-apple-system,system-ui,sans-serif}
   .pinK{display:inline-block;min-width:24px;height:24px;line-height:24px;text-align:center;border-radius:999px;
        background:#3177D5;color:#fff;font-size:12px;font-weight:800;border:2px solid #fff;
        box-shadow:0 2px 6px rgba(0,0,0,.3);font-family:-apple-system,system-ui,sans-serif}
@@ -76,13 +79,21 @@ function buildHtml(key: string, segColors: string[]): string {
     all.forEach(function(o){ b.extend(o.getPosition()); });
     map.setBounds(b);
   }
+  // 카테고리별 이모지 마커. 음식점·행사(문화)·카페 등을 한눈에 구분.
+  function catEmoji(c){
+    if(c==='맛집') return '🍽️';
+    if(c==='카페') return '☕';
+    if(c==='문화') return '🎭';
+    if(c==='체험') return '🎨';
+    if(c==='한복') return '👘';
+    return '📍';
+  }
   window.setMarkers = function(list){
     if(!ready){ pending=list; return; }
     clearArr(venueOv);
     list.forEach(function(v){
       var pos=new kakao.maps.LatLng(v.lat, v.lng);
-      var bg=v.hanbok ? '#E5484D' : '#263176';
-      var html='<div class="pin" style="background:'+bg+'" onclick="sel('+v.id+')">'+v.rating+'</div>';
+      var html='<div class="pinE" onclick="sel('+v.id+')">'+catEmoji(v.category)+'</div>';
       var ov=new kakao.maps.CustomOverlay({position:pos, content:html, yAnchor:1, clickable:true});
       ov.setMap(map); venueOv.push(ov);
     });
@@ -267,13 +278,19 @@ export default function MapScreen() {
     () =>
       JSON.stringify(
         venues
-          .filter((v) => v.lat != null && v.lng != null)
+          // 한국 범위(위도 33~38.7, 경도 124.5~132) 밖 좌표는 제외 —
+          // 지오코딩 실패 placeholder(예: 19.69,117.99)가 fitAll을 외국까지 넓히는 것 방지.
+          .filter(
+            (v) =>
+              v.lat != null && v.lng != null &&
+              Number(v.lat) >= 33 && Number(v.lat) <= 38.7 &&
+              Number(v.lng) >= 124.5 && Number(v.lng) <= 132,
+          )
           .map((v) => ({
             id: v.id,
             lat: Number(v.lat),
             lng: Number(v.lng),
-            hanbok: !!v.hanbokDiscount,
-            rating: Number(v.avgRating).toFixed(1),
+            category: v.category ?? "",
           })),
       ),
     [venues],
@@ -287,9 +304,12 @@ export default function MapScreen() {
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== "granted") return;
-        const moveTo = (lat: number, lng: number) =>
+        if (status !== "granted") return; // 거부 시 지도 기본 중심(서울) 유지
+        const moveTo = (lat: number, lng: number) => {
+          // 한국 밖 위치(에뮬레이터 기본값 등)면 이동하지 않고 서울 기본값 유지
+          if (lat < 33 || lat > 38.7 || lng < 124.5 || lng > 132) return;
           webRef.current?.injectJavaScript(`window.moveTo(${lat}, ${lng}, 4); true;`);
+        };
         // 1) 캐시된 최근 위치로 즉시 이동(GPS 픽스 대기 없이 바로 반응)
         const last = await Location.getLastKnownPositionAsync();
         if (last) moveTo(last.coords.latitude, last.coords.longitude);
