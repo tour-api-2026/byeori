@@ -106,17 +106,45 @@ function buildHtml(key: string, segColors: string[]): string {
     });
   };
   window.clearKakao = function(){ clearArr(kakaoOv); kakaoData=[]; fitAll(); };
-  // 여행 경로: polyline(도로 경로선) + 번호 마커. data={path:[[lat,lng]...], stops:[{order,lat,lng}...]}
+  // 여행 경로: polyline(도로 경로선) + 번호 마커. data={path:[[lat,lng]...], legs:[{pathEnd,...}...], stops:[{order,lat,lng}...]}
   window.drawRoute = function(data){
     if(!ready){ pendingRoute=data; return; }
     window.clearRoute();
     clearArr(venueOv); clearArr(kakaoOv); // 경로 모드에선 다른 핀 정리
-    // 도로 경로(data.path)는 쓰지 않고, 장소(stops)를 방문 순서대로 직선으로 연결한다.
     var stops=(data.stops||[]).slice().sort(function(a,b){ return a.order-b.order; });
     var stopLL=stops.map(function(s){ return new kakao.maps.LatLng(s.lat, s.lng); });
-    for(var i=0;i<stopLL.length-1;i++){
-      var seg=new kakao.maps.Polyline({path:[stopLL[i],stopLL[i+1]],strokeWeight:4,strokeColor:segColor(i),strokeOpacity:0.9,strokeStyle:'solid'});
-      seg.setMap(map); routeLines.push(seg);
+    var pathLL=(data.path||[]).map(function(p){ return new kakao.maps.LatLng(p[0], p[1]); });
+    function addLine(pts,color){
+      if(pts.length<2) return;
+      var line=new kakao.maps.Polyline({path:pts,strokeWeight:4,strokeColor:color,strokeOpacity:0.9,strokeStyle:'solid'});
+      line.setMap(map); routeLines.push(line);
+    }
+    if(pathLL.length>1){
+      // 도로 경로(data.path)를 구간 경계에서 잘라 방문 순서(구간)별 색으로 그린다.
+      var cuts=(data.legs||[]).map(function(l){ return l.pathEnd; });
+      var valid=cuts.length>0&&cuts[cuts.length-1]===pathLL.length
+        &&cuts.every(function(e,i){ return typeof e==='number'&&e>(i?cuts[i-1]:0); });
+      if(!valid){
+        // 응답에 구간 경계(pathEnd)가 없으면 각 중간 정류지에서 가장 가까운 경로 정점으로 나눈다.
+        cuts=[]; var from=0;
+        for(var s=1;s<stopLL.length-1;s++){
+          var best=from, bd=Infinity;
+          for(var j=from;j<pathLL.length;j++){
+            var dy=pathLL[j].getLat()-stopLL[s].getLat(), dx=pathLL[j].getLng()-stopLL[s].getLng(), d=dy*dy+dx*dx;
+            if(d<bd){ bd=d; best=j; }
+          }
+          cuts.push(best+1); from=best;
+        }
+        cuts.push(pathLL.length);
+      }
+      var start=0;
+      cuts.forEach(function(end,i){
+        addLine(pathLL.slice(start, Math.min(end+1, pathLL.length)), segColor(i)); // 이웃 구간과 1점 겹쳐 끊김 방지
+        start=end;
+      });
+    }else{
+      // 폴백: 도로 경로가 없으면 장소를 방문 순서대로 직선으로 연결
+      for(var i=0;i<stopLL.length-1;i++) addLine([stopLL[i],stopLL[i+1]], segColor(i));
     }
     stops.forEach(function(s,i){
       var pos=new kakao.maps.LatLng(s.lat,s.lng);
@@ -127,6 +155,7 @@ function buildHtml(key: string, segColors: string[]): string {
     });
     var b=new kakao.maps.LatLngBounds();
     stopLL.forEach(function(ll){ b.extend(ll); });
+    pathLL.forEach(function(ll){ b.extend(ll); }); // 도로 우회 구간까지 화면에 담기
     if(routeOv.length) map.setBounds(b);
   };
   window.clearRoute = function(){
@@ -260,6 +289,7 @@ export default function MapScreen() {
       if (routeQuery.data) {
         const payload = JSON.stringify({
           path: routeQuery.data.path,
+          legs: routeQuery.data.legs,
           stops: routeQuery.data.stops,
         });
         webRef.current.injectJavaScript(`window.drawRoute(${payload}); true;`);

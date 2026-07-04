@@ -98,7 +98,7 @@ public class ItineraryService {
         }
         // path: [경도,위도] → [위도,경도] (지도 LatLng 순서)
         List<double[]> path = r.path().stream().map(p -> new double[]{p[1], p[0]}).toList();
-        List<RouteLeg> legs = r.legs().stream().map(l -> new RouteLeg(l[0], l[1])).toList();
+        List<RouteLeg> legs = r.legs().stream().map(l -> new RouteLeg(l[0], l[1], l[2])).toList();
         return new RouteResponse(r.distance(), r.duration(), pr, stops, legs, path);
     }
 

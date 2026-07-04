@@ -43,8 +43,8 @@ public final class ItineraryDtos {
     public record RouteStop(
             int order, String targetType, Long targetId, String name, double lat, double lng) {}
 
-    /** 구간(경유지 간) 거리·시간. */
-    public record RouteLeg(int distance, int duration) {}
+    /** 구간(경유지 간) 거리·시간. pathEnd는 구간이 끝나는 path 인덱스(exclusive), 시작은 이전 구간의 pathEnd(첫 구간은 0). */
+    public record RouteLeg(int distance, int duration, int pathEnd) {}
 
     /**
      * 경로 응답.

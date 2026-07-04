@@ -87,13 +87,14 @@ public class KakaoMobilityClient {
         List<double[]> path = new ArrayList<>();
         List<int[]> legs = new ArrayList<>();
         for (JsonNode section : route.path("sections")) {
-            legs.add(new int[]{section.path("distance").asInt(), section.path("duration").asInt()});
             for (JsonNode road : section.path("roads")) {
                 JsonNode vertexes = road.path("vertexes"); // [경도,위도, 경도,위도, ...]
                 for (int i = 0; i + 1 < vertexes.size(); i += 2) {
                     path.add(new double[]{vertexes.get(i).asDouble(), vertexes.get(i + 1).asDouble()});
                 }
             }
+            // pathEnd: 이 구간이 끝나는 path 인덱스(exclusive) — 지도에서 구간별로 선을 나눠 그릴 때 사용
+            legs.add(new int[]{section.path("distance").asInt(), section.path("duration").asInt(), path.size()});
         }
         return new KakaoRoute(distance, duration, path, legs);
     }

@@ -24,7 +24,8 @@ export type ItineraryDetail = {
 export type RouteStop = {
   order: number; targetType: 'VENUE' | 'PERFORMANCE'; targetId: number; name: string | null; lat: number; lng: number;
 };
-export type RouteLeg = { distance: number; duration: number };
+// pathEnd: 구간이 끝나는 path 인덱스(exclusive). 구간 시작은 이전 leg의 pathEnd(첫 구간은 0).
+export type RouteLeg = { distance: number; duration: number; pathEnd: number };
 export type ItineraryRoute = {
   distance: number;            // 총 거리(m)
   duration: number;            // 총 소요시간(초)
