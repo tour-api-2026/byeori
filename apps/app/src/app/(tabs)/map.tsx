@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import * as Location from "expo-location";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -133,6 +134,16 @@ function buildHtml(key: string, segColors: string[]): string {
     routeLines.forEach(function(l){ l.setMap(null); }); routeLines=[];
     clearArr(routeOv);
   };
+  // 현재 위치로 지도 중심 이동 + 내 위치 점 표시(RN에서 좌표 주입).
+  window.moveTo = function(lat,lng){
+    if(!map) return;
+    var ll=new kakao.maps.LatLng(lat,lng);
+    map.setCenter(ll);
+    if(window.__me){ window.__me.setMap(null); }
+    window.__me=new kakao.maps.CustomOverlay({position:ll, xAnchor:0.5, yAnchor:0.5,
+      content:'<div style="width:16px;height:16px;border-radius:50%;background:#3177D5;border:3px solid #fff;box-shadow:0 0 0 3px rgba(49,119,213,.35)"></div>'});
+    window.__me.setMap(map);
+  };
   function boot(){
     if(typeof kakao==='undefined'||!kakao.maps){ post({type:'error', msg:'SDK_LOAD_FAIL'}); return; }
     kakao.maps.load(function(){
@@ -167,7 +178,9 @@ export default function MapScreen() {
   const routeQuery = useItineraryRouteQuery(
     routeMode ? (itineraryId as number) : 0,
   );
-  const exitRouteMode = () => router.setParams({ itineraryId: undefined });
+  // 경로 보기 '닫기' → '내 루트'로 복귀(내 주변에 머무르지 않도록).
+  // 탭 포커스 해제 시 useFocusEffect가 itineraryId를 정리하므로 파라미터는 자동 초기화.
+  const exitRouteMode = () => router.replace('/routes');
 
   // '내 주변' 탭을 떠나면 경로 모드를 해제한다.
   // (여행 루트에서 넘어온 itineraryId 파라미터가 남아 다시 들어왔을 때
@@ -264,6 +277,25 @@ export default function MapScreen() {
       ),
     [venues],
   );
+
+  // 최초 진입 시 현재 위치로 지도 중심 이동(권한 허용 시). 경로 모드가 아닐 때만.
+  const locatedRef = useRef(false);
+  useEffect(() => {
+    if (!ready || routeMode || locatedRef.current) return;
+    locatedRef.current = true;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") return;
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        webRef.current?.injectJavaScript(
+          `window.moveTo(${pos.coords.latitude}, ${pos.coords.longitude}); true;`,
+        );
+      } catch {
+        // 위치 실패 시 기본 중심(서울) 유지
+      }
+    })();
+  }, [ready, routeMode]);
 
   useEffect(() => {
     if (!ready || !webRef.current) return;

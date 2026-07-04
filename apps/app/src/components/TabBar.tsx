@@ -90,9 +90,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     boxShadow: '0px -4px 4px -2px rgba(13,27,53,0.1)',
   },
-  row: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', alignItems: 'flex-end' },
+  // alignItems:'stretch' — 모든 아이템이 바 전체 높이를 차지해야 가운데 원을 위로 올릴 수 있음.
+  row: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', alignItems: 'stretch' },
   item: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 3 },
   label: { fontSize: 10, fontFamily: fonts.regular, letterSpacing: 0.3, lineHeight: 14 },
+  // 가운데 홈: 위로 솟은 원. justifyContent flex-start로 아이템 상단에 배치 → 바 위로 돌출.
   centerItem: { flex: 1, alignItems: 'center', justifyContent: 'flex-start' },
   centerCircle: {
     width: 52,

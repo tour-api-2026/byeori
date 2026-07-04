@@ -83,7 +83,7 @@ function VenueStatusCard({ venue, statusLabel, color, soft }: { venue: Venue; st
   const badges = [region, venue.category].filter(Boolean) as string[];
 
   return (
-    <Pressable style={styles.card} onPress={() => router.push(`/venue/${venue.id}`)}>
+    <Pressable style={styles.card} onPress={() => router.push(`/venue/${venue.id}?mine=1`)}>
       <View>
         <Image source={venue.imageUrl} style={styles.cover} contentFit="cover" transition={200} />
         <View style={[styles.statusBadge, { backgroundColor: color }]}><Text style={styles.statusText}>{statusLabel}</Text></View>

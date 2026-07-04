@@ -1,13 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { Stack, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LoginRequired from '@/components/LoginRequired';
 import { uploadImage, type PickedImage } from '@/lib/api/uploads';
-import { useCreateVenueMutation } from '@/lib/hooks/queries';
+import { useCreateVenueMutation, useUpdateVenueMutation, useVenueDetailQuery } from '@/lib/hooks/queries';
 import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
@@ -21,12 +21,15 @@ export default function VenueRegisterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const isEdit = !!editId;
   const create = useCreateVenueMutation();
+  const update = useUpdateVenueMutation();
 
   if (!isLoggedIn) {
     return (
       <View style={styles.safe}>
-        <Stack.Screen options={{ title: '장소등록' }} />
+        <Stack.Screen options={{ title: isEdit ? '장소 수정' : '장소등록' }} />
         <LoginRequired description="장소 등록은 로그인 후에 이용할 수 있어요." />
       </View>
     );
@@ -44,6 +47,27 @@ export default function VenueRegisterScreen() {
   const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState<PickedImage[]>([]);
   const [uploading, setUploading] = useState(false);
+
+  // 편집 모드: 기존 장소 값을 폼에 채운다(등록 폼과 동일한 조합 규칙을 역파싱).
+  const detailQ = useVenueDetailQuery(isEdit ? Number(editId) : 0);
+  const prefilled = useRef(false);
+  useEffect(() => {
+    const d = detailQ.data;
+    if (!isEdit || !d || prefilled.current) return;
+    prefilled.current = true;
+    setName(d.name ?? '');
+    if (d.category && CATEGORIES.includes(d.category)) setCategory(d.category);
+    const parts = (d.address ?? '').split(' ');
+    if (parts[0] && REGIONS.includes(parts[0])) { setRegion(parts[0]); setAddress(parts.slice(1).join(' ')); }
+    else { setRegion(''); setAddress(d.address ?? ''); }
+    setPhone(d.phone ?? '');
+    setDescription(d.description ?? '');
+    const oh = d.operatingHours ?? '';
+    const t = oh.match(/(\d{1,2}:\d{2})\s*~\s*(\d{1,2}:\d{2})/);
+    if (t) { setOpenTime(t[1]); setCloseTime(t[2]); }
+    const dayTok = oh.split(' ')[0] ?? '';
+    if (/[월화수목금토일]/.test(dayTok)) setDays(dayTok.split('·').filter((x) => DAYS.includes(x)));
+  }, [detailQ.data, isEdit]);
 
   const toggleDay = (d: string) => setDays((s) => (s.includes(d) ? s.filter((x) => x !== d) : [...s, d]));
 
@@ -66,7 +90,7 @@ export default function VenueRegisterScreen() {
   const removePhoto = (i: number) => setPhotos((p) => p.filter((_, idx) => idx !== i));
 
   const submit = async () => {
-    if (create.isPending || uploading) return;
+    if (create.isPending || update.isPending || uploading) return;
     if (!name || !address) {
       Alert.alert('필수 입력', '장소명과 주소는 필수입니다.');
       return;
@@ -87,19 +111,30 @@ export default function VenueRegisterScreen() {
     }
     const operatingHours = [days.join('·'), openTime && closeTime ? `${openTime}~${closeTime}` : '']
       .filter(Boolean).join(' ');
+    const common = {
+      name,
+      category,
+      address: [region, address, addressDetail].filter(Boolean).join(' '),
+      phone,
+      operatingHours,
+      description,
+      homepageUrl: '',
+    };
+
+    if (isEdit) {
+      // 수정: 좌표는 기존 유지(생략), 대표 이미지는 새 사진 있을 때만 교체.
+      update.mutate(
+        { id: Number(editId), body: { ...common, ...(imageUrl ? { imageUrl } : {}) } },
+        {
+          onSuccess: () => router.replace(`/venue/${editId}`),
+          onError: (e: any) => Alert.alert('수정 실패', e?.message ?? '오류'),
+        },
+      );
+      return;
+    }
+
     create.mutate(
-      {
-        name,
-        category,
-        address: [region, address, addressDetail].filter(Boolean).join(' '),
-        phone,
-        operatingHours,
-        description,
-        homepageUrl: '',
-        imageUrl,
-        lat: 37.5759,
-        lng: 126.9769,
-      },
+      { ...common, imageUrl, lat: 37.5759, lng: 126.9769 },
       {
         onSuccess: (v) => router.replace(`/venue/${v.id}`),
         onError: (e: any) => Alert.alert('등록 실패', e?.message ?? '오류'),
@@ -107,11 +142,11 @@ export default function VenueRegisterScreen() {
     );
   };
 
-  const busy = create.isPending || uploading;
+  const busy = create.isPending || update.isPending || uploading;
 
   return (
     <View style={styles.safe}>
-      <Stack.Screen options={{ title: '장소등록' }} />
+      <Stack.Screen options={{ title: isEdit ? '장소 수정' : '장소등록' }} />
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 + insets.bottom }} showsVerticalScrollIndicator={false}>
         {/* 안내 배너 */}
         <View style={styles.banner}>
@@ -182,7 +217,11 @@ export default function VenueRegisterScreen() {
         <Text style={styles.photoHint}>최대 {MAX_PHOTOS}장까지 등록할 수 있어요 (첫 번째 사진이 대표 이미지)</Text>
 
         <Pressable style={[styles.submit, busy && styles.submitDisabled]} disabled={busy} onPress={submit}>
-          <Text style={styles.submitText}>{uploading ? '사진 올리는 중...' : create.isPending ? '등록 중...' : '등록 신청하기'}</Text>
+          <Text style={styles.submitText}>
+            {uploading ? '사진 올리는 중...'
+              : isEdit ? (update.isPending ? '수정 중...' : '수정하기')
+              : create.isPending ? '등록 중...' : '등록 신청하기'}
+          </Text>
         </Pressable>
       </ScrollView>
     </View>

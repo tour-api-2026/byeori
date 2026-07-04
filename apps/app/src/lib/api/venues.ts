@@ -30,6 +30,15 @@ export function createVenue(body: VenueCreateBody): Promise<VenueDetail> {
   return unwrap<VenueDetail>(api.post<ApiEnvelope<VenueDetail>>('/venues', body));
 }
 
+// 수정: 서버가 create와 동일한 DTO를 받고 null 아닌 필드만 갱신(PATCH). 소유권은 서버가 검증.
+export function updateVenue(id: number, body: Partial<VenueCreateBody>): Promise<VenueDetail> {
+  return unwrap<VenueDetail>(api.patch<ApiEnvelope<VenueDetail>>(`/venues/${id}`, body));
+}
+
+export function deleteVenue(id: number): Promise<void> {
+  return unwrap<void>(api.delete<ApiEnvelope<void>>(`/venues/${id}`));
+}
+
 export function reportVenue(id: number, body: { reason: string; detail?: string }): Promise<void> {
   return unwrap<void>(api.post<ApiEnvelope<void>>(`/venues/${id}/reports`, body));
 }

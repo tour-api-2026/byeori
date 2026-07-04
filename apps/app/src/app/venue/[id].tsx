@@ -1,21 +1,38 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Rating } from '@/components/Rating';
 import {
-  useContentTagsQuery, useReviewsQuery, useToggleWishlistMutation,
+  useContentTagsQuery, useDeleteVenueMutation, useReviewsQuery, useToggleWishlistMutation,
   useVenueDetailQuery, useVenuePerformancesQuery, useVoteTagMutation,
 } from '@/lib/hooks/queries';
 import { useBookmarkStore } from '@/lib/store/bookmarkStore';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 export default function VenueDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, mine } = useLocalSearchParams<{ id: string; mine?: string }>();
   const vid = Number(id);
+  const isMine = mine === '1';
   const router = useRouter();
+  const del = useDeleteVenueMutation();
   const { data: v, isLoading } = useVenueDetailQuery(vid);
+
+  const confirmDelete = () => {
+    Alert.alert('장소 삭제', '이 장소를 삭제할까요? 되돌릴 수 없습니다.', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: () =>
+          del.mutate(vid, {
+            onSuccess: () => router.back(),
+            onError: (e: any) => Alert.alert('삭제 실패', e?.message ?? '오류'),
+          }),
+      },
+    ]);
+  };
   const perfs = useVenuePerformancesQuery(vid);
   const tags = useContentTagsQuery('VENUE', vid);
   const reviews = useReviewsQuery('VENUE', vid);
@@ -39,7 +56,19 @@ export default function VenueDetailScreen() {
       {/* 상단 바 */}
       <View style={styles.topBar}>
         <Pressable hitSlop={8} onPress={() => router.back()}><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
-        <Pressable hitSlop={8} onPress={toggle}><Ionicons name={has ? 'heart' : 'heart-outline'} size={24} color={has ? colors.hanbok : colors.text} /></Pressable>
+        <View style={styles.topActions}>
+          {isMine && (
+            <>
+              <Pressable hitSlop={8} onPress={() => router.push(`/venue/register?editId=${vid}`)}>
+                <Ionicons name="create-outline" size={23} color={colors.text} />
+              </Pressable>
+              <Pressable hitSlop={8} onPress={confirmDelete} disabled={del.isPending}>
+                <Ionicons name="trash-outline" size={22} color={colors.danger} />
+              </Pressable>
+            </>
+          )}
+          <Pressable hitSlop={8} onPress={toggle}><Ionicons name={has ? 'heart' : 'heart-outline'} size={24} color={has ? colors.hanbok : colors.text} /></Pressable>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
@@ -152,6 +181,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.md, paddingVertical: 8 },
+  topActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   hero: { width: '100%', height: 230, backgroundColor: colors.bgSoft },
   body: { padding: space.lg },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },

@@ -8,8 +8,8 @@ import { fetchPerformances, PerformanceFilter } from '../api/performances';
 import { createReview, deleteReview, fetchMyReviews, fetchReviews } from '../api/reviews';
 import { fetchCommentTags, fetchContentTags, unvoteTag, voteTag } from '../api/tags';
 import {
-  createVenue, fetchMyVenues, fetchVenueDetail, fetchVenuePerformances, fetchVenues,
-  reportVenue, VenueFilter,
+  createVenue, deleteVenue, fetchMyVenues, fetchVenueDetail, fetchVenuePerformances, fetchVenues,
+  reportVenue, updateVenue, VenueCreateBody, VenueFilter,
 } from '../api/venues';
 import { addWishlist, fetchMyWishlists, removeWishlist } from '../api/wishlists';
 import { useAuthStore } from '../store/authStore';
@@ -31,6 +31,20 @@ export function useMyVenuesQuery() {
 export function useCreateVenueMutation() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: createVenue, onSuccess: () => qc.invalidateQueries({ queryKey: ['venues'] }) });
+}
+export function useUpdateVenueMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: number; body: Partial<VenueCreateBody> }) => updateVenue(v.id, v.body),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['venues'] });
+      qc.invalidateQueries({ queryKey: ['venue', v.id] });
+    },
+  });
+}
+export function useDeleteVenueMutation() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: deleteVenue, onSuccess: () => qc.invalidateQueries({ queryKey: ['venues'] }) });
 }
 export function useReportVenueMutation() {
   return useMutation({ mutationFn: (v: { id: number; reason: string; detail?: string }) => reportVenue(v.id, { reason: v.reason, detail: v.detail }) });

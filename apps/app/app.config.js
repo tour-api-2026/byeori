@@ -22,5 +22,14 @@ module.exports = () => {
     return p;
   });
 
+  // 현재 위치 기반 '내 주변' 지도 — 위치 권한 플러그인(중복 방지).
+  const hasLocation = expo.plugins.some((p) => (Array.isArray(p) ? p[0] : p) === 'expo-location');
+  if (!hasLocation) {
+    expo.plugins = [
+      ...expo.plugins,
+      ['expo-location', { locationWhenInUsePermission: '내 주변 장소를 현재 위치 기준으로 보여주기 위해 위치를 사용합니다.' }],
+    ];
+  }
+
   return expo;
 };
