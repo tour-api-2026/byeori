@@ -15,7 +15,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { Chip } from "@/components/Chip";
 import { Rating } from "@/components/Rating";
@@ -182,6 +182,7 @@ type KakaoPlace = {
 
 export default function MapScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ itineraryId?: string }>();
   const itineraryId = params.itineraryId
     ? Number(params.itineraryId)
@@ -296,31 +297,32 @@ export default function MapScreen() {
     [venues],
   );
 
-  // 최초 진입 시 현재 위치로 지도 중심 이동(권한 허용 시). 경로 모드가 아닐 때만.
+  // 현재 위치로 지도 중심 이동(권한 요청 → 이동). 최초 진입·'현재 위치' 버튼 공용.
+  const locateMe = useCallback(async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return; // 거부 시 지도 기본 중심(서울) 유지
+      const moveTo = (lat: number, lng: number) => {
+        // 한국 밖 위치(에뮬레이터 기본값 등)면 이동하지 않고 서울 기본값 유지
+        if (lat < 33 || lat > 38.7 || lng < 124.5 || lng > 132) return;
+        webRef.current?.injectJavaScript(`window.moveTo(${lat}, ${lng}, 4); true;`);
+      };
+      const last = await Location.getLastKnownPositionAsync(); // 즉시 반응
+      if (last) moveTo(last.coords.latitude, last.coords.longitude);
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      moveTo(pos.coords.latitude, pos.coords.longitude);
+    } catch {
+      // 위치 실패/권한 거부 시 기본 중심(서울) 유지
+    }
+  }, []);
+
+  // 최초 진입 시 1회 현재 위치로 이동(경로 모드 아닐 때).
   const locatedRef = useRef(false);
   useEffect(() => {
     if (!ready || routeMode || locatedRef.current) return;
     locatedRef.current = true;
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== "granted") return; // 거부 시 지도 기본 중심(서울) 유지
-        const moveTo = (lat: number, lng: number) => {
-          // 한국 밖 위치(에뮬레이터 기본값 등)면 이동하지 않고 서울 기본값 유지
-          if (lat < 33 || lat > 38.7 || lng < 124.5 || lng > 132) return;
-          webRef.current?.injectJavaScript(`window.moveTo(${lat}, ${lng}, 4); true;`);
-        };
-        // 1) 캐시된 최근 위치로 즉시 이동(GPS 픽스 대기 없이 바로 반응)
-        const last = await Location.getLastKnownPositionAsync();
-        if (last) moveTo(last.coords.latitude, last.coords.longitude);
-        // 2) 정확한 현재 위치로 갱신
-        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        moveTo(pos.coords.latitude, pos.coords.longitude);
-      } catch {
-        // 위치 실패/권한 거부 시 기본 중심(서울) 유지
-      }
-    })();
-  }, [ready, routeMode]);
+    locateMe();
+  }, [ready, routeMode, locateMe]);
 
   useEffect(() => {
     if (!ready || !webRef.current) return;
@@ -365,8 +367,70 @@ export default function MapScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      {/* 경로 모드 배너 (여행 일지 경로 보기) */}
+    <View style={styles.root}>
+      {/* 지도 (전체화면 배경) */}
+      <View style={styles.map}>
+        {KAKAO_JS_KEY && !mapError && Platform.OS !== "web" ? (
+          <>
+            <WebView
+              ref={webRef}
+              originWhitelist={["*"]}
+              source={{
+                html: buildHtml(KAKAO_JS_KEY, ROUTE_SEGMENT_COLORS),
+                baseUrl: KAKAO_WEB_ORIGIN,
+              }}
+              onMessage={onMessage}
+              javaScriptEnabled
+              domStorageEnabled
+              mixedContentMode="always"
+              setSupportMultipleWindows={false}
+              onError={(e) =>
+                setMapError("WebView 오류: " + e.nativeEvent.description)
+              }
+              onHttpError={(e) =>
+                setMapError("HTTP 오류: " + e.nativeEvent.statusCode)
+              }
+              style={{ flex: 1, backgroundColor: "#EAF0E6" }}
+            />
+            {!ready && (
+              <View style={styles.mapOverlay} pointerEvents="none">
+                <Text style={styles.mapOverlayText}>
+                  {mapError ?? "지도 불러오는 중…"}
+                </Text>
+              </View>
+            )}
+          </>
+        ) : (
+          // 카카오 키 미설정 시 폴백: 좌표 정규화 핀 오버레이
+          <View style={styles.fallback}>
+            <View style={styles.grid} pointerEvents="none" />
+            <Text style={styles.mapHint}>서울 도심 · {venues.length}곳</Text>
+            {venues.map((v) => (
+              <Pressable
+                key={v.id}
+                style={[
+                  styles.pin,
+                  pos(v),
+                  v.hanbokDiscount && styles.pinHanbok,
+                  selected?.id === v.id && styles.pinSelected,
+                ]}
+                onPress={() => setSelected(v)}
+              >
+                <Text style={styles.pinText}>
+                  {Number(v.avgRating).toFixed(1)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </View>
+
+      {/* 상단 오버레이: 검색·칩·토글 또는 경로 배너 (지도 위에 떠 있음) */}
+      <View
+        style={[styles.topOverlay, { paddingTop: insets.top + 8 }]}
+        pointerEvents="box-none"
+      >
+        {/* 경로 모드 배너 (여행 일지 경로 보기) */}
       {routeMode && (
         <View style={styles.routeBanner}>
           <Ionicons name="navigate" size={18} color={colors.white} />
@@ -462,62 +526,18 @@ export default function MapScreen() {
         </>
       )}
 
-      {/* 카카오 지도 (WebView는 네이티브 전용 — 웹에서는 핀 폴백) */}
-      <View style={styles.map}>
-        {KAKAO_JS_KEY && !mapError && Platform.OS !== "web" ? (
-          <>
-            <WebView
-              ref={webRef}
-              originWhitelist={["*"]}
-              source={{
-                html: buildHtml(KAKAO_JS_KEY, ROUTE_SEGMENT_COLORS),
-                baseUrl: KAKAO_WEB_ORIGIN,
-              }}
-              onMessage={onMessage}
-              javaScriptEnabled
-              domStorageEnabled
-              mixedContentMode="always"
-              setSupportMultipleWindows={false}
-              onError={(e) =>
-                setMapError("WebView 오류: " + e.nativeEvent.description)
-              }
-              onHttpError={(e) =>
-                setMapError("HTTP 오류: " + e.nativeEvent.statusCode)
-              }
-              style={{ flex: 1, backgroundColor: "#EAF0E6" }}
-            />
-            {!ready && (
-              <View style={styles.mapOverlay} pointerEvents="none">
-                <Text style={styles.mapOverlayText}>
-                  {mapError ?? "지도 불러오는 중…"}
-                </Text>
-              </View>
-            )}
-          </>
-        ) : (
-          // 카카오 키 미설정 시 폴백: 좌표 정규화 핀 오버레이
-          <View style={styles.fallback}>
-            <View style={styles.grid} pointerEvents="none" />
-            <Text style={styles.mapHint}>서울 도심 · {venues.length}곳</Text>
-            {venues.map((v) => (
-              <Pressable
-                key={v.id}
-                style={[
-                  styles.pin,
-                  pos(v),
-                  v.hanbokDiscount && styles.pinHanbok,
-                  selected?.id === v.id && styles.pinSelected,
-                ]}
-                onPress={() => setSelected(v)}
-              >
-                <Text style={styles.pinText}>
-                  {Number(v.avgRating).toFixed(1)}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
       </View>
+
+      {/* 현재 위치 버튼 (우하단 FAB) */}
+      {!routeMode && (
+        <Pressable
+          style={[styles.locBtn, { bottom: selected || selectedKakao ? 104 : 28 }]}
+          onPress={locateMe}
+          hitSlop={8}
+        >
+          <Ionicons name="locate" size={22} color={colors.primary} />
+        </Pressable>
+      )}
 
       {/* 선택된 우리 장소 미니 카드 */}
       {selected && (
@@ -590,12 +610,24 @@ export default function MapScreen() {
           </Pressable>
         </Pressable>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1, backgroundColor: colors.bg },
+  topOverlay: { position: "absolute", top: 0, left: 0, right: 0 },
+  locBtn: {
+    position: "absolute",
+    right: space.lg,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.white,
+    alignItems: "center",
+    justifyContent: "center",
+    ...shadow.card,
+  },
   search: {
     flexDirection: "row",
     alignItems: "center",
@@ -681,11 +713,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: "center",
   },
+  // 전체화면 배경 지도.
   map: {
-    flex: 1,
-    margin: space.lg,
-    marginTop: 0,
-    borderRadius: radius.lg,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "#EAF0E6",
     overflow: "hidden",
   },
