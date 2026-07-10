@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTabBarHeight } from '@/components/TabBar';
 import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
@@ -19,6 +20,7 @@ const GROUP2: MenuItem[] = [
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const tabH = useTabBarHeight();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -38,7 +40,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 28, paddingHorizontal: space.lg }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: tabH + 28, paddingHorizontal: space.lg }}>
         <Text style={styles.h1}>마이페이지</Text>
 
         <Text style={styles.sectionLabel}>내 정보</Text>

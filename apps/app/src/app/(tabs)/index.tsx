@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Chip } from '@/components/Chip';
+import { useTabBarHeight } from '@/components/TabBar';
 import { SectionHeader } from '@/components/SectionHeader';
 import { VenueCard } from '@/components/VenueCard';
 import { Venue } from '@/lib/api/types';
@@ -17,6 +18,7 @@ const REGIONS = ['전체', '종로구', '중구', '용산구'];
 
 export default function HomeScreen() {
   const router = useRouter();
+  const tabH = useTabBarHeight();
   const [keyword, setKeyword] = useState('전체');
   const [region, setRegion] = useState('전체');
 
@@ -34,7 +36,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: tabH + 24 }}>
         {/* 헤더 (중앙 타이틀) */}
         <View style={styles.header}><Text style={styles.title}>벼리</Text></View>
 

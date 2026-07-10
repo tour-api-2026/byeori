@@ -13,6 +13,13 @@ const INACTIVE = '#80808C'; // Figma 라벨/아이콘 회색
 const BAR_H = 56; // 흰 바 높이(세이프에어리어 제외)
 const RAISE = 16; // 가운데 원이 바 위로 솟는 높이
 
+// 탭바가 콘텐츠 위에 '떠 있으므로'(position:absolute), 스크롤 화면은 이 높이만큼
+// contentContainer 하단 여백을 줘서 마지막 항목이 바에 가리지 않게 한다.
+export function useTabBarHeight() {
+  const insets = useSafeAreaInsets();
+  return BAR_H + insets.bottom;
+}
+
 type TabConfig = { label: string; center?: boolean; icon?: (color: string, size: number) => ReactNode };
 
 const TABS: Record<string, TabConfig> = {
@@ -83,7 +90,8 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { position: 'relative', backgroundColor: 'transparent' },
+  // 콘텐츠(지도) 위에 떠 있는 바. 지도가 화면 맨 아래까지 꽉 차고 바가 그 위에 겹친다.
+  wrap: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent' },
   bg: {
     position: 'absolute',
     left: 0,

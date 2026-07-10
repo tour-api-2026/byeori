@@ -2,12 +2,14 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTabBarHeight } from '@/components/TabBar';
 import { useCoursesQuery } from '@/lib/hooks/queries';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 // 루트 탐색 — 큐레이션 추천 코스(루트) 목록. 탭하면 코스 상세로 이동.
 export default function ExploreScreen() {
   const router = useRouter();
+  const tabH = useTabBarHeight();
   const { data, isLoading } = useCoursesQuery();
 
   return (
@@ -21,7 +23,7 @@ export default function ExploreScreen() {
         <FlatList
           data={data ?? []}
           keyExtractor={(c) => String(c.id)}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: tabH + space.lg }]}
           ListEmptyComponent={<Text style={styles.empty}>추천 루트가 아직 없어요</Text>}
           renderItem={({ item }) => (
             <Pressable style={styles.card} onPress={() => router.push(`/course/${item.id}`)}>

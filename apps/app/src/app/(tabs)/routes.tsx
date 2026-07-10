@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import LoginRequired from "@/components/LoginRequired";
+import { useTabBarHeight } from "@/components/TabBar";
 import { ItinerarySummary } from "@/lib/api/itineraries";
 import { useItineraryQuery, useMyItinerariesQuery } from "@/lib/hooks/queries";
 import { useAuthStore } from "@/lib/store/authStore";
@@ -61,6 +62,7 @@ function dayLabel(start: string, end: string) {
 
 export default function RoutesScreen() {
   const router = useRouter();
+  const tabH = useTabBarHeight();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const mine = useMyItinerariesQuery();
   const today = todayIso();
@@ -87,7 +89,7 @@ export default function RoutesScreen() {
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: space.lg,
-          paddingBottom: 28,
+          paddingBottom: tabH + 28,
         }}
         showsVerticalScrollIndicator={false}
       >

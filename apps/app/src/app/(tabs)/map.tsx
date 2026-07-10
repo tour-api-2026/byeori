@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { Chip } from "@/components/Chip";
+import { useTabBarHeight } from "@/components/TabBar";
 import { Rating } from "@/components/Rating";
 import { Venue } from "@/lib/api/types";
 import { useItineraryRouteQuery, useVenuesQuery } from "@/lib/hooks/queries";
@@ -183,6 +184,7 @@ type KakaoPlace = {
 export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const tabH = useTabBarHeight(); // 떠 있는 탭바 높이 — 하단 UI(카드·현재위치 버튼)를 그만큼 올린다.
   const params = useLocalSearchParams<{ itineraryId?: string }>();
   const itineraryId = params.itineraryId
     ? Number(params.itineraryId)
@@ -531,7 +533,7 @@ export default function MapScreen() {
       {/* 현재 위치 버튼 (우하단 FAB) */}
       {!routeMode && (
         <Pressable
-          style={[styles.locBtn, { bottom: selected || selectedKakao ? 104 : 28 }]}
+          style={[styles.locBtn, { bottom: (selected || selectedKakao ? 96 : 16) + tabH }]}
           onPress={locateMe}
           hitSlop={8}
         >
@@ -542,7 +544,7 @@ export default function MapScreen() {
       {/* 선택된 우리 장소 미니 카드 */}
       {selected && (
         <Pressable
-          style={styles.miniCard}
+          style={[styles.miniCard, { bottom: tabH + 12 }]}
           onPress={() => router.push(`/venue/${selected.id}`)}
         >
           <Image
@@ -576,7 +578,7 @@ export default function MapScreen() {
       {/* 선택된 카카오 장소 미니 카드 */}
       {selectedKakao && (
         <Pressable
-          style={styles.miniCard}
+          style={[styles.miniCard, { bottom: tabH + 12 }]}
           onPress={() =>
             selectedKakao.url && Linking.openURL(selectedKakao.url)
           }
