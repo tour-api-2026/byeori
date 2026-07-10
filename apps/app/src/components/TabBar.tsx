@@ -31,8 +31,11 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   const activeName = state.routes[state.index]?.name;
 
   return (
-    <View style={[styles.wrap, { height: RAISE + BAR_H + insets.bottom }]}>
-      <View style={[styles.bg, { top: RAISE }]} />
+    // 바가 차지하는 레이아웃 높이는 흰 바(BAR_H)+세이프에어리어까지만 —
+    // 가운데 홈 원은 marginTop 음수로 바 위로 '떠서' 겹치므로 콘텐츠(지도) 아래에
+    // 빈 여백이 생기지 않는다(네이버 지도처럼 지도가 바 상단까지 꽉 참).
+    <View style={[styles.wrap, { height: BAR_H + insets.bottom }]}>
+      <View style={styles.bg} />
       <View style={styles.row}>
         {ORDER.map((name) => {
           const route = routeByName[name];
@@ -94,12 +97,13 @@ const styles = StyleSheet.create({
   row: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', alignItems: 'stretch' },
   item: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 3 },
   label: { fontSize: 10, fontFamily: fonts.regular, letterSpacing: 0.3, lineHeight: 14 },
-  // 가운데 홈: 위로 솟은 원. justifyContent flex-start로 아이템 상단에 배치 → 바 위로 돌출.
+  // 가운데 홈: 위로 솟은 원. flex-start + marginTop 음수(-RAISE)로 바 상단보다 위로 돌출.
   centerItem: { flex: 1, alignItems: 'center', justifyContent: 'flex-start' },
   centerCircle: {
     width: 52,
     height: 52,
     borderRadius: 26,
+    marginTop: -RAISE,
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
