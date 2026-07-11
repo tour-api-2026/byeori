@@ -11,7 +11,6 @@ const ACTIVE = colors.accent; // #3177D5
 const INACTIVE = '#80808C'; // Figma 라벨/아이콘 회색
 
 const BAR_H = 56; // 흰 바 높이(세이프에어리어 제외)
-const RAISE = 16; // 가운데 원이 바 위로 솟는 높이
 
 // 탭바가 콘텐츠 위에 '떠 있으므로'(position:absolute), 스크롤 화면은 이 높이만큼
 // contentContainer 하단 여백을 줘서 마지막 항목이 바에 가리지 않게 한다.
@@ -105,13 +104,13 @@ const styles = StyleSheet.create({
   row: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', alignItems: 'stretch' },
   item: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 3 },
   label: { fontSize: 10, fontFamily: fonts.regular, letterSpacing: 0.3, lineHeight: 14 },
-  // 가운데 홈: 위로 솟은 원. flex-start + marginTop 음수(-RAISE)로 바 상단보다 위로 돌출.
+  // 가운데 홈: 바 안에 들어오게 배치(돌출 X). 다른 탭 아이콘과 나란히 정렬.
   centerItem: { flex: 1, alignItems: 'center', justifyContent: 'flex-start' },
   centerCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    marginTop: -RAISE,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginTop: 4,
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
