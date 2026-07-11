@@ -104,13 +104,13 @@ const styles = StyleSheet.create({
   row: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', alignItems: 'stretch' },
   item: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 3 },
   label: { fontSize: 10, fontFamily: fonts.regular, letterSpacing: 0.3, lineHeight: 14 },
-  // 가운데 홈: 바 안에 들어오게 배치(돌출 X). 다른 탭 아이콘과 나란히 정렬.
+  // 가운데 홈: 바 상단보다 살짝(약 6px) 위로 돌출 — Figma 설계(원이 바 위 4px, 43×43)를 반영.
   centerItem: { flex: 1, alignItems: 'center', justifyContent: 'flex-start' },
   centerCircle: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    marginTop: 4,
+    marginTop: -6,
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
