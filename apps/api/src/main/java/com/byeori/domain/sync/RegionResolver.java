@@ -1,6 +1,5 @@
 package com.byeori.domain.sync;
 
-import com.byeori.global.external.SyncProperties;
 import com.byeori.global.external.TourApiClient;
 import com.byeori.global.external.dto.RegionCode;
 import java.util.ArrayList;
@@ -9,7 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-/** 대상 도시명 → 법정동코드(시도/시군구)로 변환. ldongCode2 동적 조회. */
+/** 수집 대상 지역 해석. 전국 모든 시도를 법정동코드(ldongCode2)로 동적 조회. */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -22,39 +21,18 @@ public class RegionResolver {
 
     public List<Region> resolve() {
         List<Region> out = new ArrayList<>();
-        List<RegionCode> sidos = tourClient.ldongCodes(null); // 시도 목록
+        List<RegionCode> sidos = tourClient.ldongCodes(null); // 시도 목록(전국)
         if (sidos.isEmpty()) {
             log.warn("ldongCode2 시도 목록 비어있음 → 지역 해석 불가");
             return out;
         }
-        for (SyncProperties.Target t : SyncProperties.TARGETS) {
-            RegionCode sido = sidos.stream()
-                    .filter(s -> s.name() != null && containsAny(s.name(), t.sidoKeywords()))
-                    .findFirst().orElse(null);
-            if (sido == null) {
-                log.warn("시도 매칭 실패: {}", t.label());
-                continue;
-            }
-            if (t.sigunguKeyword() == null) {
-                out.add(new Region(sido.code(), null, t.label()));
-            } else {
-                List<RegionCode> sgg = tourClient.ldongCodes(sido.code());
-                List<RegionCode> matched = sgg.stream()
-                        .filter(s -> s.name() != null && s.name().contains(t.sigunguKeyword()))
-                        .toList();
-                if (matched.isEmpty()) {
-                    log.warn("시군구 매칭 실패: {} (시도 {})", t.label(), sido.name());
-                } else {
-                    matched.forEach(s -> out.add(new Region(sido.code(), s.code(), t.label())));
-                }
-            }
+        // 전국: 모든 시도를 대상으로 수집(시군구 null = 시도 전체).
+        // 특정 도시로 제한하려면 SyncProperties.TARGETS 매칭 방식으로 되돌리면 된다.
+        for (RegionCode sido : sidos) {
+            if (sido.code() == null || sido.name() == null) continue;
+            out.add(new Region(sido.code(), null, sido.name()));
         }
-        log.info("지역 해석 완료: {}개 단위", out.size());
+        log.info("지역 해석 완료(전국): {}개 시도", out.size());
         return out;
-    }
-
-    private static boolean containsAny(String name, String[] keywords) {
-        for (String k : keywords) if (name.contains(k)) return true;
-        return false;
     }
 }
