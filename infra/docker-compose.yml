@@ -8,6 +8,8 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: byeori-postgres
+    # WSL/도커 데몬 재시작 시에도 자동 기동(없으면 postgres만 죽어 API가 크래시 루프).
+    restart: unless-stopped
     environment:
       POSTGRES_DB: byeori
       POSTGRES_USER: byeori
