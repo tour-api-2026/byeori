@@ -8,23 +8,19 @@ module.exports = () => {
 
   expo.plugins = (expo.plugins || []).map((p) => {
     if (p === '@react-native-seoul/kakao-login') {
-      // kakaoAppKey + kotlinVersion. 이 플러그인이 android.kotlinVersion을 기본 1.5.10으로
-      // 설정해 expo-root-project(KSP, Kotlin 2.x만 지원)와 충돌 → 지원 버전으로 넘긴다.
-      return ['@react-native-seoul/kakao-login', { kakaoAppKey, kotlinVersion: '2.0.21' }];
-    }
-    // RN0.81/Expo54는 저장소를 settings.gradle로 중앙화(FAIL_ON_PROJECT_REPOS) →
-    // 카카오 SDK maven 저장소를 프로젝트에 직접 추가해야 com.kakao.sdk 해석됨
-    if (p === 'expo-build-properties') {
-      return ['expo-build-properties', {
-        android: { extraMavenRepos: ['https://devrepo.kakao.com/nexus/content/groups/public/'] },
-      }];
+      // kakaoAppKey + kotlinVersion. 이 플러그인이 android.kotlinVersion gradle 속성을 직접
+      // 기록한다(옵션 미지정 시 기본 1.5.10 → expo-root-project가 지원 안 함). RN0.81/Expo54의
+      // Kotlin 컴파일러는 2.1.20이므로 여기서 2.1.20으로 맞춰야 expo-updates의 KSP도
+      // 호환 버전(2.1.20-2.0.1)으로 잡혀 kspReleaseKotlin 크래시가 나지 않는다.
+      return ['@react-native-seoul/kakao-login', { kakaoAppKey, kotlinVersion: '2.1.20' }];
     }
     return p;
   });
 
+  const pluginName = (p) => (Array.isArray(p) ? p[0] : p);
+
   // 현재 위치 기반 '내 주변' 지도 — 위치 권한 플러그인(중복 방지).
-  const hasLocation = expo.plugins.some((p) => (Array.isArray(p) ? p[0] : p) === 'expo-location');
-  if (!hasLocation) {
+  if (!expo.plugins.some((p) => pluginName(p) === 'expo-location')) {
     expo.plugins = [
       ...expo.plugins,
       ['expo-location', { locationWhenInUsePermission: '내 주변 장소를 현재 위치 기준으로 보여주기 위해 위치를 사용합니다.' }],
