@@ -13,3 +13,19 @@ docs/.verify-*.html
 # OS
 .DS_Store
 *.log
+
+# 검증 아티팩트
+.playwright-mcp/
+byeori-*.png
+
+# ralph 루프 상태
+.claude/ralph-loop.local.md
+.claude/.ralph-loop*
+.gstack/
+
+# 로컬 API 터널 임시 스크립트
+apps/app/apitun.mjs
+
+# 시크릿 env (TOURAPI/KOPIS 등 백엔드 키 — .env.example만 커밋)
+**/.env
+infra/.env

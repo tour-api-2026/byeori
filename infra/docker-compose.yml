@@ -1,0 +1,65 @@
+# 벼리 데모/운영 인프라 — PostgreSQL + Spring API
+# nginx(80/443)는 호스트의 공용 nginx(seoulride-nginx)가 단독 점유하므로,
+# 벼리 API는 그 nginx가 붙어있는 외부 네트워크(infra_seoulride-net)에 합류해
+# byeori.seoulride.site/api 로 프록시된다.
+# 주의: 이 compose의 프로젝트명은 "infra"로 다른 스택과 공유된다.
+#       절대 `--remove-orphans` 를 쓰지 말 것(타 스택 컨테이너 삭제 위험).
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: byeori-postgres
+    # WSL/도커 데몬 재시작 시에도 자동 기동(없으면 postgres만 죽어 API가 크래시 루프).
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: byeori
+      POSTGRES_USER: byeori
+      POSTGRES_PASSWORD: byeori
+    # 5432는 호스트 로컬(127.0.0.1)에만 바인딩 — 인터넷/LAN 노출 차단.
+    # API는 도커 내부 네트워크(postgres:5432)로 붙으므로 영향 없음.
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U byeori"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - default
+
+  api:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    image: byeori-api:latest
+    container_name: byeori-api
+    restart: unless-stopped
+    # 시크릿 키(TOURAPI_KEY/KOPIS_KEY 등)는 infra/.env(gitignore)에서 주입
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/byeori
+      POSTGRES_USER: byeori
+      POSTGRES_PASSWORD: byeori
+      SERVER_PORT: "8080"
+    # 로컬 웹 미리보기(EXPO_PUBLIC_API_URL=http://localhost:8080)용 — 127.0.0.1 전용 바인딩.
+    # 인터넷 노출(0.0.0.0)이 아니라 로컬 전용이라 안전. 외부는 nginx(443) 프록시로만 접근.
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - default          # postgres 접근
+      - seoulride-net    # 공용 nginx가 byeori-api:8080 으로 프록시
+
+networks:
+  default:
+  seoulride-net:
+    external: true
+    name: infra_seoulride-net
+
+volumes:
+  pgdata:

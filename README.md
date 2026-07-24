@@ -58,6 +58,61 @@ byeori/
 
 ---
 
+## 인프라 · 서버 실행
+
+백엔드(PostgreSQL + Spring API)는 `infra/docker-compose.yml` 하나로 기동합니다.
+공용 nginx(`seoulride-nginx`)가 `byeori.seoulride.site/api` 로 프록시하며, 외부에는 nginx(443)만 노출됩니다.
+
+### 시작
+
+```bash
+cd infra
+docker compose up -d
+```
+
+> ⚠️ **`--remove-orphans` 를 절대 쓰지 말 것.** 이 compose는 프로젝트명이 `infra`로,
+> 같은 이름을 쓰는 seoulRide 스택(nginx·web·certbot)과 공유됩니다. orphan 정리를 하면 타 스택 컨테이너가 삭제됩니다.
+
+### 헬스체크
+
+```bash
+# API 직접 (호스트 로컬 바인딩)
+curl http://127.0.0.1:8080/actuator/health          # → {"status":"UP"}
+
+# nginx 경유 (외부 공개 경로)
+curl -sk https://byeori.seoulride.site/actuator/health
+```
+
+nginx 경유가 **502**면, API 컨테이너가 재생성되며 nginx가 옛 IP를 물고 있는 경우입니다. nginx를 reload 하세요.
+
+```bash
+docker exec seoulride-nginx nginx -s reload
+```
+
+### 중지 / 재시작
+
+```bash
+docker compose stop          # 컨테이너만 정지(데이터 유지)
+docker compose up -d         # 다시 기동
+docker compose logs -f api   # API 로그 확인
+```
+
+> Docker 데몬(WSL)이 재시작되면 postgres가 종료코드 255로 내려가고 API가 재시작 루프에 빠질 수 있습니다.
+> 이때는 `cd infra && docker compose up -d` 로 다시 올리면 됩니다. (postgres healthy 후 API 자동 기동)
+
+### 환경변수
+
+시크릿 키는 `infra/.env`(gitignore)에서 주입됩니다. 저장소에는 포함되지 않으니 새 환경에선 별도 전달이 필요합니다.
+
+- `TOURAPI_KEY`, `KOPIS_KEY` — 공공데이터 동기화
+- `JWT_SECRET` — JWT 서명(32바이트 이상 필수, 미설정 시 API 기동 실패)
+- `KAKAO_REST_KEY` — 카카오 길찾기
+- `ADMIN_ID`, `ADMIN_PASSWORD` — 어드민 계정
+
+포트: PostgreSQL `127.0.0.1:5432`, API `127.0.0.1:8080` — 둘 다 호스트 로컬 전용 바인딩이라 인터넷/LAN에 노출되지 않습니다.
+
+---
+
 ## 문서 보기 / 빌드
 
 기술 설계 문서는 **명명규칙 → 파일구조 → API 명세 → 인프라 setup** 4개 섹션으로 구성됩니다.

@@ -1,0 +1,53 @@
+name: OTA Update (production)
+
+on:
+  push:
+    branches: [main]
+    paths: ['apps/app/**']
+
+jobs:
+  ota:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/app
+    env:
+      # eas.json production 프로필과 동일한 공개 env — update 번들에도 박혀야 함
+      EXPO_PUBLIC_API_URL: https://byeori.seoulride.site/api/v1
+      EXPO_PUBLIC_KAKAO_JS_KEY: c67499ab00bd0367a2de44ba3990169d
+      EXPO_PUBLIC_KAKAO_NATIVE_KEY: 7f769acfbde8a4f7d9dedba42e0580a4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/app/package-lock.json
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      # 네이티브 변경 감지: 로컬 fingerprint ≠ 최신 production 빌드의 runtimeVersion이면
+      # 이 OTA는 기존 설치자에게 도달하지 않는다 → 실패 처리로 "새 스토어 빌드 필요" 알림
+      - name: Fingerprint check (native change detection)
+        run: |
+          LOCAL_FP=$(npx expo-updates fingerprint:generate --platform android | jq -r '.hash')
+          BUILD_RTV=$(eas build:list --platform android --channel production --limit 1 --non-interactive --json | jq -r '.[0].runtimeVersion // empty')
+          echo "local=$LOCAL_FP latest-build=$BUILD_RTV"
+          if [ -z "$BUILD_RTV" ]; then
+            echo "::notice::production 빌드가 아직 없음 — fingerprint 검사 건너뜀"
+          elif [ "$LOCAL_FP" != "$BUILD_RTV" ]; then
+            echo "::error::네이티브 변경 감지 — 이 OTA는 기존 빌드에 도달하지 않습니다. eas build --profile production 후 스토어 제출이 필요합니다."
+            exit 1
+          fi
+
+      - name: Publish OTA update
+        env:
+          # 셸 보간이 아닌 env 경유 — 따옴표/백틱 포함 커밋 메시지에도 안전
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: eas update --channel production --message "$COMMIT_MESSAGE" --non-interactive
