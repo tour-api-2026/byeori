@@ -32,12 +32,23 @@ jobs:
 
       - run: npm ci
 
+      # 시크릿 미등록 시 뒤 스텝들이 알 수 없는 에러로 죽지 않도록 인증을 먼저 검사
+      - name: Verify EAS auth
+        run: |
+          if ! eas whoami > /dev/null 2>&1; then
+            echo "::error::EAS 인증 실패 — GitHub 시크릿 EXPO_TOKEN이 등록되어 있는지 확인하세요 (expo.dev → Access Tokens)."
+            exit 1
+          fi
+
       # 네이티브 변경 감지: 로컬 fingerprint ≠ 최신 production 빌드의 runtimeVersion이면
       # 이 OTA는 기존 설치자에게 도달하지 않는다 → 실패 처리로 "새 스토어 빌드 필요" 알림
       - name: Fingerprint check (native change detection)
         run: |
           LOCAL_FP=$(npx expo-updates fingerprint:generate --platform android | jq -r '.hash')
-          BUILD_RTV=$(eas build:list --platform android --channel production --limit 1 --non-interactive --json | jq -r '.[0].runtimeVersion // empty')
+          BUILD_JSON=$(eas build:list --platform android --channel production --limit 1 --non-interactive --json) || {
+            echo "::error::eas build:list 실패 — 아래 출력 확인"; echo "$BUILD_JSON"; exit 1;
+          }
+          BUILD_RTV=$(echo "$BUILD_JSON" | jq -r '.[0].runtimeVersion // empty')
           echo "local=$LOCAL_FP latest-build=$BUILD_RTV"
           if [ -z "$BUILD_RTV" ]; then
             echo "::notice::production 빌드가 아직 없음 — fingerprint 검사 건너뜀"
