@@ -38,7 +38,7 @@
         "EXPO_PUBLIC_KAKAO_NATIVE_KEY": "7f769acfbde8a4f7d9dedba42e0580a4"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
       }
     }
   },
