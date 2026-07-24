@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useAutoUpdate } from '@/hooks/use-auto-update';
 import { applyGlobalFont } from '@/lib/font';
 import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts } from '@/lib/theme';
@@ -12,6 +13,7 @@ import { colors, fonts } from '@/lib/theme';
 applyGlobalFont();
 
 export default function RootLayout() {
+  useAutoUpdate();
   const [client] = useState(() => new QueryClient());
   const [loaded] = useFonts({
     'Pretendard-Regular': require('../../assets/fonts/Pretendard-Regular.ttf'),
