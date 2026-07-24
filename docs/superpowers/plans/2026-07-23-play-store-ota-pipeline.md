@@ -30,7 +30,7 @@
 **Interfaces:**
 - Produces: Play Store 제출 가능한 production 프로필. Task 4(수동 절차)의 `eas build --profile production`이 이 설정을 사용.
 
-- [ ] **Step 1: buildType 변경**
+- [x] **Step 1: buildType 변경**
 
 `apps/app/eas.json`의 production 프로필에서:
 
@@ -42,12 +42,12 @@
 
 (development/preview 프로필의 `"apk"`는 그대로 둔다.)
 
-- [ ] **Step 2: JSON 유효성 확인**
+- [x] **Step 2: JSON 유효성 확인**
 
 Run: `node -e "JSON.parse(require('fs').readFileSync('apps/app/eas.json','utf8')); console.log('OK')"`
 Expected: `OK`
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add apps/app/eas.json
@@ -65,7 +65,7 @@ git commit -m "feat(app): production 빌드를 AAB(app-bundle)로 전환 — Pla
 **Interfaces:**
 - Produces: `useAutoUpdate(): void` — 인자 없음, 반환 없음. RootLayout에서만 호출.
 
-- [ ] **Step 1: 훅 작성**
+- [x] **Step 1: 훅 작성**
 
 `apps/app/src/hooks/use-auto-update.ts`:
 
@@ -109,7 +109,7 @@ export function useAutoUpdate() {
 }
 ```
 
-- [ ] **Step 2: RootLayout에 연결**
+- [x] **Step 2: RootLayout에 연결**
 
 `apps/app/src/app/_layout.tsx`에 import 추가:
 
@@ -123,12 +123,12 @@ import { useAutoUpdate } from '@/hooks/use-auto-update';
   useAutoUpdate();
 ```
 
-- [ ] **Step 3: 타입체크·린트 통과 확인**
+- [x] **Step 3: 타입체크·린트 통과 확인**
 
 Run: `cd apps/app && npx tsc --noEmit && npm run lint`
 Expected: 에러 0건
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add apps/app/src/hooks/use-auto-update.ts apps/app/src/app/_layout.tsx
@@ -146,7 +146,7 @@ git commit -m "feat(app): OTA 자동 적용 훅 — 시작/포그라운드 시 �
 - Consumes: GitHub 시크릿 `EXPO_TOKEN` (Task 4에서 사용자가 등록)
 - Produces: `main` push(경로 `apps/app/**`) 시 production 채널 OTA 발행. 네이티브 fingerprint가 최신 production 빌드와 다르면 실패로 알림.
 
-- [ ] **Step 1: 워크플로 작성**
+- [x] **Step 1: 워크플로 작성**
 
 `.github/workflows/ota-update.yml`:
 
@@ -203,12 +203,12 @@ jobs:
         run: eas update --channel production --message "${{ github.event.head_commit.message }}" --non-interactive
 ```
 
-- [ ] **Step 2: YAML 유효성 확인**
+- [x] **Step 2: YAML 유효성 확인**
 
 Run: `node -e "const yaml=require('js-yaml')" 2>/dev/null || python3 -c "import yaml,sys; yaml.safe_load(open('.github/workflows/ota-update.yml')); print('OK')"`
 Expected: `OK`
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add .github/workflows/ota-update.yml
