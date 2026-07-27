@@ -21,5 +21,7 @@ public class WebConfig implements WebMvcConfigurer {
     public void addViewControllers(@NonNull ViewControllerRegistry registry) {
         // 개인정보처리방침 — Play Store 등록용 공개 URL (/privacy → static/privacy.html)
         registry.addViewController("/privacy").setViewName("forward:/privacy.html");
+        // 계정 삭제 안내 — Play 데이터 보안 '계정 삭제 URL' 요건
+        registry.addViewController("/account-deletion").setViewName("forward:/account-deletion.html");
     }
 }
