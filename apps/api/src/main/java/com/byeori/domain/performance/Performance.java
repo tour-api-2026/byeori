@@ -32,6 +32,7 @@ public class Performance {
     private String kopisId;
     private String tourContentId;
     private LocalDateTime syncedAt;
+    private boolean traditional;
 
     /** KOPIS 공연으로 신규 생성 */
     public static Performance fromKopis(String kopisId, String title, String genre, String posterImageUrl,
@@ -100,6 +101,11 @@ public class Performance {
         if (lat != null) this.lat = lat;
         if (lng != null) this.lng = lng;
         this.syncedAt = LocalDateTime.now();
+    }
+
+    /** 전통 테마 태깅(동기화 시 TraditionalTagger 판정 결과 반영). */
+    public void applyTraditional(boolean traditional) {
+        this.traditional = traditional;
     }
 
     /** 좌표 보강(KOPIS 공연: 공연시설상세에서 위경도 확보 후 설정). */

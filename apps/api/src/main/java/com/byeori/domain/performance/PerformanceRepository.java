@@ -25,11 +25,13 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
               and (:genre is null or p.genre = :genre)
               and (:venueId is null or p.venueId = :venueId)
               and (:keyword is null or p.title like %:keyword%)
+              and (:traditional is null or p.traditional = :traditional)
             """)
     Page<Performance> search(@Param("state") String state,
                              @Param("genre") String genre,
                              @Param("venueId") Long venueId,
                              @Param("keyword") String keyword,
+                             @Param("traditional") Boolean traditional,
                              Pageable pageable);
 
     List<Performance> findByVenueIdOrderByStartDateAsc(Long venueId);

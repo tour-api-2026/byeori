@@ -136,10 +136,11 @@ public class SyncService {
         LocalDate end = tourDate(it.eventEndDate());
         String state = festivalState(start, end);
         try {
-            perfRepo.findByTourContentId(it.contentId())
-                    .ifPresentOrElse(
-                            p -> { p.updateFromTour(it.title(), "축제", it.firstImage(), start, end, state, num(it.mapy()), num(it.mapx())); perfRepo.save(p); },
-                            () -> perfRepo.save(Performance.fromTour(it.contentId(), it.title(), "축제", it.firstImage(), start, end, state, num(it.mapy()), num(it.mapx()))));
+            Performance p = perfRepo.findByTourContentId(it.contentId())
+                    .map(existing -> { existing.updateFromTour(it.title(), "축제", it.firstImage(), start, end, state, num(it.mapy()), num(it.mapx())); return existing; })
+                    .orElseGet(() -> Performance.fromTour(it.contentId(), it.title(), "축제", it.firstImage(), start, end, state, num(it.mapy()), num(it.mapx())));
+            p.applyTraditional(TraditionalTagger.isTraditional(p.getTitle(), p.getGenre()));
+            perfRepo.save(p);
             return 1;
         } catch (Exception e) {
             log.debug("festival upsert skip {}: {}", it.contentId(), e.getMessage());
@@ -170,6 +171,7 @@ public class SyncService {
             Performance p = perfRepo.findByKopisId(it.mt20id())
                     .map(existing -> { existing.updateFromKopis(it.prfnm(), it.genrenm(), it.poster(), start, end, state); return existing; })
                     .orElseGet(() -> Performance.fromKopis(it.mt20id(), it.prfnm(), it.genrenm(), it.poster(), start, end, state, null));
+            p.applyTraditional(TraditionalTagger.isTraditional(p.getTitle(), p.getGenre()));
             // 좌표 미보유 시에만 공연시설상세에서 위경도 보강(재동기화 비용 최소화).
             if (!p.hasCoordinates()) {
                 BigDecimal[] coords = resolvePerformanceCoords(it.mt20id(), facilityCoords);

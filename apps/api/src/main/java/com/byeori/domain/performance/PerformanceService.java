@@ -18,8 +18,9 @@ public class PerformanceService {
         this.repo = repo;
     }
 
-    public Page<PerformanceResponse> list(String state, String genre, Long venueId, String keyword, Pageable pageable) {
-        return repo.search(state, genre, venueId, keyword, pageable).map(PerformanceResponse::from);
+    public Page<PerformanceResponse> list(String state, String genre, Long venueId, String keyword,
+                                          Boolean traditional, Pageable pageable) {
+        return repo.search(state, genre, venueId, keyword, traditional, pageable).map(PerformanceResponse::from);
     }
 
     public PerformanceResponse detail(Long id) {
