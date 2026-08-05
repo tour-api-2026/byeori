@@ -12,15 +12,19 @@ public class SyncProperties {
 
     private final String tourApiKey;
     private final String kopisKey;
+    private final String seoulKey;
 
     public SyncProperties(@Value("${byeori.sync.tourapi-key:}") String tourApiKey,
-                          @Value("${byeori.sync.kopis-key:}") String kopisKey) {
+                          @Value("${byeori.sync.kopis-key:}") String kopisKey,
+                          @Value("${byeori.sync.seoul-key:}") String seoulKey) {
         this.tourApiKey = tourApiKey;
         this.kopisKey = kopisKey;
+        this.seoulKey = seoulKey;
     }
 
     public boolean tourApiEnabled() { return tourApiKey != null && !tourApiKey.isBlank(); }
     public boolean kopisEnabled() { return kopisKey != null && !kopisKey.isBlank(); }
+    public boolean seoulEnabled() { return seoulKey != null && !seoulKey.isBlank(); }
 
     /**
      * 동기화 대상 도시. 법정동코드는 런타임에 ldongCode2로 동적 조회(RegionResolver).

@@ -31,6 +31,7 @@ public class Performance {
     private String source;
     private String kopisId;
     private String tourContentId;
+    private String seoulId;
     private LocalDateTime syncedAt;
     private boolean traditional;
 
@@ -100,6 +101,45 @@ public class Performance {
         if (state != null) this.state = state;
         if (lat != null) this.lat = lat;
         if (lng != null) this.lng = lng;
+        this.syncedAt = LocalDateTime.now();
+    }
+
+    /** 서울 열린데이터 문화행사로 신규 생성 */
+    public static Performance fromSeoul(String seoulId, String title, String genre, String posterImageUrl,
+                                        LocalDate startDate, LocalDate endDate, String state,
+                                        BigDecimal lat, BigDecimal lng, String externalBookingUrl) {
+        Performance p = new Performance();
+        p.seoulId = seoulId;
+        p.title = title;
+        p.genre = genre;
+        p.posterImageUrl = posterImageUrl;
+        p.startDate = startDate;
+        p.endDate = endDate;
+        p.state = state;
+        p.lat = lat;
+        p.lng = lng;
+        p.externalBookingUrl = externalBookingUrl;
+        p.source = "SEOUL";
+        p.avgRating = BigDecimal.ZERO;
+        p.reviewCount = 0;
+        p.createdAt = LocalDateTime.now();
+        p.syncedAt = LocalDateTime.now();
+        return p;
+    }
+
+    /** 서울 문화행사 재동기화 갱신 */
+    public void updateFromSeoul(String title, String genre, String posterImageUrl,
+                                LocalDate startDate, LocalDate endDate, String state,
+                                BigDecimal lat, BigDecimal lng, String externalBookingUrl) {
+        if (title != null) this.title = title;
+        if (genre != null) this.genre = genre;
+        if (posterImageUrl != null) this.posterImageUrl = posterImageUrl;
+        if (startDate != null) this.startDate = startDate;
+        if (endDate != null) this.endDate = endDate;
+        if (state != null) this.state = state;
+        if (lat != null) this.lat = lat;
+        if (lng != null) this.lng = lng;
+        if (externalBookingUrl != null) this.externalBookingUrl = externalBookingUrl;
         this.syncedAt = LocalDateTime.now();
     }
 

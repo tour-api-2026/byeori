@@ -19,5 +19,6 @@ public class SyncScheduler {
         syncService.syncVenues();
         syncService.syncPerformances();
         syncService.syncFestivals();
+        syncService.syncSeoulEvents();
     }
 }

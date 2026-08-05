@@ -24,6 +24,7 @@ byeori:
   sync:
     tourapi-key: ${TOURAPI_KEY:}
     kopis-key: ${KOPIS_KEY:}
+    seoul-key: ${SEOUL_OPEN_API_KEY:}   # 서울 열린데이터광장 (전통 테마 문화행사)
   auth:
     jwt-secret: ${JWT_SECRET:}   # 필수. 미설정 시 JwtTokenProvider가 부팅 실패시킴(하드코딩 폴백 금지).
     kakao-rest-key: ${KAKAO_REST_KEY:}
