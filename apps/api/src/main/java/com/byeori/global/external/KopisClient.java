@@ -45,7 +45,7 @@ public class KopisClient {
                     .encode()
                     .build()
                     .toUriString();
-            String xml = http.get().uri(url).retrieve().body(String.class);
+            String xml = new String(http.get().uri(url).retrieve().body(byte[].class), StandardCharsets.UTF_8); // KOPIS는 charset 헤더가 없어 명시 디코딩(ISO-8859-1 오디코딩 방지)
             return parse(xml);
         } catch (Exception e) {
             log.warn("KOPIS 공연목록 실패 page={}: {}", page, e.getMessage());
@@ -60,7 +60,7 @@ public class KopisClient {
             String url = UriComponentsBuilder.fromUriString(BASE + "/pblprfr/" + mt20id)
                     .queryParam("service", props.getKopisKey())
                     .encode().build().toUriString();
-            String xml = http.get().uri(url).retrieve().body(String.class);
+            String xml = new String(http.get().uri(url).retrieve().body(byte[].class), StandardCharsets.UTF_8); // KOPIS는 charset 헤더가 없어 명시 디코딩(ISO-8859-1 오디코딩 방지)
             return firstTag(xml, "mt10id");
         } catch (Exception e) {
             log.debug("KOPIS 공연상세 실패 {}: {}", mt20id, e.getMessage());
@@ -75,7 +75,7 @@ public class KopisClient {
             String url = UriComponentsBuilder.fromUriString(BASE + "/prfplc/" + mt10id)
                     .queryParam("service", props.getKopisKey())
                     .encode().build().toUriString();
-            String xml = http.get().uri(url).retrieve().body(String.class);
+            String xml = new String(http.get().uri(url).retrieve().body(byte[].class), StandardCharsets.UTF_8); // KOPIS는 charset 헤더가 없어 명시 디코딩(ISO-8859-1 오디코딩 방지)
             String la = firstTag(xml, "la");
             String lo = firstTag(xml, "lo");
             if (la == null || lo == null) return null;
