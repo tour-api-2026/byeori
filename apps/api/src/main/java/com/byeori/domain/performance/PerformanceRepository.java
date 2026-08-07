@@ -15,6 +15,8 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
 
     java.util.Optional<Performance> findByTourContentId(String tourContentId);
 
+    java.util.Optional<Performance> findBySeoulId(String seoulId);
+
     @Modifying(clearAutomatically = true)
     @Query("update Performance p set p.avgRating = :avg, p.reviewCount = :cnt where p.id = :id")
     void updateRating(@Param("id") Long id, @Param("avg") BigDecimal avg, @Param("cnt") int cnt);
@@ -25,11 +27,13 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
               and (:genre is null or p.genre = :genre)
               and (:venueId is null or p.venueId = :venueId)
               and (:keyword is null or p.title like %:keyword%)
+              and (:traditional is null or p.traditional = :traditional)
             """)
     Page<Performance> search(@Param("state") String state,
                              @Param("genre") String genre,
                              @Param("venueId") Long venueId,
                              @Param("keyword") String keyword,
+                             @Param("traditional") Boolean traditional,
                              Pageable pageable);
 
     List<Performance> findByVenueIdOrderByStartDateAsc(Long venueId);

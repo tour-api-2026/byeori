@@ -19,13 +19,14 @@ public class SyncController {
 
     private final SyncService syncService;
 
-    /** only=all(기본)|venues|performances|festivals 로 대상 선택. */
+    /** only=all(기본)|venues|performances|festivals|seoul 로 대상 선택. */
     @PostMapping("/trigger")
     public ApiResponse<Map<String, Integer>> trigger(@RequestParam(name = "only", defaultValue = "all") String only) {
         boolean all = only.equals("all");
         int venues = (all || only.equals("venues")) ? syncService.syncVenues() : -1;
         int performances = (all || only.equals("performances")) ? syncService.syncPerformances() : -1;
         int festivals = (all || only.equals("festivals")) ? syncService.syncFestivals() : -1;
-        return ApiResponse.ok(Map.of("venues", venues, "performances", performances, "festivals", festivals));
+        int seoul = (all || only.equals("seoul")) ? syncService.syncSeoulEvents() : -1;
+        return ApiResponse.ok(Map.of("venues", venues, "performances", performances, "festivals", festivals, "seoul", seoul));
     }
 }

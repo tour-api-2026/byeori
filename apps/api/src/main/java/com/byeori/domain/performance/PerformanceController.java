@@ -24,9 +24,10 @@ public class PerformanceController {
             @RequestParam(name = "genre", required = false) String genre,
             @RequestParam(name = "venueId", required = false) Long venueId,
             @RequestParam(name = "keyword", required = false) String keyword,
+            @RequestParam(name = "traditional", required = false) Boolean traditional,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size) {
-        Page<PerformanceResponse> result = service.list(state, genre, venueId, keyword,
+        Page<PerformanceResponse> result = service.list(state, genre, venueId, keyword, traditional,
                 PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "startDate")));
         return ApiResponse.ok(PageResponse.of(result));
     }

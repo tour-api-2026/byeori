@@ -5,9 +5,11 @@ import com.byeori.domain.performance.PerformanceRepository;
 import com.byeori.domain.venue.Venue;
 import com.byeori.domain.venue.VenueRepository;
 import com.byeori.global.external.KopisClient;
+import com.byeori.global.external.SeoulEventClient;
 import com.byeori.global.external.SyncProperties;
 import com.byeori.global.external.TourApiClient;
 import com.byeori.global.external.dto.KopisItem;
+import com.byeori.global.external.dto.SeoulEventItem;
 import com.byeori.global.external.dto.TourFestivalItem;
 import com.byeori.global.external.dto.TourItem;
 import java.math.BigDecimal;
@@ -38,6 +40,7 @@ public class SyncService {
     private final SyncProperties props;
     private final TourApiClient tourClient;
     private final KopisClient kopisClient;
+    private final SeoulEventClient seoulClient;
     private final RegionResolver regionResolver;
     private final VenueRepository venueRepo;
     private final PerformanceRepository perfRepo;
@@ -136,15 +139,77 @@ public class SyncService {
         LocalDate end = tourDate(it.eventEndDate());
         String state = festivalState(start, end);
         try {
-            perfRepo.findByTourContentId(it.contentId())
-                    .ifPresentOrElse(
-                            p -> { p.updateFromTour(it.title(), "축제", it.firstImage(), start, end, state, num(it.mapy()), num(it.mapx())); perfRepo.save(p); },
-                            () -> perfRepo.save(Performance.fromTour(it.contentId(), it.title(), "축제", it.firstImage(), start, end, state, num(it.mapy()), num(it.mapx()))));
+            Performance p = perfRepo.findByTourContentId(it.contentId())
+                    .map(existing -> { existing.updateFromTour(it.title(), "축제", it.firstImage(), start, end, state, num(it.mapy()), num(it.mapx())); return existing; })
+                    .orElseGet(() -> Performance.fromTour(it.contentId(), it.title(), "축제", it.firstImage(), start, end, state, num(it.mapy()), num(it.mapx())));
+            p.applyTraditional(TraditionalTagger.isTraditional(p.getTitle(), p.getGenre()));
+            perfRepo.save(p);
             return 1;
         } catch (Exception e) {
             log.debug("festival upsert skip {}: {}", it.contentId(), e.getMessage());
             return 0;
         }
+    }
+
+    /** 서울 열린데이터 전통 계열 CODENAME(서버 필터로 사용). */
+    private static final List<String> SEOUL_TRADITIONAL_CODES = List.of("국악", "축제-전통/역사");
+    private static final int SEOUL_ROWS = 1000; // 서울 API 페이지당 최대
+
+    /** 서울 문화행사(전통 테마) 동기화. CODENAME 서버 필터로 국악·전통/역사 축제만 수집. */
+    public int syncSeoulEvents() {
+        if (!props.seoulEnabled()) {
+            log.info("SEOUL_OPEN_API_KEY 미설정 → 서울 문화행사 동기화 skip");
+            return 0;
+        }
+        int count = 0;
+        for (String codename : SEOUL_TRADITIONAL_CODES) {
+            for (int start = 1; start <= 10 * SEOUL_ROWS; start += SEOUL_ROWS) {
+                List<SeoulEventItem> items = seoulClient.events(codename, start, start + SEOUL_ROWS - 1);
+                if (items.isEmpty()) break;
+                for (SeoulEventItem it : items) count += upsertSeoulEvent(it);
+                throttle();
+                if (items.size() < SEOUL_ROWS) break; // 마지막 페이지
+            }
+        }
+        log.info("서울 전통 행사 동기화 완료: {}건", count);
+        return count;
+    }
+
+    private int upsertSeoulEvent(SeoulEventItem it) {
+        if (it.title() == null) return 0;
+        String seoulId = seoulEventId(it);
+        LocalDate start = seoulDate(it.strtdate());
+        LocalDate end = seoulDate(it.endDate());
+        String state = festivalState(start, end);
+        String bookingUrl = it.hmpgAddr() != null ? it.hmpgAddr() : it.orgLink();
+        try {
+            Performance p = perfRepo.findBySeoulId(seoulId)
+                    .map(existing -> { existing.updateFromSeoul(it.title(), it.codename(), it.mainImg(), start, end, state, num(it.lat()), num(it.lot()), bookingUrl); return existing; })
+                    .orElseGet(() -> Performance.fromSeoul(seoulId, it.title(), it.codename(), it.mainImg(), start, end, state, num(it.lat()), num(it.lot()), bookingUrl));
+            p.applyTraditional(true); // 전통 계열 CODENAME만 수집하므로 항상 true
+            perfRepo.save(p);
+            return 1;
+        } catch (Exception e) {
+            log.debug("seoul event upsert skip {}: {}", seoulId, e.getMessage());
+            return 0;
+        }
+    }
+
+    /** 안정 ID: 상세 URL의 cultcode 우선, 없으면 제목+시작일+장소 해시. */
+    private static String seoulEventId(SeoulEventItem it) {
+        if (it.hmpgAddr() != null) {
+            var m = java.util.regex.Pattern.compile("cultcode=(\\d+)").matcher(it.hmpgAddr());
+            if (m.find()) return "cult-" + m.group(1);
+        }
+        String basis = it.title() + "|" + it.strtdate() + "|" + it.place();
+        return "hash-" + Integer.toHexString(basis.hashCode());
+    }
+
+    /** "yyyy-MM-dd HH:mm:ss.S" → LocalDate (앞 10자리만 사용). */
+    private static LocalDate seoulDate(String s) {
+        if (s == null || s.length() < 10) return null;
+        try { return LocalDate.parse(s.substring(0, 10)); }
+        catch (Exception e) { return null; }
     }
 
     /** 행사 기간 기준 상태 산출. 기간 정보 없으면 예정으로 처리. */
@@ -170,6 +235,7 @@ public class SyncService {
             Performance p = perfRepo.findByKopisId(it.mt20id())
                     .map(existing -> { existing.updateFromKopis(it.prfnm(), it.genrenm(), it.poster(), start, end, state); return existing; })
                     .orElseGet(() -> Performance.fromKopis(it.mt20id(), it.prfnm(), it.genrenm(), it.poster(), start, end, state, null));
+            p.applyTraditional(TraditionalTagger.isTraditional(p.getTitle(), p.getGenre()));
             // 좌표 미보유 시에만 공연시설상세에서 위경도 보강(재동기화 비용 최소화).
             if (!p.hasCoordinates()) {
                 BigDecimal[] coords = resolvePerformanceCoords(it.mt20id(), facilityCoords);
