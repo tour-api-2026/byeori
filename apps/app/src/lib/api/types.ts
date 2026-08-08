@@ -34,6 +34,7 @@ export type Performance = {
   avgRating: number;
   reviewCount: number;
   source: string;
+  traditional: boolean;
 };
 
 export type CommentTag = { id: number; name: string };
