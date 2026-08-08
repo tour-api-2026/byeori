@@ -27,4 +27,11 @@ class TraditionalTaggerTest {
         assertFalse(TraditionalTagger.isTraditional("뮤지컬 캣츠", "뮤지컬"));
         assertFalse(TraditionalTagger.isTraditional(null, null));
     }
+
+    @Test
+    void 문화재단은_문화재로_오탐하지_않음() {
+        assertFalse(TraditionalTagger.isTraditional("동대문문화재단 기획공연, 와인et멜로디", "대중음악"));
+        // 문화재단 주최라도 다른 전통 키워드가 있으면 참
+        assertTrue(TraditionalTagger.isTraditional("문화재단 주최 판소리 한마당", "복합"));
+    }
 }

@@ -17,6 +17,8 @@ public final class TraditionalTagger {
     public static boolean isTraditional(String title, String genre) {
         if (genre != null && genre.contains("국악")) return true;
         if (title == null) return false;
-        return TITLE_KEYWORDS.stream().anyMatch(title::contains);
+        // '문화재단'(기관명)이 '문화재'로 오탐되지 않게 제거 후 매칭
+        String normalized = title.replace("문화재단", "");
+        return TITLE_KEYWORDS.stream().anyMatch(normalized::contains);
     }
 }
