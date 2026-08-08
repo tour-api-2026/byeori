@@ -8,7 +8,8 @@ import { Chip } from '@/components/Chip';
 import { useTabBarHeight } from '@/components/TabBar';
 import { SectionHeader } from '@/components/SectionHeader';
 import { VenueCard } from '@/components/VenueCard';
-import { Venue } from '@/lib/api/types';
+import * as WebBrowser from 'expo-web-browser';
+import { Performance, Venue } from '@/lib/api/types';
 import { sized } from '@/lib/img';
 import { usePerformancesQuery, useVenuesQuery } from '@/lib/hooks/queries';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
@@ -23,6 +24,10 @@ export default function HomeScreen() {
   const [region, setRegion] = useState('전체');
 
   const banner = usePerformancesQuery({ state: 'ONGOING', size: 5 });
+  // 전통 테마 행사 — 진행 중 우선, 없으면 예정으로 대체
+  const tradOngoing = usePerformancesQuery({ traditional: true, state: 'ONGOING', size: 10 });
+  const tradUpcoming = usePerformancesQuery({ traditional: true, state: 'UPCOMING', size: 10 });
+  const traditional = tradOngoing.data?.content.length ? tradOngoing : tradUpcoming;
   const recommended = useVenuesQuery({ size: 6 });
   const keyworded = useVenuesQuery({ category: keyword === '전체' ? undefined : keyword, size: 6 });
   const all = useVenuesQuery({ size: 50 });
@@ -59,6 +64,19 @@ export default function HomeScreen() {
               </View>
             </Pressable>
           ) : <Loading />}
+        </View>
+
+        {/* 전통 테마 행사 */}
+        <View style={styles.section}>
+          <SectionHeader title="전통 테마 행사" />
+          {traditional.isLoading
+            ? <Loading />
+            : (traditional.data?.content.length
+              ? <PerformanceRow items={traditional.data.content} onPress={(p) => {
+                  if (p.venueId) router.push(`/venue/${p.venueId}`);
+                  else if (p.externalBookingUrl) WebBrowser.openBrowserAsync(p.externalBookingUrl);
+                }} />
+              : <Text style={styles.empty}>진행 중인 전통 행사가 아직 없어요</Text>)}
         </View>
 
         {/* 맞춤 추천 */}
@@ -105,6 +123,20 @@ function Grid({ venues }: { venues: Venue[] }) {
   );
 }
 
+function PerformanceRow({ items, onPress }: { items: Performance[]; onPress: (p: Performance) => void }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rowScroll} contentContainerStyle={styles.row}>
+      {items.map((p) => (
+        <Pressable key={p.id} style={styles.perfCard} onPress={() => onPress(p)}>
+          <Image source={sized(p.posterImageUrl, 300, 400)} style={styles.perfImg} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+          <Text style={styles.perfTitle} numberOfLines={2}>{p.title}</Text>
+          <Text style={styles.perfSub} numberOfLines={1}>{p.genre ?? '전통 행사'}{p.startDate ? ` · ${p.startDate.slice(5).replace('-', '.')}~` : ''}</Text>
+        </Pressable>
+      ))}
+    </ScrollView>
+  );
+}
+
 function Chips({ items, value, onChange }: { items: string[]; value: string; onChange: (s: string) => void }) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chips}>
@@ -139,6 +171,10 @@ const styles = StyleSheet.create({
   row: { gap: 12, paddingHorizontal: space.lg },
   chipsScroll: { flexGrow: 0, flexShrink: 0, marginBottom: 14 },
   chips: { gap: 8, paddingRight: 8, alignItems: 'center' },
+  perfCard: { width: 130 },
+  perfImg: { width: 130, height: 170, borderRadius: radius.lg, backgroundColor: colors.bgSoft },
+  perfTitle: { fontSize: 13, fontFamily: fonts.bold, color: colors.text, marginTop: 8, lineHeight: 18 },
+  perfSub: { fontSize: 12, color: colors.textFaint, marginTop: 2 },
   empty: { color: colors.textFaint, fontSize: 13, paddingVertical: 16 },
   loading: { paddingVertical: 30, alignItems: 'center' },
 });
