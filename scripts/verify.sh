@@ -31,10 +31,35 @@ if [ "$(curl -s -o /dev/null -w '%{http_code}' $API/actuator/health 2>/dev/null)
   smoke "/api/v1/comment-tags"
   smoke "/api/v1/curated-courses"
   smoke "/api/v1/curated-courses/1"
-  # 신규 도메인(루프가 추가하면 통과해야 함)
-  smoke "/api/v1/users/me/wishlists"
-  smoke "/api/v1/users/me/itineraries"
-  smoke "/api/v1/users/me/reviews"
+
+  # 인증이 필요한 개인 도메인. 무인증 401(가드 정상)을 먼저 확인하고,
+  # infra/.env의 관리자 계정으로 토큰을 얻을 수 있으면 200까지 확인한다.
+  TOKEN=""
+  if [ -f "$ROOT/infra/.env" ]; then
+    A_ID=$(grep -E '^ADMIN_ID=' "$ROOT/infra/.env" | cut -d= -f2- | tr -d '"'"'"'')
+    A_PW=$(grep -E '^ADMIN_PASSWORD=' "$ROOT/infra/.env" | cut -d= -f2- | tr -d '"'"'"'')
+    if [ -n "${A_ID:-}" ] && [ -n "${A_PW:-}" ]; then
+      TOKEN=$(curl -s -X POST "$API/api/v1/auth/login" -H 'Content-Type: application/json' \
+        -d "{\"id\":\"$A_ID\",\"password\":\"$A_PW\"}" 2>/dev/null \
+        | python3 -c 'import json,sys
+try: print((json.load(sys.stdin).get("data") or {}).get("accessToken") or "")
+except Exception: print("")' 2>/dev/null)
+    fi
+  fi
+  [ -n "$TOKEN" ] && pass "관리자 토큰 획득" || note "관리자 토큰 없음 — 인증 200 검사는 건너뜀"
+
+  smoke_auth() {
+    local code
+    code=$(curl -s -o /dev/null -w '%{http_code}' "$API$1" 2>/dev/null)
+    if [ "$code" = "401" ]; then pass "GET $1 (무인증) → 401 보호됨"
+    else fail "GET $1 (무인증) → $code — 인증 가드가 열려 있음"; fi
+    [ -z "$TOKEN" ] && return
+    code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$API$1" 2>/dev/null)
+    if [ "$code" = "200" ]; then pass "GET $1 (인증) → 200"; else fail "GET $1 (인증) → $code"; fi
+  }
+  smoke_auth "/api/v1/users/me/wishlists"
+  smoke_auth "/api/v1/users/me/itineraries"
+  smoke_auth "/api/v1/users/me/reviews"
 else
   fail "API not running (start: cd apps/api && ./gradlew bootRun)"
 fi
