@@ -100,8 +100,11 @@ export default function VenueDetailScreen() {
             {!!v.phone && <InfoRow label="전화번호" value={v.phone} />}
             {!!v.homepageUrl && <InfoRow label="웹사이트" value={v.homepageUrl} />}
           </View>
+          {/* 공공데이터 출처 표기 — 기관명 기준(API 서비스명 단독 표기 불가) */}
           {(v.source === 'KOPIS' || v.source === 'TOURAPI') && (
-            <Text style={styles.source}>출처: {v.source === 'KOPIS' ? '공연예술통합전산망(KOPIS)' : '한국관광공사 TourAPI'}</Text>
+            <Text style={styles.source}>
+              출처: ⓒ{v.source === 'KOPIS' ? '공연예술통합전산망(KOPIS)' : '한국관광공사'}
+            </Text>
           )}
 
           {/* 진행 중인 행사 */}

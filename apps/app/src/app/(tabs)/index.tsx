@@ -68,7 +68,7 @@ export default function HomeScreen() {
 
         {/* 전통 테마 행사 */}
         <View style={styles.section}>
-          <SectionHeader title="전통 테마 행사" />
+          <SectionHeader title="전통 테마 행사" onMore={() => router.push('/performances/traditional')} />
           {traditional.isLoading
             ? <Loading />
             : (traditional.data?.content.length
