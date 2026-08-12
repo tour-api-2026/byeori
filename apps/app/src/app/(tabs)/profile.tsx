@@ -1,21 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTabBarHeight } from '@/components/TabBar';
+import { deleteAccount } from '@/lib/api/account';
 import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
-type MenuItem = { icon: string; label: string; route?: string; tint: string; soft: string };
+const CONTACT_EMAIL = 'alstjq1012@gmail.com';
+
+type MenuItem = { icon: string; label: string; route?: string; action?: 'contact'; tint: string; soft: string };
 const GROUP1: MenuItem[] = [
   { icon: 'chatbubble-ellipses', label: '내가 쓴 리뷰', route: '/my/reviews', tint: colors.accent, soft: colors.accentSoft },
   { icon: 'location', label: '내가 등록한 장소', route: '/my/venues', tint: colors.primary, soft: colors.primarySoft },
   { icon: 'heart', label: '찜한 장소', route: '/bookmarks', tint: colors.hanbok, soft: '#FDECEC' },
 ];
 const GROUP2: MenuItem[] = [
-  { icon: 'help-circle', label: '문의하기', tint: colors.textSub, soft: colors.bgSoft },
-  { icon: 'information-circle', label: '서비스 정보', tint: colors.textSub, soft: colors.bgSoft },
+  { icon: 'help-circle', label: '문의하기', action: 'contact', tint: colors.textSub, soft: colors.bgSoft },
+  { icon: 'information-circle', label: '서비스 정보', route: '/my/service-info', tint: colors.textSub, soft: colors.bgSoft },
 ];
 
 export default function ProfileScreen() {
@@ -25,13 +29,52 @@ export default function ProfileScreen() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
 
+  const [deleting, setDeleting] = useState(false);
+
   const onLogout = async () => {
     await logout();
     router.replace('/login');
   };
 
+  // 계정 삭제: 되돌릴 수 없으므로 2단계 확인
+  const onDeleteAccount = () => {
+    Alert.alert(
+      '계정을 삭제할까요?',
+      '즐겨찾기·여행 일정·작성한 리뷰가 모두 삭제되며 되돌릴 수 없습니다.\n등록하신 장소는 다른 이용자를 위해 남지만 작성자 정보는 익명 처리됩니다.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: async () => {
+            if (deleting) return;
+            setDeleting(true);
+            try {
+              await deleteAccount();
+              await logout();
+              Alert.alert('계정이 삭제되었습니다', '그동안 벼리를 이용해 주셔서 감사합니다.');
+              router.replace('/login');
+            } catch (e: any) {
+              Alert.alert('삭제하지 못했어요', e?.message ?? '잠시 후 다시 시도해 주세요.');
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const onMenuPress = (m: MenuItem) => {
+    if (m.action === 'contact') {
+      Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=[벼리] 문의`);
+      return;
+    }
+    if (m.route) router.push(m.route as any);
+  };
+
   const Row = ({ m }: { m: MenuItem }) => (
-    <Pressable style={styles.menuRow} onPress={() => m.route && router.push(m.route as any)}>
+    <Pressable style={styles.menuRow} onPress={() => onMenuPress(m)}>
       <View style={[styles.iconCircle, { backgroundColor: m.soft }]}><Ionicons name={m.icon as any} size={18} color={m.tint} /></View>
       <Text style={styles.menuLabel}>{m.label}</Text>
       <Ionicons name="chevron-forward" size={18} color={colors.textFaint} style={{ marginLeft: 'auto' }} />
@@ -72,9 +115,14 @@ export default function ProfileScreen() {
         <View style={[styles.card, { marginTop: 12 }]}>{GROUP2.map((m, i) => <View key={m.label}>{i > 0 && <View style={styles.divider} />}<Row m={m} /></View>)}</View>
 
         {isLoggedIn ? (
-          <Pressable style={styles.logout} onPress={onLogout}>
-            <Text style={styles.logoutText}>로그아웃</Text>
-          </Pressable>
+          <>
+            <Pressable style={styles.logout} onPress={onLogout}>
+              <Text style={styles.logoutText}>로그아웃</Text>
+            </Pressable>
+            <Pressable style={styles.deleteAccount} onPress={onDeleteAccount} disabled={deleting}>
+              <Text style={styles.deleteAccountText}>{deleting ? '삭제 중…' : '계정 삭제'}</Text>
+            </Pressable>
+          </>
         ) : (
           <Pressable style={styles.loginBtn} onPress={() => router.push('/login')}>
             <Text style={styles.loginBtnText}>로그인하기</Text>
@@ -102,6 +150,8 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: colors.border, marginLeft: 62 },
   logout: { marginTop: 28, borderWidth: 1.5, borderColor: colors.danger, borderRadius: radius.md, paddingVertical: 15, alignItems: 'center' },
   logoutText: { color: colors.danger, fontSize: 15, fontFamily: fonts.bold, fontWeight: '800' },
+  deleteAccount: { marginTop: 12, paddingVertical: 12, alignItems: 'center' },
+  deleteAccountText: { color: colors.textFaint, fontSize: 13, fontFamily: fonts.medium, textDecorationLine: 'underline' },
   loginBtn: { marginTop: 28, backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 15, alignItems: 'center' },
   loginBtnText: { color: colors.white, fontSize: 15, fontFamily: fonts.bold, fontWeight: '800' },
 });

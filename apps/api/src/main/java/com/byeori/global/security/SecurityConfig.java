@@ -43,6 +43,7 @@ public class SecurityConfig {
                         // --- 보호 경로(authenticated)가 먼저 매칭되도록 상단 배치 ---
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/me").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/me/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/users/me").authenticated()
                         .requestMatchers("/api/v1/wishlists/**").authenticated()
                         .requestMatchers("/api/v1/itineraries/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/venues/mine").authenticated()
