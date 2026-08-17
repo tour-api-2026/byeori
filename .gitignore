@@ -29,3 +29,5 @@ apps/app/apitun.mjs
 # 시크릿 env (TOURAPI/KOPIS 등 백엔드 키 — .env.example만 커밋)
 **/.env
 infra/.env
+# .env 수정 전 백업본도 같은 시크릿을 담고 있음
+**/.env.bak.*

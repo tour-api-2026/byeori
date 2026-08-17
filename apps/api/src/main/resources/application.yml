@@ -33,6 +33,9 @@ byeori:
     # 아이디/비밀번호 로그인용 관리자 계정(운영은 ADMIN_* 환경변수로 덮어쓸 것)
     admin-id: ${ADMIN_ID:admin}
     admin-password: ${ADMIN_PASSWORD:byeori1234}
+    # 스토어 심사용 계정(role=USER). 기본값 없음 — 미설정 시 심사 로그인 경로 비활성.
+    review-id: ${REVIEW_ID:}
+    review-password: ${REVIEW_PASSWORD:}
   maps:
     # 카카오모빌리티 길찾기(여러 경유지) REST 키 — 로그인 키와 동일 값 재사용. 서버 전용.
     kakao-rest-key: ${KAKAO_REST_KEY:}
