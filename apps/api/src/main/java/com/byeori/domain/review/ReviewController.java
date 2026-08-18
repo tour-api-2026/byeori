@@ -1,5 +1,6 @@
 package com.byeori.domain.review;
 
+import com.byeori.domain.review.dto.ReviewReportRequest;
 import com.byeori.domain.review.dto.ReviewRequest;
 import com.byeori.domain.review.dto.ReviewResponse;
 import com.byeori.domain.review.dto.ReviewUpdateRequest;
@@ -18,11 +19,13 @@ public class ReviewController {
         this.service = service;
     }
 
+    /** 공개 조회. 토큰이 있으면 차단한 사용자의 리뷰를 걸러낸다(비로그인은 userId=null). */
     @GetMapping("/reviews")
     public ApiResponse<List<ReviewResponse>> list(
+            @AuthenticationPrincipal Long userId,
             @RequestParam(name = "targetType") String targetType,
             @RequestParam(name = "targetId") Long targetId) {
-        return ApiResponse.ok(service.listByTarget(targetType, targetId));
+        return ApiResponse.ok(service.listByTarget(targetType, targetId, userId));
     }
 
     @GetMapping("/users/me/reviews")
@@ -44,6 +47,15 @@ public class ReviewController {
             @PathVariable("id") Long id,
             @RequestBody ReviewUpdateRequest req) {
         return ApiResponse.ok(service.update(userId, id, req));
+    }
+
+    @PostMapping("/reviews/{id}/reports")
+    public ApiResponse<Void> report(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable("id") Long id,
+            @RequestBody ReviewReportRequest req) {
+        service.report(userId, id, req);
+        return ApiResponse.ok(null);
     }
 
     @DeleteMapping("/reviews/{id}")

@@ -1,5 +1,6 @@
 package com.byeori.domain.user;
 
+import com.byeori.global.exception.BadRequestException;
 import com.byeori.global.exception.NotFoundException;
 import jakarta.persistence.EntityManager;
 import java.util.List;
@@ -19,11 +20,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
     private final UserRepository userRepo;
+    private final UserBlockRepository blockRepo;
     private final EntityManager em;
 
     /** users.id를 참조하는 개인 데이터 테이블 — FK(NO ACTION) 때문에 users보다 먼저 지운다. */
     private static final List<String> PERSONAL_TABLES = List.of(
-            "content_tag_votes", "venue_reports", "wishlists", "reviews",
+            "content_tag_votes", "venue_reports", "review_reports", "wishlists", "reviews",
             "social_auths", "user_interests", "user_terms");
 
     @Transactional
@@ -39,6 +41,10 @@ public class UserService {
         em.createNativeQuery("delete from itineraries where user_id = :uid")
                 .setParameter("uid", userId).executeUpdate();
 
+        // 차단은 양방향으로 내 id를 참조한다(내가 차단한 것 + 나를 차단한 것)
+        em.createNativeQuery("delete from user_blocks where user_id = :uid or blocked_user_id = :uid")
+                .setParameter("uid", userId).executeUpdate();
+
         for (String table : PERSONAL_TABLES) {
             em.createNativeQuery("delete from " + table + " where user_id = :uid")
                     .setParameter("uid", userId).executeUpdate();
@@ -51,5 +57,28 @@ public class UserService {
         userRepo.delete(user);
         em.flush();
         log.info("계정 삭제 완료 userId={}", userId);
+    }
+
+    /** 사용자 차단. 이미 차단했으면 아무 것도 하지 않는다(버튼 연타 대비). */
+    @Transactional
+    public void block(Long userId, Long targetUserId) {
+        if (targetUserId == null || targetUserId.equals(userId)) {
+            throw new BadRequestException("BLOCK_SELF", "자기 자신은 차단할 수 없습니다.");
+        }
+        if (!userRepo.existsById(targetUserId)) {
+            throw new NotFoundException("USER_NOT_FOUND", "사용자를 찾을 수 없습니다.");
+        }
+        if (blockRepo.existsByUserIdAndBlockedUserId(userId, targetUserId)) return;
+        blockRepo.save(new UserBlock(userId, targetUserId));
+    }
+
+    @Transactional
+    public void unblock(Long userId, Long targetUserId) {
+        blockRepo.deleteByUserIdAndBlockedUserId(userId, targetUserId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> listBlocked(Long userId) {
+        return blockRepo.findBlockedUserIds(userId);
     }
 }

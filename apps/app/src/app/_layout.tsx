@@ -55,6 +55,7 @@ export default function RootLayout() {
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
           <Stack.Screen name="bookmarks" options={{ title: '즐겨찾기' }} />
           <Stack.Screen name="performances/traditional" options={{ title: '전통 테마 행사' }} />
+          <Stack.Screen name="my/blocked" options={{ title: '차단한 사용자' }} />
           <Stack.Screen name="my/service-info" options={{ title: '서비스 정보' }} />
         </Stack>
       </SafeAreaProvider>

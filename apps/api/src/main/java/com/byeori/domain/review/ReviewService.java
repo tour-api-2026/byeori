@@ -1,9 +1,11 @@
 package com.byeori.domain.review;
 
 import com.byeori.domain.performance.PerformanceRepository;
+import com.byeori.domain.review.dto.ReviewReportRequest;
 import com.byeori.domain.review.dto.ReviewRequest;
 import com.byeori.domain.review.dto.ReviewResponse;
 import com.byeori.domain.review.dto.ReviewUpdateRequest;
+import com.byeori.domain.user.UserBlockRepository;
 import com.byeori.domain.venue.VenueRepository;
 import com.byeori.global.content.ContentTarget;
 import com.byeori.global.content.ContentType;
@@ -12,6 +14,7 @@ import com.byeori.global.exception.NotFoundException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,22 +22,39 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ReviewService {
 
+    /** reason 컬럼이 varchar(50) — 초과 시 DB에서 터지므로 서비스에서 막는다. */
+    private static final int REASON_MAX = 50;
+
     private final ReviewRepository repo;
     private final VenueRepository venueRepo;
     private final PerformanceRepository performanceRepo;
+    private final ReviewReportRepository reportRepo;
+    private final UserBlockRepository blockRepo;
 
-    public ReviewService(ReviewRepository repo, VenueRepository venueRepo, PerformanceRepository performanceRepo) {
+    public ReviewService(ReviewRepository repo, VenueRepository venueRepo,
+                         PerformanceRepository performanceRepo, ReviewReportRepository reportRepo,
+                         UserBlockRepository blockRepo) {
         this.repo = repo;
         this.venueRepo = venueRepo;
         this.performanceRepo = performanceRepo;
+        this.reportRepo = reportRepo;
+        this.blockRepo = blockRepo;
     }
 
-    public List<ReviewResponse> listByTarget(String targetType, Long targetId) {
+    /**
+     * 대상의 리뷰 목록. viewerId가 있으면 그가 차단한 사용자의 리뷰는 제외한다
+     * (차단이 실제로 콘텐츠를 가려야 의미가 있음). 비로그인 조회는 viewerId=null.
+     */
+    public List<ReviewResponse> listByTarget(String targetType, Long targetId, Long viewerId) {
         ContentTarget t = new ContentTarget(ContentType.from(targetType), targetId);
         List<Review> reviews = t.targetType() == ContentType.VENUE
                 ? repo.findByVenueIdOrderByCreatedAtDesc(targetId)
                 : repo.findByPerformanceIdOrderByCreatedAtDesc(targetId);
-        return reviews.stream().map(ReviewResponse::from).toList();
+        Set<Long> blocked = viewerId == null ? Set.of() : Set.copyOf(blockRepo.findBlockedUserIds(viewerId));
+        return reviews.stream()
+                .filter(r -> !blocked.contains(r.getUserId()))
+                .map(ReviewResponse::from)
+                .toList();
     }
 
     public List<ReviewResponse> listMine(Long userId) {
@@ -71,6 +91,27 @@ public class ReviewService {
         ContentTarget t = ContentTarget.of(review.getPerformanceId(), review.getVenueId());
         repo.delete(review);
         recalc(t);
+    }
+
+    /** 리뷰 신고. 구글 UGC 정책이 요구하는 신고 수단 — 운영진이 status로 후속 처리한다. */
+    @Transactional
+    public void report(Long userId, Long reviewId, ReviewReportRequest req) {
+        Review review = repo.findById(reviewId)
+                .orElseThrow(() -> new NotFoundException("REVIEW_NOT_FOUND", "리뷰를 찾을 수 없습니다."));
+        String reason = (req != null && req.reason() != null) ? req.reason().trim() : null;
+        if (reason == null || reason.isBlank()) {
+            throw new BadRequestException("REPORT_INVALID", "신고 사유는 필수입니다.");
+        }
+        if (reason.length() > REASON_MAX) {
+            throw new BadRequestException("REPORT_INVALID", "신고 사유가 너무 깁니다.");
+        }
+        if (review.getUserId().equals(userId)) {
+            throw new BadRequestException("REPORT_SELF", "본인 리뷰는 신고할 수 없습니다.");
+        }
+        if (reportRepo.existsByReviewIdAndUserId(reviewId, userId)) {
+            throw new BadRequestException("REPORT_DUPLICATE", "이미 신고한 리뷰입니다.");
+        }
+        reportRepo.save(new ReviewReport(reviewId, userId, reason, req.detail()));
     }
 
     /** 대상의 avg_rating·review_count 동기 재계산 */
