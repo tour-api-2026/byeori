@@ -29,6 +29,11 @@ public class AuthService {
     private String adminId;
     @Value("${byeori.auth.admin-password:byeori1234}")
     private String adminPassword;
+    // 스토어 심사용 계정. 미설정(빈 값)이면 심사 로그인 경로 자체가 비활성.
+    @Value("${byeori.auth.review-id:}")
+    private String reviewId;
+    @Value("${byeori.auth.review-password:}")
+    private String reviewPassword;
 
     @Transactional
     public TokenResponse socialLogin(SocialLoginRequest req) {
@@ -60,22 +65,38 @@ public class AuthService {
     }
 
     /**
-     * 아이디/비밀번호 로그인. 현재는 설정된 관리자 계정만 통과.
-     * 자격증명은 byeori.auth.admin-id/admin-password(기본 admin/byeori1234, 운영은 ADMIN_* 환경변수로 덮어쓰기).
+     * 아이디/비밀번호 로그인. 관리자 계정(ADMIN) 또는 스토어 심사용 계정(USER)만 통과.
+     * 자격증명은 byeori.auth.admin-id/admin-password(운영은 ADMIN_* 환경변수),
+     * 심사용은 byeori.auth.review-id/review-password(REVIEW_* 환경변수, 미설정 시 비활성).
      */
     @Transactional
     public TokenResponse login(LoginRequest req) {
         String id = (req != null && req.id() != null) ? req.id().trim() : null;
         String pw = (req != null) ? req.password() : null;
-        if (id == null || pw == null || !adminId.equals(id) || !adminPassword.equals(pw)) {
+
+        User user;
+        if (matches(adminId, adminPassword, id, pw)) {
+            user = userRepository
+                    .findByAuthProviderAndProviderUserId("ADMIN", adminId)
+                    .orElseGet(() -> userRepository.save(User.admin(adminId, "관리자")));
+        } else if (matches(reviewId, reviewPassword, id, pw)) {
+            user = userRepository
+                    .findByAuthProviderAndProviderUserId("REVIEW", reviewId)
+                    .orElseGet(() -> userRepository.save(User.review(reviewId, "심사용 계정")));
+        } else {
             throw new BadRequestException("INVALID_CREDENTIALS", "아이디 또는 비밀번호가 올바르지 않습니다.");
         }
-        User user = userRepository
-                .findByAuthProviderAndProviderUserId("ADMIN", adminId)
-                .orElseGet(() -> userRepository.save(User.admin(adminId, "관리자")));
+
         String access = tokenProvider.generateAccess(user.getId(), user.getRole());
         String refresh = tokenProvider.generateRefresh(user.getId(), user.getRole());
         return new TokenResponse(access, refresh, toSummary(user));
+    }
+
+    /** 설정된 자격증명과 요청이 일치하는지. 설정값이 비어 있으면(미설정) 항상 false. */
+    private static boolean matches(String expectedId, String expectedPw, String id, String pw) {
+        return expectedId != null && !expectedId.isBlank()
+                && expectedPw != null && !expectedPw.isBlank()
+                && expectedId.equals(id) && expectedPw.equals(pw);
     }
 
     /** 무상태 리프레시: refresh 토큰 검증 후 새 토큰쌍 발급. */

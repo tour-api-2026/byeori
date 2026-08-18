@@ -88,6 +88,25 @@ public class User {
         return u;
     }
 
+    /**
+     * 스토어 심사용 계정(아이디/비밀번호 로그인). role=USER —
+     * 심사자가 로그인 전용 기능(즐겨찾기·리뷰·마이페이지)만 확인하면 되므로 ADMIN 권한을 주지 않는다.
+     */
+    public static User review(String providerUserId, String name) {
+        User u = new User();
+        u.authProvider = "REVIEW";
+        u.providerUserId = providerUserId;
+        u.name = (name != null && !name.isBlank()) ? name : "심사용 계정";
+        u.role = "USER";
+        u.status = "ACTIVE";
+        u.language = "ko";
+        u.phoneVerified = false;
+        u.emailVerified = false;
+        u.createdAt = LocalDateTime.now();
+        u.updatedAt = LocalDateTime.now();
+        return u;
+    }
+
     /** 재로그인 시 변경된 프로필 동기화. */
     public void updateProfile(String name, String email, String profileImageUrl) {
         if (name != null && !name.isBlank()) this.name = name;

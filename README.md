@@ -108,6 +108,7 @@ docker compose logs -f api   # API 로그 확인
 - `JWT_SECRET` — JWT 서명(32바이트 이상 필수, 미설정 시 API 기동 실패)
 - `KAKAO_REST_KEY` — 카카오 길찾기
 - `ADMIN_ID`, `ADMIN_PASSWORD` — 어드민 계정
+- `REVIEW_ID`, `REVIEW_PASSWORD` — Play Store 심사용 계정(role=USER). 미설정 시 해당 로그인 경로 비활성
 
 포트: PostgreSQL `127.0.0.1:5432`, API `127.0.0.1:8080` — 둘 다 호스트 로컬 전용 바인딩이라 인터넷/LAN에 노출되지 않습니다.
 
