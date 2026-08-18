@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { blockUser, fetchBlockedUsers, unblockUser } from '../api/account';
 import { fetchCourseDetail, fetchCourses } from '../api/courses';
 import {
   addItineraryItem, createItinerary, deleteItinerary, deleteItineraryItem,
@@ -103,6 +104,33 @@ export function useReportReviewMutation() {
 export function useDeleteReviewMutation() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: deleteReview, onSuccess: () => qc.invalidateQueries({ queryKey: ['reviews'] }) });
+}
+
+// ---------- 차단 ----------
+export function useBlockedUsersQuery() {
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  return useQuery({ queryKey: ['blocks'], queryFn: fetchBlockedUsers, enabled: isLoggedIn });
+}
+export function useBlockUserMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: blockUser,
+    // 차단 즉시 상대 리뷰가 사라지도록 리뷰 목록도 무효화
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['blocks'] });
+      qc.invalidateQueries({ queryKey: ['reviews'] });
+    },
+  });
+}
+export function useUnblockUserMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: unblockUser,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['blocks'] });
+      qc.invalidateQueries({ queryKey: ['reviews'] });
+    },
+  });
 }
 
 // ---------- 찜 ----------

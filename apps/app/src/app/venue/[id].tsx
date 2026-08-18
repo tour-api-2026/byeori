@@ -7,7 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Rating } from '@/components/Rating';
 import { ReportDialog } from '@/components/ReportDialog';
 import {
-  useContentTagsQuery, useDeleteVenueMutation, useReportReviewMutation, useReportVenueMutation,
+  useBlockUserMutation, useContentTagsQuery, useDeleteVenueMutation,
+  useReportReviewMutation, useReportVenueMutation,
   useReviewsQuery, useToggleWishlistMutation, useVenueDetailQuery, useVenuePerformancesQuery,
   useVoteTagMutation,
 } from '@/lib/hooks/queries';
@@ -56,6 +57,7 @@ export default function VenueDetailScreen() {
   const myId = useAuthStore((s) => s.user?.id);
   const reportVenue = useReportVenueMutation();
   const reportReview = useReportReviewMutation();
+  const blockUser = useBlockUserMutation();
   const [report, setReport] = useState<{ kind: 'VENUE' | 'REVIEW'; id: number } | null>(null);
 
   const openReport = (kind: 'VENUE' | 'REVIEW', targetId: number) => {
@@ -85,6 +87,28 @@ export default function VenueDetailScreen() {
         },
       },
     );
+  };
+
+  const confirmBlock = (targetUserId: number) => {
+    if (!isLoggedIn) {
+      Alert.alert('로그인 필요', '차단하려면 로그인이 필요해요.', [
+        { text: '취소', style: 'cancel' },
+        { text: '로그인', onPress: () => router.push('/login') },
+      ]);
+      return;
+    }
+    Alert.alert('사용자 차단', '이 사용자의 리뷰가 더 이상 보이지 않아요. 차단은 마이 > 차단한 사용자에서 해제할 수 있어요.', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '차단',
+        style: 'destructive',
+        onPress: () =>
+          blockUser.mutate(targetUserId, {
+            onSuccess: () => Alert.alert('차단 완료', '이 사용자의 리뷰를 더 이상 표시하지 않아요.'),
+            onError: (e: any) => Alert.alert('차단 실패', e?.message ?? '잠시 후 다시 시도해주세요.'),
+          }),
+      },
+    ]);
   };
 
   if (isLoading || !v) {
@@ -200,9 +224,14 @@ export default function VenueDetailScreen() {
                     <View style={styles.reviewAvatar} />
                     <Text style={styles.reviewUser}>사용자{r.userId}</Text>
                     {String(r.userId) !== String(myId ?? '') && (
-                      <Pressable style={styles.reportBtn} hitSlop={8} onPress={() => openReport('REVIEW', r.id)}>
-                        <Ionicons name="flag-outline" size={15} color={colors.textFaint} />
-                      </Pressable>
+                      <View style={styles.reviewActions}>
+                        <Pressable hitSlop={8} onPress={() => openReport('REVIEW', r.id)}>
+                          <Ionicons name="flag-outline" size={15} color={colors.textFaint} />
+                        </Pressable>
+                        <Pressable hitSlop={8} onPress={() => confirmBlock(r.userId)}>
+                          <Ionicons name="person-remove-outline" size={15} color={colors.textFaint} />
+                        </Pressable>
+                      </View>
                     )}
                   </View>
                   <View style={styles.reviewStars}>
@@ -279,7 +308,7 @@ const styles = StyleSheet.create({
   reviewTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   reviewAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.border },
   reviewUser: { fontSize: 13, fontFamily: fonts.semibold, fontWeight: '600', color: colors.text },
-  reportBtn: { marginLeft: 'auto' },
+  reviewActions: { flexDirection: 'row', alignItems: 'center', gap: 14, marginLeft: 'auto' },
   reviewStars: { flexDirection: 'row', alignItems: 'center', gap: 1, marginTop: 8 },
   reviewContent: { fontSize: 13, color: colors.textSub, marginTop: 8, lineHeight: 19 },
   noReview: { fontSize: 13, color: colors.textFaint },

@@ -19,11 +19,13 @@ public class ReviewController {
         this.service = service;
     }
 
+    /** 공개 조회. 토큰이 있으면 차단한 사용자의 리뷰를 걸러낸다(비로그인은 userId=null). */
     @GetMapping("/reviews")
     public ApiResponse<List<ReviewResponse>> list(
+            @AuthenticationPrincipal Long userId,
             @RequestParam(name = "targetType") String targetType,
             @RequestParam(name = "targetId") Long targetId) {
-        return ApiResponse.ok(service.listByTarget(targetType, targetId));
+        return ApiResponse.ok(service.listByTarget(targetType, targetId, userId));
     }
 
     @GetMapping("/users/me/reviews")

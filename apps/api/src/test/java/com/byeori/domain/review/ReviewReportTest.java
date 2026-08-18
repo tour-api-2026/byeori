@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.byeori.domain.performance.PerformanceRepository;
 import com.byeori.domain.review.dto.ReviewReportRequest;
+import com.byeori.domain.user.UserBlockRepository;
 import com.byeori.domain.venue.VenueRepository;
 import com.byeori.global.exception.BadRequestException;
 import com.byeori.global.exception.NotFoundException;
@@ -36,12 +37,13 @@ class ReviewReportTest {
     @Mock VenueRepository venueRepo;
     @Mock PerformanceRepository performanceRepo;
     @Mock ReviewReportRepository reportRepo;
+    @Mock UserBlockRepository blockRepo;
 
     ReviewService service;
 
     @BeforeEach
     void setUp() {
-        service = new ReviewService(repo, venueRepo, performanceRepo, reportRepo);
+        service = new ReviewService(repo, venueRepo, performanceRepo, reportRepo, blockRepo);
         // 신고 대상: AUTHOR가 쓴 리뷰
         Review review = new Review(AUTHOR, null, 10L, 5, "내용");
         when(repo.findById(REVIEW_ID)).thenReturn(Optional.of(review));

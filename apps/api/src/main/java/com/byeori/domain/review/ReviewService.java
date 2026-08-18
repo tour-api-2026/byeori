@@ -5,6 +5,7 @@ import com.byeori.domain.review.dto.ReviewReportRequest;
 import com.byeori.domain.review.dto.ReviewRequest;
 import com.byeori.domain.review.dto.ReviewResponse;
 import com.byeori.domain.review.dto.ReviewUpdateRequest;
+import com.byeori.domain.user.UserBlockRepository;
 import com.byeori.domain.venue.VenueRepository;
 import com.byeori.global.content.ContentTarget;
 import com.byeori.global.content.ContentType;
@@ -13,6 +14,7 @@ import com.byeori.global.exception.NotFoundException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,21 +29,32 @@ public class ReviewService {
     private final VenueRepository venueRepo;
     private final PerformanceRepository performanceRepo;
     private final ReviewReportRepository reportRepo;
+    private final UserBlockRepository blockRepo;
 
     public ReviewService(ReviewRepository repo, VenueRepository venueRepo,
-                         PerformanceRepository performanceRepo, ReviewReportRepository reportRepo) {
+                         PerformanceRepository performanceRepo, ReviewReportRepository reportRepo,
+                         UserBlockRepository blockRepo) {
         this.repo = repo;
         this.venueRepo = venueRepo;
         this.performanceRepo = performanceRepo;
         this.reportRepo = reportRepo;
+        this.blockRepo = blockRepo;
     }
 
-    public List<ReviewResponse> listByTarget(String targetType, Long targetId) {
+    /**
+     * 대상의 리뷰 목록. viewerId가 있으면 그가 차단한 사용자의 리뷰는 제외한다
+     * (차단이 실제로 콘텐츠를 가려야 의미가 있음). 비로그인 조회는 viewerId=null.
+     */
+    public List<ReviewResponse> listByTarget(String targetType, Long targetId, Long viewerId) {
         ContentTarget t = new ContentTarget(ContentType.from(targetType), targetId);
         List<Review> reviews = t.targetType() == ContentType.VENUE
                 ? repo.findByVenueIdOrderByCreatedAtDesc(targetId)
                 : repo.findByPerformanceIdOrderByCreatedAtDesc(targetId);
-        return reviews.stream().map(ReviewResponse::from).toList();
+        Set<Long> blocked = viewerId == null ? Set.of() : Set.copyOf(blockRepo.findBlockedUserIds(viewerId));
+        return reviews.stream()
+                .filter(r -> !blocked.contains(r.getUserId()))
+                .map(ReviewResponse::from)
+                .toList();
     }
 
     public List<ReviewResponse> listMine(Long userId) {
