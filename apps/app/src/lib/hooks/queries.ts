@@ -5,7 +5,7 @@ import {
   fetchItinerary, fetchItineraryRoute, fetchMyItineraries,
 } from '../api/itineraries';
 import { fetchPerformances, PerformanceFilter } from '../api/performances';
-import { createReview, deleteReview, fetchMyReviews, fetchReviews } from '../api/reviews';
+import { createReview, deleteReview, fetchMyReviews, fetchReviews, reportReview } from '../api/reviews';
 import { fetchCommentTags, fetchContentTags, unvoteTag, voteTag } from '../api/tags';
 import {
   createVenue, deleteVenue, fetchMyVenues, fetchVenueDetail, fetchVenuePerformances, fetchVenues,
@@ -96,6 +96,9 @@ export function useCreateReviewMutation() {
       qc.invalidateQueries({ queryKey: ['venue', vars.targetId] });
     },
   });
+}
+export function useReportReviewMutation() {
+  return useMutation({ mutationFn: (v: { id: number; reason: string; detail?: string }) => reportReview(v.id, { reason: v.reason, detail: v.detail }) });
 }
 export function useDeleteReviewMutation() {
   const qc = useQueryClient();

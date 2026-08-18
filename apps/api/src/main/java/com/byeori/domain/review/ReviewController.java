@@ -1,5 +1,6 @@
 package com.byeori.domain.review;
 
+import com.byeori.domain.review.dto.ReviewReportRequest;
 import com.byeori.domain.review.dto.ReviewRequest;
 import com.byeori.domain.review.dto.ReviewResponse;
 import com.byeori.domain.review.dto.ReviewUpdateRequest;
@@ -44,6 +45,15 @@ public class ReviewController {
             @PathVariable("id") Long id,
             @RequestBody ReviewUpdateRequest req) {
         return ApiResponse.ok(service.update(userId, id, req));
+    }
+
+    @PostMapping("/reviews/{id}/reports")
+    public ApiResponse<Void> report(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable("id") Long id,
+            @RequestBody ReviewReportRequest req) {
+        service.report(userId, id, req);
+        return ApiResponse.ok(null);
     }
 
     @DeleteMapping("/reviews/{id}")

@@ -25,3 +25,7 @@ export function createReview(body: { targetType: string; targetId: number; ratin
 export function deleteReview(id: number): Promise<void> {
   return unwrap<void>(api.delete<ApiEnvelope<void>>(`/reviews/${id}`));
 }
+
+export function reportReview(id: number, body: { reason: string; detail?: string }): Promise<void> {
+  return unwrap<void>(api.post<ApiEnvelope<void>>(`/reviews/${id}/reports`, body));
+}
