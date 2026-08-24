@@ -31,3 +31,8 @@ apps/app/apitun.mjs
 infra/.env
 # .env 수정 전 백업본도 같은 시크릿을 담고 있음
 **/.env.bak.*
+
+# 로컬로 내려받은 스토어 제출용 빌드 산출물(AAB/APK) — 수십 MB, 저장소에 넣지 않는다
+build/
+*.aab
+*.apk
