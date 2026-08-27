@@ -18,7 +18,7 @@ export function VenueCard({ venue, width = '48.5%' }: { venue: Venue; width?: Di
       <Image source={sized(venue.imageUrl, 360, 240)} style={styles.img} contentFit="cover" transition={200} cachePolicy="memory-disk" recyclingKey={String(venue.id)} />
       <View style={styles.body}>
         <Text style={styles.name} numberOfLines={1}>{venue.name}</Text>
-        <Rating value={venue.avgRating} />
+        <Rating value={venue.avgRating} count={venue.reviewCount} />
         {tags.length > 0 && (
           <View style={styles.tags}>
             {tags.slice(0, 2).map((t) => (

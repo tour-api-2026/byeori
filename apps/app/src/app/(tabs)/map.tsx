@@ -419,7 +419,10 @@ export default function MapScreen() {
                 onPress={() => setSelected(v)}
               >
                 <Text style={styles.pinText}>
-                  {Number(v.avgRating).toFixed(1)}
+                  {/* 리뷰가 없으면 "0.0"만 깔려 정보가 없다. 그럴 땐 카테고리를 보여준다. */}
+                  {v.reviewCount > 0
+                    ? Number(v.avgRating).toFixed(1)
+                    : v.category || '·'}
                 </Text>
               </Pressable>
             ))}
