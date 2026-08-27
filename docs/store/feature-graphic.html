@@ -34,7 +34,7 @@
   .wrap { position:relative; height:100%; display:flex; align-items:center; }
 
   /* ── 좌측 카피 ── */
-  .left { width:474px; padding-left:66px; }
+  .left { width:430px; padding-left:60px; }
   .brandrow { display:flex; align-items:center; gap:16px; margin-bottom:16px; }
   .icon { width:66px; height:66px; border-radius:19px; object-fit:cover;
     box-shadow:0 8px 20px rgba(31,38,76,.18); }
@@ -49,17 +49,20 @@
     border-radius:999px; padding:8px 15px; white-space:nowrap; }
   .chip.hot { color:#fff; background:#263176; border-color:#263176; }
 
-  /* ── 우측 단말 ── */
-  .phones { position:absolute; left:498px; top:0; width:526px; height:500px; }
-  .ph { position:absolute; border-radius:30px; background:#0E1330;
-    padding:7px; box-shadow:0 24px 48px rgba(23,29,66,.30); }
-  .ph img { display:block; border-radius:24px; width:100%; height:100%; object-fit:cover;
-    object-position:top center; }
+  /* ── 우측 단말 ──
+     핵심: 기기 안쪽 영역의 비율을 스크린샷과 똑같이 9:16으로 맞춘다.
+     그래야 object-fit:cover가 잘라내는 부분 없이 앱 화면 전체를 보여준다.
+     (이전 판은 4:5 남짓한 틀에 세로로 긴 화면을 끼워 넣어 위아래가 잘렸다.)
+     회전도 쓰지 않는다 — 회전은 바운딩 박스를 키워 캔버스 밖으로 삐져나갔다. */
+  .phones { position:absolute; left:0; top:0; width:1024px; height:500px; }
+  .ph { position:absolute; border-radius:26px; background:#0E1330;
+    padding:6px; box-shadow:0 20px 44px rgba(23,29,66,.28); }
+  .ph img { display:block; border-radius:20px; width:100%; height:100%; object-fit:cover; }
 
-  /* 겹쳐 배치 — 가운데를 가장 크고 앞에 */
-  .p1 { width:180px; height:366px; left:6px;   top:70px; transform:rotate(-9deg);   z-index:1; }
-  .p2 { width:206px; height:418px; left:160px; top:41px; transform:rotate(-1.5deg); z-index:3; }
-  .p3 { width:180px; height:366px; left:322px; top:66px; transform:rotate(7deg);    z-index:2; }
+  /* 셋 다 캔버스 안에 완전히 들어온다(top ≥ 43, bottom ≤ 457, right ≤ 995). */
+  .p1 { width:206px; height:357px; left:505px; top:71px; z-index:1; }
+  .p2 { width:238px; height:414px; left:631px; top:43px; z-index:3; }
+  .p3 { width:206px; height:357px; left:789px; top:71px; z-index:2; }
 </style>
 </head>
 <body>

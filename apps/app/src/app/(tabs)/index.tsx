@@ -23,7 +23,10 @@ export default function HomeScreen() {
   const [keyword, setKeyword] = useState('전체');
   const [region, setRegion] = useState('전체');
 
-  const banner = usePerformancesQuery({ state: 'ONGOING', size: 5 });
+  // 배너 — 앱 성격에 맞게 전통 행사를 먼저 걸고, 진행 중인 게 없을 때만 일반 공연으로 대체.
+  const bannerTrad = usePerformancesQuery({ state: 'ONGOING', traditional: true, size: 5 });
+  const bannerAny = usePerformancesQuery({ state: 'ONGOING', size: 5 });
+  const banner = bannerTrad.data?.content.length ? bannerTrad : bannerAny;
   // 전통 테마 행사 — 진행 중 우선, 없으면 예정으로 대체
   const tradOngoing = usePerformancesQuery({ traditional: true, state: 'ONGOING', size: 10 });
   const tradUpcoming = usePerformancesQuery({ traditional: true, state: 'UPCOMING', size: 10 });
@@ -33,6 +36,8 @@ export default function HomeScreen() {
   const all = useVenuesQuery({ size: 50 });
 
   const top = banner.data?.content?.[0];
+  // 배너에 건 공연이 바로 아래 목록 첫 칸에 또 나오면 같은 포스터가 두 번 보인다.
+  const traditionalItems = (traditional.data?.content ?? []).filter((p) => p.id !== top?.id);
   const regionVenues = useMemo(() => {
     const list = all.data?.content ?? [];
     return (region === '전체' ? list : list.filter((v) => v.address?.includes(region))).slice(0, 4);
@@ -71,8 +76,8 @@ export default function HomeScreen() {
           <SectionHeader title="전통 테마 행사" onMore={() => router.push('/performances/traditional')} />
           {traditional.isLoading
             ? <Loading />
-            : (traditional.data?.content.length
-              ? <PerformanceRow items={traditional.data.content} onPress={(p) => {
+            : (traditionalItems.length
+              ? <PerformanceRow items={traditionalItems} onPress={(p) => {
                   if (p.venueId) router.push(`/venue/${p.venueId}`);
                   else if (p.externalBookingUrl) WebBrowser.openBrowserAsync(p.externalBookingUrl);
                 }} />

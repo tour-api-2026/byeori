@@ -18,12 +18,19 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
 
     java.util.Optional<Venue> findByTourContentId(String tourContentId);
 
+    /**
+     * 정렬이 없으면 DB가 돌려주는 순서가 임의라 페이지 간 중복·누락이 생기고,
+     * 홈의 "맞춤 추천"에 사진 없는 장소가 먼저 뜨기도 한다.
+     * 사진 있는 것 → 평점 높은 것 → 리뷰 많은 것 순으로 고정하고, 마지막에 id로 동점을 깬다.
+     */
     @Query("""
             select v from Venue v
             where v.status = 'ACTIVE' and v.visibility = 'PUBLIC'
               and (:category is null or v.category = :category)
               and (:hanbokDiscount is null or v.hanbokDiscount = :hanbokDiscount)
               and (:keyword is null or v.name like %:keyword%)
+            order by case when v.imageUrl is null or v.imageUrl = '' then 1 else 0 end,
+                     v.avgRating desc, v.reviewCount desc, v.id asc
             """)
     Page<Venue> search(@Param("category") String category,
                        @Param("hanbokDiscount") Boolean hanbokDiscount,
