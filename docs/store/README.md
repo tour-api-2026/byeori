@@ -91,9 +91,9 @@ im.resize((1024,500), Image.LANCZOS).save('feature-graphic-1024x500.png', optimi
   `object-fit:cover`가 화면 위아래를 잘라내 "앱이 잘린" 그래픽이 된다.
 - **회전(`transform:rotate`)을 쓰지 않는다.** 회전은 바운딩 박스를 키워
   기기가 캔버스 밖으로 삐져나간다.
-- 좌측 문구의 숫자는 실제 DB 집계와 맞춰야 한다. 현재 값의 근거:
-  `select count(*) from performances where traditional = true` → 1,265 (문구 "1,100+"),
-  `select count(*) from venues` → 29,466 (문구 "2만 9천+"). 데이터가 줄면 문구도 낮춘다.
+- **칩 문구에 건수를 넣지 않는다.** 공공데이터 동기화로 수치가 계속 변해
+  그래픽을 다시 만들 때마다 검증해야 하고, 줄어들면 사실과 어긋난다.
+  기능 이름만 쓴다(전통 행사 / 지역 명소 / 나만의 루트).
 
 ## 문구
 
