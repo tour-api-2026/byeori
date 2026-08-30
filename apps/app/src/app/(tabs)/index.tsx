@@ -40,7 +40,8 @@ export default function HomeScreen() {
   const traditionalItems = (traditional.data?.content ?? []).filter((p) => p.id !== top?.id);
   const regionVenues = useMemo(() => {
     const list = all.data?.content ?? [];
-    return (region === '전체' ? list : list.filter((v) => v.address?.includes(region))).slice(0, 4);
+    // 위 '맞춤 추천'·'키워드로 탐색'과 같은 6개로 맞춘다(줄 끝이 어긋나 보이지 않게).
+    return (region === '전체' ? list : list.filter((v) => v.address?.includes(region))).slice(0, 6);
   }, [all.data, region]);
   const recent = (all.data?.content ?? []).slice(-4).reverse();
 
