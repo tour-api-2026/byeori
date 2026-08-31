@@ -1,4 +1,5 @@
 import * as AuthSession from 'expo-auth-session';
+import { Platform } from 'react-native';
 import { api, type ApiEnvelope } from '@/lib/api/client';
 import { useAuthStore, type Session } from '@/lib/store/authStore';
 
@@ -11,6 +12,15 @@ console.log('[oauth] redirectUri =', redirectUri);
 
 export function getRedirectUri() {
   return redirectUri;
+}
+
+/**
+ * 실제로 인증 요청에 쓸 redirect_uri.
+ * 웹에서는 makeRedirectUri가 현재 경로까지 붙여(예: /login) 콘솔 등록값과 어긋날 수 있으므로
+ * 오리진만 쓴다 — 카카오·구글 콘솔에는 https://byeori.ernebi.org 를 등록한다.
+ */
+function activeRedirectUri(): string {
+  return Platform.OS === 'web' ? window.location.origin : redirectUri;
 }
 
 class AuthCancelledError extends Error {
@@ -26,6 +36,11 @@ export function isCancelled(e: unknown) {
 const GOOGLE_DISCOVERY: AuthSession.DiscoveryDocument = {
   authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
   tokenEndpoint: 'https://oauth2.googleapis.com/token',
+};
+
+const KAKAO_DISCOVERY: AuthSession.DiscoveryDocument = {
+  authorizationEndpoint: 'https://kauth.kakao.com/oauth/authorize',
+  tokenEndpoint: 'https://kauth.kakao.com/oauth/token',
 };
 
 // 백엔드 /auth/social 호출 → 세션 저장
@@ -45,11 +60,52 @@ async function exchangeWithBackend(body: {
 }
 
 /**
- * 카카오 로그인: 네이티브 SDK로 accessToken 획득 → 백엔드 검증.
- * 네이티브 모듈이라 Expo Go/웹에선 동작하지 않음(APK/dev build 전용).
- * lazy require로 모듈 로드 — Expo Go 브라우징은 영향받지 않게.
+ * 웹 카카오 로그인: 인가 코드 플로우.
+ * 네이티브 SDK를 쓸 수 없으므로 브라우저에서 카카오 인증을 거쳐 code를 받고,
+ * 백엔드가 그 code를 토큰으로 교환한다(AuthService.socialLogin의 "웹 OAuth 경로").
+ *
+ * redirect_uri는 카카오 콘솔에 등록된 값과 **정확히** 같아야 한다.
+ * 배포 오리진을 그대로 쓰므로 콘솔에는 https://byeori.ernebi.org 형태로 등록한다.
+ */
+async function loginKakaoWeb() {
+  const clientId = process.env.EXPO_PUBLIC_KAKAO_REST_KEY;
+  if (!clientId) {
+    throw new Error('카카오 웹 로그인 설정이 필요해요. (EXPO_PUBLIC_KAKAO_REST_KEY 미설정)');
+  }
+  const webRedirectUri = activeRedirectUri();
+
+  const request = new AuthSession.AuthRequest({
+    clientId,
+    redirectUri: webRedirectUri,
+    responseType: AuthSession.ResponseType.Code,
+    scopes: [],
+    // 백엔드가 code를 그대로 교환하므로 PKCE verifier를 넘길 수단이 없다.
+    usePKCE: false,
+  });
+
+  const result = await request.promptAsync(KAKAO_DISCOVERY);
+  if (result.type === 'cancel' || result.type === 'dismiss') throw new AuthCancelledError();
+  if (result.type !== 'success') {
+    throw new Error(
+      result.type === 'error'
+        ? (result.error?.message ?? '카카오 인증 오류')
+        : '카카오 인증에 실패했습니다.',
+    );
+  }
+  const code = result.params.code;
+  if (!code) throw new Error('카카오 인가 코드를 받지 못했습니다.');
+
+  return exchangeWithBackend({ provider: 'kakao', code, redirectUri: webRedirectUri });
+}
+
+/**
+ * 카카오 로그인.
+ * 네이티브는 SDK로 accessToken을 받아 백엔드에 검증시키고(lazy require — Expo Go 브라우징 영향 없음),
+ * 웹은 네이티브 모듈을 쓸 수 없으므로 인가 코드 플로우로 우회한다.
  */
 export async function loginKakao() {
+  if (Platform.OS === 'web') return loginKakaoWeb();
+
   let KakaoLogin: typeof import('@react-native-seoul/kakao-login');
   try {
     KakaoLogin = require('@react-native-seoul/kakao-login');
@@ -91,7 +147,7 @@ export async function loginGoogle() {
 
   const request = new AuthSession.AuthRequest({
     clientId,
-    redirectUri,
+    redirectUri: activeRedirectUri(),
     responseType: AuthSession.ResponseType.IdToken,
     scopes: ['openid', 'profile', 'email'],
     // id_token implicit 플로우는 nonce 필수
