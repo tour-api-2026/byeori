@@ -81,8 +81,8 @@ export default function LoginScreen() {
           style={[styles.btn, styles.btnBorder, { backgroundColor: colors.white }, !!busy && styles.btnDisabled]}
           disabled={!!busy}
           onPress={() => router.push('/email-login')}>
-          <Ionicons name="mail-outline" size={18} color={colors.text} />
-          <Text style={[styles.btnText, { color: colors.text }]}>이메일로 로그인하기</Text>
+          <Ionicons name="person-outline" size={18} color={colors.text} />
+          <Text style={[styles.btnText, { color: colors.text }]}>아이디로 로그인</Text>
         </Pressable>
 
         <Pressable disabled={!!busy} onPress={() => router.replace('/(tabs)')}>

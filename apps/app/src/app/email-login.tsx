@@ -43,7 +43,7 @@ export default function EmailLoginScreen() {
         <Pressable hitSlop={10} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={26} color={colors.text} />
         </Pressable>
-        <Text style={styles.headerTitle}>이메일 로그인</Text>
+        <Text style={styles.headerTitle}>아이디 로그인</Text>
         <View style={{ width: 26 }} />
       </View>
 
