@@ -59,6 +59,8 @@ export default function VenueDetailScreen() {
   const reportReview = useReportReviewMutation();
   const blockUser = useBlockUserMutation();
   const [report, setReport] = useState<{ kind: 'VENUE' | 'REVIEW'; id: number } | null>(null);
+  // 공사 API 소개글은 수십 줄인 경우가 있어, 접어두지 않으면 운영시간·문의가 화면 밖으로 밀린다.
+  const [overviewOpen, setOverviewOpen] = useState(false);
 
   const openReport = (kind: 'VENUE' | 'REVIEW', targetId: number) => {
     if (!isLoggedIn) {
@@ -163,11 +165,30 @@ export default function VenueDetailScreen() {
             </View>
           )}
 
-          {/* 정보 (라벨 좌 / 값 우) */}
+          {/* 소개글 — 상세를 열 때 한국관광공사 OpenAPI에서 실시간으로 받아온다. */}
+          {!!v.liveInfo?.overview && (
+            <Pressable onPress={() => setOverviewOpen((o) => !o)}>
+              <Text style={styles.overview} numberOfLines={overviewOpen ? undefined : 5}>
+                {v.liveInfo.overview}
+              </Text>
+              <Text style={styles.overviewMore}>{overviewOpen ? '접기' : '더보기'}</Text>
+            </Pressable>
+          )}
+
+          {/* 정보 (라벨 좌 / 값 우).
+              실시간 조회값을 우선 쓰고, 없을 때만 저장된 값으로 채운다. */}
           <View style={styles.info}>
-            {!!v.operatingHours && <InfoRow label="운영시간" value={v.operatingHours} />}
-            {!!v.phone && <InfoRow label="전화번호" value={v.phone} />}
-            {!!v.homepageUrl && <InfoRow label="웹사이트" value={v.homepageUrl} />}
+            {!!(v.liveInfo?.useTime || v.operatingHours) && (
+              <InfoRow label="운영시간" value={(v.liveInfo?.useTime || v.operatingHours) as string} />
+            )}
+            {!!v.liveInfo?.restDate && <InfoRow label="휴무일" value={v.liveInfo.restDate} />}
+            {!!(v.liveInfo?.infoCenter || v.phone) && (
+              <InfoRow label="문의" value={(v.liveInfo?.infoCenter || v.phone) as string} />
+            )}
+            {!!v.liveInfo?.parking && <InfoRow label="주차" value={v.liveInfo.parking} />}
+            {!!(v.liveInfo?.homepage || v.homepageUrl) && (
+              <InfoRow label="웹사이트" value={(v.liveInfo?.homepage || v.homepageUrl) as string} />
+            )}
           </View>
           {/* 공공데이터 출처 표기 — 기관명 기준(API 서비스명 단독 표기 불가) */}
           {(v.source === 'KOPIS' || v.source === 'TOURAPI') && (
@@ -286,6 +307,8 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.border },
   infoLabel: { fontSize: 14, color: colors.textSub, fontFamily: fonts.medium, fontWeight: '500' },
   infoValue: { fontSize: 14, color: colors.text, fontFamily: fonts.medium, fontWeight: '500', flexShrink: 1, textAlign: 'right', marginLeft: 16 },
+  overview: { fontSize: 14, lineHeight: 22, color: colors.textSub, marginTop: 16 },
+  overviewMore: { fontSize: 13, fontFamily: fonts.semibold, fontWeight: '600', color: colors.primary, marginTop: 6 },
   source: { fontSize: 11, color: colors.textFaint, marginTop: 8 },
   section: { marginTop: 26 },
   sectionTitle: { fontSize: 16, fontFamily: fonts.bold, fontWeight: '800', color: colors.text, marginBottom: 12 },
