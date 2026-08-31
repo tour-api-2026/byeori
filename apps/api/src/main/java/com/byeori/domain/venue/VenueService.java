@@ -6,6 +6,7 @@ import com.byeori.domain.venue.dto.VenueReportRequest;
 import com.byeori.domain.venue.dto.VenueResponse;
 import com.byeori.global.exception.BadRequestException;
 import com.byeori.global.exception.NotFoundException;
+import com.byeori.global.external.TourApiClient;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -17,20 +18,27 @@ public class VenueService {
 
     private final VenueRepository repo;
     private final VenueReportRepository reportRepo;
+    private final TourApiClient tourClient;
 
-    public VenueService(VenueRepository repo, VenueReportRepository reportRepo) {
+    public VenueService(VenueRepository repo, VenueReportRepository reportRepo, TourApiClient tourClient) {
         this.repo = repo;
         this.reportRepo = reportRepo;
+        this.tourClient = tourClient;
     }
 
     public Page<VenueResponse> list(String category, Boolean hanbokDiscount, String keyword, Pageable pageable) {
         return repo.search(category, hanbokDiscount, keyword, pageable).map(VenueResponse::from);
     }
 
+    /**
+     * 장소 상세. 한국관광공사 콘텐츠 ID가 있는 장소는 공사 OpenAPI를 실시간으로 조회해
+     * 개요·이용시간·휴무일·문의처를 함께 내려준다(동기화 목록에는 없는 항목들이다).
+     * 조회가 실패하거나 느려도 화면은 떠야 하므로 실패 시 저장된 정보만으로 응답한다.
+     */
     public VenueDetailResponse detail(Long id) {
         Venue v = repo.findById(id)
                 .orElseThrow(() -> new NotFoundException("VENUE_NOT_FOUND", "장소를 찾을 수 없습니다."));
-        return VenueDetailResponse.from(v);
+        return VenueDetailResponse.from(v, tourClient.detail(v.getDetailContentId()));
     }
 
     public java.util.List<VenueResponse> listMine(Long userId) {

@@ -1,6 +1,7 @@
 package com.byeori.global.external;
 
 import com.byeori.global.external.dto.RegionCode;
+import com.byeori.global.external.dto.TourDetail;
 import com.byeori.global.external.dto.TourFestivalItem;
 import com.byeori.global.external.dto.TourItem;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -8,10 +9,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -29,8 +32,26 @@ public class TourApiClient {
     private static final String BASE = "https://apis.data.go.kr/B551011/KorService2";
 
     private final SyncProperties props;
-    private final RestClient http = RestClient.create();
     private final ObjectMapper om = new ObjectMapper();
+
+    /**
+     * 동기화용. 대량 페이지를 도는 호출이라 여유를 준다.
+     * 타임아웃이 없으면 공사 API가 응답하지 않을 때 스레드가 그대로 묶인다.
+     */
+    private final RestClient http = client(Duration.ofSeconds(3), Duration.ofSeconds(20));
+
+    /**
+     * 사용자 요청 경로(장소 상세)에서 쓰는 실시간 조회용. 화면이 기다리는 호출이라
+     * 짧게 끊고 저장된 정보로 넘어가는 편이 낫다.
+     */
+    private final RestClient liveHttp = client(Duration.ofSeconds(2), Duration.ofSeconds(3));
+
+    private static RestClient client(Duration connect, Duration read) {
+        SimpleClientHttpRequestFactory f = new SimpleClientHttpRequestFactory();
+        f.setConnectTimeout(connect);
+        f.setReadTimeout(read);
+        return RestClient.builder().requestFactory(f).build();
+    }
 
     public TourApiClient(SyncProperties props) {
         this.props = props;
@@ -116,6 +137,83 @@ public class TourApiClient {
             log.warn("TourAPI ldongCode2 실패 parent={}: {}", parentRegnCd, e.getMessage());
             return List.of();
         }
+    }
+
+    /**
+     * 장소 상세 정보 실시간 조회. 사용자가 장소 상세 화면을 열 때마다 호출한다.
+     *
+     * 동기화로 내려받는 목록에는 개요·이용시간·휴무일·문의처가 없어서, 이 값들은
+     * 상세를 열 때 공사 API에서 직접 받아온다. detailCommon2로 개요와 콘텐츠 타입을
+     * 얻고, 그 타입으로 detailIntro2를 불러 운영 정보를 채운다(타입마다 필드명이 달라
+     * contentTypeId가 필요하다).
+     *
+     * 화면을 막지 않는 것이 우선이라 실패·지연은 조용히 삼키고 null을 돌려준다.
+     * 호출부는 null이면 DB에 저장된 정보만으로 화면을 구성한다.
+     */
+    public TourDetail detail(String contentId) {
+        if (!props.tourApiEnabled() || contentId == null || contentId.isBlank()) return null;
+        try {
+            JsonNode common = firstItem(get("/detailCommon2", b -> b.queryParam("contentId", contentId)));
+            if (common == null) return null;
+
+            String typeId = text(common, "contenttypeid");
+            JsonNode intro = typeId == null ? null : firstItem(get("/detailIntro2",
+                    b -> b.queryParam("contentId", contentId).queryParam("contentTypeId", typeId)));
+
+            return new TourDetail(
+                    stripTags(text(common, "overview")),
+                    stripTags(text(common, "homepage")),
+                    // 이용시간 필드명이 타입마다 다르다(관광지 usetime, 문화시설 usetimeculture 등).
+                    intro == null ? null : stripTags(firstText(intro, "usetime", "usetimeculture", "usetimefestival", "opentimefood", "opentime")),
+                    intro == null ? null : stripTags(firstText(intro, "restdate", "restdateculture", "restdatefood", "restdateshopping")),
+                    intro == null ? null : stripTags(firstText(intro, "infocenter", "infocenterculture", "infocenterfood", "infocentershopping", "sponsor1tel")),
+                    intro == null ? null : stripTags(firstText(intro, "parking", "parkingculture", "parkingfood", "parkingshopping")));
+        } catch (Exception e) {
+            log.warn("TourAPI 상세 조회 실패 contentId={}: {}", contentId, e.getMessage());
+            return null;
+        }
+    }
+
+    /** 공통 쿼리(인증키·앱 정보·JSON)를 붙여 GET 하고 본문을 돌려준다. */
+    private String get(String path, java.util.function.UnaryOperator<UriComponentsBuilder> extra) {
+        URI uri = extra.apply(UriComponentsBuilder.fromUriString(BASE + path)
+                        .queryParam("serviceKey", encKey())
+                        .queryParam("MobileOS", "ETC")
+                        .queryParam("MobileApp", "byeori")
+                        .queryParam("_type", "json"))
+                .build(true).toUri();
+        return liveHttp.get().uri(uri).retrieve().body(String.class);
+    }
+
+    private JsonNode firstItem(String json) throws Exception {
+        List<JsonNode> list = items(json);
+        return list.isEmpty() ? null : list.get(0);
+    }
+
+    /** 후보 필드명을 순서대로 보고 처음 값이 있는 것을 돌려준다. */
+    private String firstText(JsonNode n, String... names) {
+        for (String name : names) {
+            String v = text(n, name);
+            if (v != null) return v;
+        }
+        return null;
+    }
+
+    /**
+     * 공사 API 텍스트에는 HTML이 섞여 온다(homepage는 &lt;a href&gt;, 휴무일·이용시간은 &lt;br&gt;).
+     * 앱은 일반 텍스트로 그리므로 태그를 걷어낸다. 줄바꿈 의미가 있는 &lt;br&gt;은 개행으로 바꾼다.
+     */
+    private static String stripTags(String s) {
+        if (s == null) return null;
+        String plain = s
+                .replaceAll("(?i)<br\\s*/?>", "\n")
+                .replaceAll("<[^>]*>", " ")
+                .replace("&amp;", "&").replace("&nbsp;", " ")
+                .replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
+                .replaceAll("[ \\t]+", " ")
+                .replaceAll(" *\n *", "\n")
+                .trim();
+        return plain.isBlank() ? null : plain;
     }
 
     private String encKey() {

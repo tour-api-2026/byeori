@@ -13,12 +13,23 @@ export type Venue = {
   lng: number;
 };
 
+/** 상세 화면을 열 때 한국관광공사 OpenAPI에서 실시간으로 받아온 값. 없으면 null. */
+export type VenueLiveInfo = {
+  overview: string | null;
+  useTime: string | null;
+  restDate: string | null;
+  infoCenter: string | null;
+  parking: string | null;
+  homepage: string | null;
+};
+
 export type VenueDetail = Venue & {
   description: string | null;
   operatingHours: string | null;
   phone: string | null;
   homepageUrl: string | null;
   visibility: string;
+  liveInfo: VenueLiveInfo | null;
 };
 
 export type Performance = {

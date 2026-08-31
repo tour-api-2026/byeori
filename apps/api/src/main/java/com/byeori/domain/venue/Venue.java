@@ -38,6 +38,14 @@ public class Venue {
     private String source;
     private String kopisId;
     private String tourContentId;
+
+    /**
+     * 상세 화면 실시간 조회에 쓸 공사 콘텐츠 ID.
+     * tourContentId는 동기화 upsert 키라 유니크 제약이 걸려 있어, 시드 장소가 같은 장소의
+     * 실제 ID를 가리키려면 별도 컬럼이 필요하다. 표시 전용이므로 중복을 허용한다.
+     */
+    @Column(name = "detail_content_id")
+    private String detailContentId;
     private LocalDateTime syncedAt;
     private Long createdByUserId;
     private String visibility;
