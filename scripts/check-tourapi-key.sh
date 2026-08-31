@@ -26,11 +26,14 @@ for name, path in OPS:
     try:
         with urllib.request.urlopen(url, timeout=20) as r:
             body = r.read(600).decode('utf-8', 'replace')
-        try:
-            total = json.loads(body)['response']['body']['totalCount']
-            print(f'  {name:16s} 정상 (totalCount={total})')
-        except Exception:
-            print(f'  {name:16s} 응답 이상 -> {body[:120]}'); ok = False
+        # 응답이 커서 일부만 읽으면 JSON 파싱이 실패한다. resultCode로 판정한다.
+        m = re.search(r'"resultCode"\s*:\s*"([0-9]+)"|<resultCode>([0-9]+)</resultCode>', body)
+        code = (m.group(1) or m.group(2)) if m else None
+        if code == '0000':
+            t = re.search(r'"totalCount"\s*:\s*"?([0-9]+)', body)
+            print(f'  {name:16s} 정상' + (f' (totalCount={t.group(1)})' if t else ''))
+        else:
+            print(f'  {name:16s} 응답 이상 -> {body[:110]}'); ok = False
     except Exception as e:
         body = getattr(e, 'read', lambda: b'')().decode('utf-8', 'replace')
         m = re.search(r'"errMsg"\s*:\s*"([^"]+)"|<errMsg>([^<]+)</errMsg>', body)
