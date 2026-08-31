@@ -104,6 +104,16 @@ public class ItineraryService {
 
     @Transactional
     public Detail create(Long userId, CreateRequest req) {
+        // 필수 값 검증. 없으면 DB의 NOT NULL 제약에서 터져 SQL문이 그대로 응답에 실린다.
+        if (req == null || req.title() == null || req.title().isBlank()) {
+            throw new BadRequestException("ITINERARY_INVALID", "일정 제목은 필수입니다.");
+        }
+        if (req.startDate() == null || req.endDate() == null) {
+            throw new BadRequestException("ITINERARY_INVALID", "여행 시작일과 종료일은 필수입니다.");
+        }
+        if (req.endDate().isBefore(req.startDate())) {
+            throw new BadRequestException("ITINERARY_INVALID", "종료일은 시작일보다 앞설 수 없습니다.");
+        }
         String sourceType = "CURATED".equals(req.sourceType()) ? "CURATED" : "CUSTOM";
         Itinerary saved = repo.save(new Itinerary(userId, req.title(), req.startDate(), req.endDate(),
                 sourceType, sourceType.equals("CURATED") ? req.sourceCourseId() : null));
@@ -136,6 +146,9 @@ public class ItineraryService {
     @Transactional
     public ItemResponse addItem(Long userId, Long id, ItemRequest req) {
         own(userId, id);
+        if (req == null || req.visitDate() == null) {
+            throw new BadRequestException("ITEM_INVALID", "방문 날짜는 필수입니다.");
+        }
         ContentTarget t = new ContentTarget(ContentType.from(req.targetType()), req.targetId());
         ItineraryItem saved = itemRepo.save(new ItineraryItem(id, t.performanceId(), t.venueId(),
                 req.visitDate(), req.sortOrder(), req.plannedTime(), req.memo()));
