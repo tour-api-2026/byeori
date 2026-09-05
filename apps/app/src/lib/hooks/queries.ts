@@ -13,11 +13,24 @@ import {
   reportVenue, updateVenue, VenueCreateBody, VenueFilter,
 } from '../api/venues';
 import { addWishlist, fetchMyWishlists, removeWishlist } from '../api/wishlists';
+import { fetchNearbyVenues, type NearbyParams } from '../api/venues';
 import { useAuthStore } from '../store/authStore';
 
 // ---------- 장소 ----------
 export function useVenuesQuery(filter: VenueFilter = {}) {
   return useQuery({ queryKey: ['venues', filter], queryFn: () => fetchVenues(filter) });
+}
+/**
+ * 지도 주변 조회. 지도를 움직일 때마다 부르지 않도록 호출부에서 좌표를 반올림해 넘긴다
+ * (같은 키면 캐시가 재사용된다).
+ */
+export function useNearbyVenuesQuery(p: NearbyParams | null) {
+  return useQuery({
+    queryKey: ['venues-nearby', p],
+    queryFn: () => fetchNearbyVenues(p as NearbyParams),
+    enabled: !!p,
+    staleTime: 5 * 60 * 1000,
+  });
 }
 export function useVenueDetailQuery(id: number) {
   return useQuery({ queryKey: ['venue', id], queryFn: () => fetchVenueDetail(id), enabled: !!id });

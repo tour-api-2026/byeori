@@ -18,6 +18,9 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
 
     java.util.Optional<Venue> findByTourContentId(String tourContentId);
 
+    /** 실시간 조회 결과를 자체 정보(한복 혜택·평점)와 붙이기 위한 일괄 조회. */
+    java.util.List<Venue> findByTourContentIdIn(java.util.Collection<String> tourContentIds);
+
     /**
      * 정렬이 없으면 DB가 돌려주는 순서가 임의라 페이지 간 중복·누락이 생기고,
      * 홈의 "맞춤 추천"에 사진 없는 장소가 먼저 뜨기도 한다.

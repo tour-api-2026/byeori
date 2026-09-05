@@ -20,7 +20,7 @@ import { Chip } from "@/components/Chip";
 import { useTabBarHeight } from "@/components/TabBar";
 import { Rating } from "@/components/Rating";
 import { Venue } from "@/lib/api/types";
-import { useItineraryRouteQuery, useVenuesQuery } from "@/lib/hooks/queries";
+import { useItineraryRouteQuery, useNearbyVenuesQuery, useVenuesQuery } from "@/lib/hooks/queries";
 import { colors, fonts, radius, shadow, space } from "@/lib/theme";
 import { ROUTE_SEGMENT_COLORS } from "@/lib/routeColors";
 
@@ -84,13 +84,31 @@ export default function MapScreen() {
   const [ready, setReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
 
-  const { data } = useVenuesQuery({
+  // 지도가 멈춘 위치. 좌표를 소수 3자리(약 100m)로 반올림해 미세한 이동으로는
+  // 다시 부르지 않게 한다(같은 키면 캐시가 재사용된다).
+  const [view, setView] = useState<{ lat: number; lng: number; radius: number } | null>(null);
+
+  // 지도 화면은 보고 있는 영역만 공사 OpenAPI로 실시간 조회한다.
+  const nearby = useNearbyVenuesQuery(
+    view && !routeMode
+      ? { lat: view.lat, lng: view.lng, radius: view.radius, category: cat === "전체" ? undefined : cat }
+      : null,
+  );
+
+  // 공사 API가 실패하면 화면이 비지 않도록 저장된 목록으로 대체한다.
+  const fallback = useVenuesQuery({
     keyword: keyword || undefined,
     category: cat === "전체" ? undefined : cat,
     hanbokDiscount: hanbokOnly || undefined,
     size: 50,
   });
-  const venues = data?.content ?? [];
+
+  const live = nearby.data ?? [];
+  const venues = useMemo(() => {
+    const base = live.length ? live : (fallback.data?.content ?? []);
+    // 한복 혜택은 공공데이터에 없는 자체 정보라 API 단계에서 거를 수 없다 — 여기서 건다.
+    return hanbokOnly ? base.filter((v) => v.hanbokDiscount) : base;
+  }, [live, fallback.data, hanbokOnly]);
 
   // 검색 실행: 우리 장소는 쿼리 키워드로, 카카오 장소는 WebView keywordSearch로.
   const runSearch = () => {
@@ -140,10 +158,22 @@ export default function MapScreen() {
   };
 
   // 지도가 준비됐고 venues가 바뀌면 마커를 다시 주입한다.
+  // 마커로 그릴 대상(한국 범위 안). 선택 인덱스도 이 배열 기준이다.
+  const plotted = useMemo(
+    () =>
+      venues.filter(
+        (v) =>
+          v.lat != null && v.lng != null &&
+          Number(v.lat) >= 33 && Number(v.lat) <= 38.7 &&
+          Number(v.lng) >= 124.5 && Number(v.lng) <= 132,
+      ),
+    [venues],
+  );
+
   const markerPayload = useMemo(
     () =>
       JSON.stringify(
-        venues
+        plotted
           // 한국 범위(위도 33~38.7, 경도 124.5~132) 밖 좌표는 제외 —
           // 지오코딩 실패 placeholder(예: 19.69,117.99)가 fitAll을 외국까지 넓히는 것 방지.
           .filter(
@@ -152,14 +182,16 @@ export default function MapScreen() {
               Number(v.lat) >= 33 && Number(v.lat) <= 38.7 &&
               Number(v.lng) >= 124.5 && Number(v.lng) <= 132,
           )
-          .map((v) => ({
-            id: v.id,
+          // 실시간 조회 결과에는 아직 우리 DB에 없는 장소가 섞여 id가 null일 수 있다.
+          // 마커 식별자는 목록 인덱스를 쓴다(선택 시 그대로 되짚는다).
+          .map((v, i) => ({
+            id: i,
             lat: Number(v.lat),
             lng: Number(v.lng),
             category: v.category ?? "",
           })),
       ),
-    [venues],
+    [plotted],
   );
 
   // 현재 위치로 지도 중심 이동(권한 요청 → 이동). 최초 진입·'현재 위치' 버튼 공용.
@@ -214,8 +246,16 @@ export default function MapScreen() {
         setMapError(null);
       }
       if (msg.type === "error") setMapError(String(msg.msg));
+      if (msg.type === "idle") {
+        const r = Math.min(Math.max(Number(msg.radius) || 3000, 500), 20000);
+        setView({
+          lat: Math.round(Number(msg.lat) * 1000) / 1000,
+          lng: Math.round(Number(msg.lng) * 1000) / 1000,
+          radius: Math.round(r / 500) * 500,
+        });
+      }
       if (msg.type === "select") {
-        const v = venues.find((x) => x.id === msg.id);
+        const v = plotted[Number(msg.id)];
         if (v) {
           setSelectedKakao(null);
           setSelected(v);
@@ -399,7 +439,9 @@ export default function MapScreen() {
       {selected && (
         <Pressable
           style={[styles.miniCard, { bottom: tabH + 12 }]}
-          onPress={() => router.push(`/venue/${selected.id}`)}
+          // 아직 우리 DB에 없는 장소(id 없음)는 상세 화면이 없으므로 이동하지 않는다.
+          disabled={selected.id == null}
+          onPress={() => selected.id != null && router.push(`/venue/${selected.id}`)}
         >
           <Image
             source={selected.imageUrl}

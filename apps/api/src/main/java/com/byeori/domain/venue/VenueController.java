@@ -39,6 +39,19 @@ public class VenueController {
         return ApiResponse.ok(PageResponse.of(result));
     }
 
+    /**
+     * 지도 주변 조회. 지도가 보고 있는 좌표·반경만 공사 OpenAPI로 실시간 조회한다.
+     * 전국 데이터를 미리 받아 거르는 방식 대신, 화면이 필요한 만큼만 그때그때 부른다.
+     */
+    @GetMapping("/nearby")
+    public ApiResponse<List<VenueResponse>> nearby(
+            @RequestParam(name = "lat") double lat,
+            @RequestParam(name = "lng") double lng,
+            @RequestParam(name = "radius", defaultValue = "3000") int radius,
+            @RequestParam(name = "category", required = false) String category) {
+        return ApiResponse.ok(service.nearby(lat, lng, radius, category));
+    }
+
     @GetMapping("/mine")
     public ApiResponse<List<VenueResponse>> mine(
             @AuthenticationPrincipal Long userId) {

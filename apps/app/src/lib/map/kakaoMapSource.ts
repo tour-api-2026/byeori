@@ -54,6 +54,9 @@ export function mapScript(segColors: string[]): string {
     if(c==='한복') return '👘';
     return '📍';
   }
+  // 주변 조회 마커는 지금 보고 있는 영역에서 받아온 것이라 지도를 다시 맞추지 않는다.
+  // fitAll()을 부르면 setBounds가 지도를 움직여 idle이 또 발생하고,
+  // 그 idle이 재조회를 부르는 되먹임 고리가 생겨 호출이 몇 배로 늘어난다.
   window.setMarkers = function(list){
     if(!ready){ pending=list; return; }
     clearArr(venueOv);
@@ -63,7 +66,6 @@ export function mapScript(segColors: string[]): string {
       var ov=new kakao.maps.CustomOverlay({position:pos, content:html, yAnchor:1, clickable:true});
       ov.setMap(map); venueOv.push(ov);
     });
-    fitAll();
   };
   window.searchKakao = function(q){
     if(!ready || !q) return;
@@ -83,7 +85,8 @@ export function mapScript(segColors: string[]): string {
       fitAll();
     });
   };
-  window.clearKakao = function(){ clearArr(kakaoOv); kakaoData=[]; fitAll(); };
+  // 검색 해제 시에도 지도를 움직이지 않는다(움직이면 idle → 재조회가 또 돈다).
+  window.clearKakao = function(){ clearArr(kakaoOv); kakaoData=[]; };
   // 여행 경로: polyline(도로 경로선) + 번호 마커. data={path:[[lat,lng]...], stops:[{order,lat,lng}...]}
   window.drawRoute = function(data){
     if(!ready){ pendingRoute=data; return; }
@@ -127,6 +130,16 @@ export function mapScript(segColors: string[]): string {
     kakao.maps.load(function(){
       map=new kakao.maps.Map(document.getElementById('map'),{center:new kakao.maps.LatLng(37.5759,126.9769), level:6});
       ready=true; post({type:'ready'});
+      // 지도 이동/확대가 멈추면 중심 좌표와 대략의 반경을 알린다.
+      // RN이 이 좌표로 공사 OpenAPI를 실시간 조회해 마커를 다시 주입한다.
+      kakao.maps.event.addListener(map, 'idle', function(){
+        var c=map.getCenter(), b=map.getBounds();
+        var sw=b.getSouthWest(), ne=b.getNorthEast();
+        // 대각선의 절반을 반경으로 본다(위도 1도 ~111km).
+        var dLat=(ne.getLat()-sw.getLat())*111000, dLng=(ne.getLng()-sw.getLng())*88000;
+        var r=Math.round(Math.sqrt(dLat*dLat+dLng*dLng)/2);
+        post({type:'idle', lat:c.getLat(), lng:c.getLng(), radius:r, level:map.getLevel()});
+      });
       if(pendingRoute){ window.drawRoute(pendingRoute); pendingRoute=null; }
       else if(pending){ window.setMarkers(pending); pending=null; }
     });

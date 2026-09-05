@@ -84,6 +84,67 @@ public class TourApiClient {
     }
 
     /**
+     * 위치기반 목록(locationBasedList2). 좌표와 반경으로 주변 장소를 실시간 조회한다.
+     *
+     * 지도 화면이 보고 있는 영역만 그때그때 받아오므로, 전국 데이터를 미리 저장해 둘 필요가 없다.
+     * 사용자 요청 경로에서 호출되므로 짧은 타임아웃(liveHttp)을 쓰고, 실패하면 빈 목록을 돌려
+     * 호출부가 저장된 데이터로 대체할 수 있게 한다.
+     *
+     * @param radius 미터 단위(공사 API 최대 20,000)
+     * @param contentTypeId 0이면 전체 유형
+     */
+    public List<TourItem> locationBasedList(double lng, double lat, int radius, int contentTypeId, int rows) {
+        if (!props.tourApiEnabled()) return List.of();
+        try {
+            URI uri = UriComponentsBuilder.fromUriString(BASE + "/locationBasedList2")
+                    .queryParam("serviceKey", encKey())
+                    .queryParam("MobileOS", "ETC")
+                    .queryParam("MobileApp", "byeori")
+                    .queryParam("_type", "json")
+                    .queryParam("arrange", "E")            // E = 거리순
+                    .queryParam("mapX", lng)
+                    .queryParam("mapY", lat)
+                    .queryParam("radius", Math.min(radius, 20000))
+                    .queryParamIfPresent("contentTypeId",
+                            Optional.ofNullable(contentTypeId > 0 ? contentTypeId : null))
+                    .queryParam("numOfRows", rows)
+                    .queryParam("pageNo", 1)
+                    .build(true)
+                    .toUri();
+            return parseItems(liveHttp.get().uri(uri).retrieve().body(String.class));
+        } catch (Exception e) {
+            log.warn("TourAPI locationBasedList 실패 ({},{}) r={}: {}", lat, lng, radius, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * 키워드 검색(searchKeyword2). 지도 검색창에서 사용자가 입력한 말로 실시간 조회한다.
+     */
+    public List<TourItem> searchKeyword(String keyword, int contentTypeId, int rows) {
+        if (!props.tourApiEnabled() || keyword == null || keyword.isBlank()) return List.of();
+        try {
+            URI uri = UriComponentsBuilder.fromUriString(BASE + "/searchKeyword2")
+                    .queryParam("serviceKey", encKey())
+                    .queryParam("MobileOS", "ETC")
+                    .queryParam("MobileApp", "byeori")
+                    .queryParam("_type", "json")
+                    .queryParam("arrange", "A")
+                    .queryParam("keyword", URLEncoder.encode(keyword.trim(), StandardCharsets.UTF_8))
+                    .queryParamIfPresent("contentTypeId",
+                            Optional.ofNullable(contentTypeId > 0 ? contentTypeId : null))
+                    .queryParam("numOfRows", rows)
+                    .queryParam("pageNo", 1)
+                    .build(true)
+                    .toUri();
+            return parseItems(liveHttp.get().uri(uri).retrieve().body(String.class));
+        } catch (Exception e) {
+            log.warn("TourAPI searchKeyword 실패 kw={}: {}", keyword, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
      * 축제/행사 목록(searchFestival2). eventStartDate(yyyyMMdd) 이후 진행/예정 행사 검색.
      * areaBasedList2와 동일하게 법정동코드(lDongRegnCd/lDongSignguCd) 사용.
      */
