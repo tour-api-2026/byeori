@@ -52,6 +52,19 @@ public class VenueController {
         return ApiResponse.ok(service.nearby(lat, lng, radius, category));
     }
 
+    /**
+     * 키워드 검색. 저장된 목록 대신 공사 OpenAPI를 실시간으로 조회한다.
+     * 실패하거나 결과가 없으면 빈 목록이 오고, 앱이 저장된 검색으로 대체한다.
+     */
+    @GetMapping("/search")
+    public ApiResponse<List<VenueResponse>> search(
+            @RequestParam(name = "keyword") String keyword,
+            @RequestParam(name = "category", required = false) String category,
+            @RequestParam(name = "hanbokDiscount", required = false) Boolean hanbokDiscount,
+            @RequestParam(name = "size", defaultValue = "60") int size) {
+        return ApiResponse.ok(service.searchLive(keyword, category, hanbokDiscount, Math.min(size, 100)));
+    }
+
     @GetMapping("/mine")
     public ApiResponse<List<VenueResponse>> mine(
             @AuthenticationPrincipal Long userId) {

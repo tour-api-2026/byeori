@@ -47,9 +47,44 @@ public class VenueService {
         var items = tourClient.locationBasedList(lng, lat, radius, typeId, 50);
         if (items.isEmpty()) return List.of();
 
+        return enrich(items);
+    }
+
+    /**
+     * 키워드 검색. 저장된 목록 대신 공사 OpenAPI를 실시간으로 조회한다.
+     *
+     * 저장분은 관광지·문화시설·음식점 세 유형뿐이라 숙박·쇼핑·레포츠가 빠져 있었다.
+     * searchKeyword2는 전 유형을 대상으로 해 '한옥' 기준 57건 → 210건으로 늘어난다.
+     *
+     * 한복 혜택과 평점은 공사 데이터에 없는 자체 정보라 API 단계에서 거를 수 없다.
+     * 콘텐츠 ID로 우리 레코드를 붙인 뒤 여기서 거르고 정렬한다.
+     */
+    public java.util.List<VenueResponse> searchLive(String keyword, String category, Boolean hanbokDiscount, int rows) {
+        if (keyword == null || keyword.isBlank()) return List.of();
+        var items = tourClient.searchKeyword(keyword, CategoryMapper.toTourContentTypeId(category), rows);
+        if (items.isEmpty()) return List.of();
+
+        var out = enrich(items);
+        if (Boolean.TRUE.equals(hanbokDiscount)) {
+            out = out.stream().filter(VenueResponse::hanbokDiscount).toList();
+        }
+        // 저장 목록과 같은 기준으로 정렬한다: 이미지 있는 것 먼저, 그 다음 평점·리뷰 수.
+        return out.stream()
+                .sorted(java.util.Comparator
+                        .comparing((VenueResponse v) -> v.imageUrl() == null || v.imageUrl().isBlank())
+                        .thenComparing(VenueResponse::avgRating, java.util.Comparator.reverseOrder())
+                        .thenComparing(VenueResponse::reviewCount, java.util.Comparator.reverseOrder()))
+                .toList();
+    }
+
+    /** 공사 응답에 우리 레코드(한복 혜택·평점)를 콘텐츠 ID로 붙인다. 저장분이 없으면 id는 null. */
+    private java.util.List<VenueResponse> enrich(java.util.List<TourItem> items) {
         var ids = items.stream().map(TourItem::contentId).filter(java.util.Objects::nonNull).toList();
-        var mine = repo.findByTourContentIdIn(ids).stream()
-                .collect(java.util.stream.Collectors.toMap(Venue::getTourContentId, v -> v, (a, b) -> a));
+        // 콘텐츠 ID는 두 컬럼에 나뉘어 있다. 시드 장소(경복궁·창경궁 등 한복 혜택 보유)는
+        // tour_content_id가 자리표시자라 detail_content_id로만 맞물린다. 둘 다 훑는다.
+        var mine = new java.util.HashMap<String, Venue>();
+        repo.findByTourContentIdIn(ids).forEach(v -> mine.putIfAbsent(v.getTourContentId(), v));
+        repo.findByDetailContentIdIn(ids).forEach(v -> mine.put(v.getDetailContentId(), v));
 
         return items.stream()
                 .filter(it -> it.contentId() != null && it.mapy() != null && it.mapx() != null)

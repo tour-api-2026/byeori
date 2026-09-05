@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Chip } from '@/components/Chip';
 import { VenueCard } from '@/components/VenueCard';
-import { useVenuesQuery } from '@/lib/hooks/queries';
+import { useLiveSearchQuery, useVenuesQuery } from '@/lib/hooks/queries';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 const CATS = ['전체', '문화', '카페', '체험', '맛집', '한복'];
@@ -17,16 +17,31 @@ export default function SearchScreen() {
   const [region, setRegion] = useState('전체');
   const [page, setPage] = useState(0);
 
-  const { data, isLoading } = useVenuesQuery({
+  // 타이핑마다 공사 API를 부르지 않도록 입력이 멈춘 뒤에만 검색어를 확정한다.
+  const [typed, setTyped] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setKeyword(typed.trim()), 400);
+    return () => clearTimeout(t);
+  }, [typed]);
+
+  // 검색어가 있으면 공사 OpenAPI 실시간 조회, 없으면 저장된 목록을 훑어본다.
+  const live = useLiveSearchQuery(
+    keyword ? { keyword, category: cat === '전체' ? undefined : cat } : null,
+  );
+
+  const { data, isLoading: listLoading } = useVenuesQuery({
     keyword: keyword || undefined,
     category: cat === '전체' ? undefined : cat,
     size: 60,
   });
 
+  const isLoading = keyword ? live.isLoading : listLoading;
+
   const filtered = useMemo(() => {
-    const list = data?.content ?? [];
+    // 실시간 조회가 실패하거나 결과가 없으면 저장된 검색으로 대체한다.
+    const list = keyword && live.data?.length ? live.data : (data?.content ?? []);
     return region === '전체' ? list : list.filter((v) => v.address?.includes(region));
-  }, [data, region]);
+  }, [keyword, live.data, data, region]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const cur = Math.min(page, totalPages - 1);
@@ -43,8 +58,8 @@ export default function SearchScreen() {
           style={styles.input}
           placeholder="장소를 검색해보세요"
           placeholderTextColor={colors.textFaint}
-          value={keyword}
-          onChangeText={(t) => reset(() => setKeyword(t))}
+          value={typed}
+          onChangeText={(t) => reset(() => setTyped(t))}
         />
       </View>
 
