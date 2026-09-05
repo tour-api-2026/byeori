@@ -9,6 +9,17 @@ export function fetchVenues(filter: VenueFilter = {}): Promise<Page<Venue>> {
   }));
 }
 
+/** 지도 주변 조회 — 보고 있는 좌표·반경만 한국관광공사 OpenAPI로 실시간 조회한다. */
+export type NearbyParams = { lat: number; lng: number; radius?: number; category?: string };
+
+export function fetchNearbyVenues(p: NearbyParams): Promise<Venue[]> {
+  return unwrap<Venue[]>(
+    api.get<ApiEnvelope<Venue[]>>('/venues/nearby', {
+      params: { lat: p.lat, lng: p.lng, radius: p.radius ?? 3000, category: p.category },
+    }),
+  );
+}
+
 export function fetchVenueDetail(id: number): Promise<VenueDetail> {
   return unwrap<VenueDetail>(api.get<ApiEnvelope<VenueDetail>>(`/venues/${id}`));
 }
