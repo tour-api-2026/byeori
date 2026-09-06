@@ -9,11 +9,11 @@ import { fetchPerformances, PerformanceFilter } from '../api/performances';
 import { createReview, deleteReview, fetchMyReviews, fetchReviews, reportReview } from '../api/reviews';
 import { fetchCommentTags, fetchContentTags, unvoteTag, voteTag } from '../api/tags';
 import {
-  createVenue, deleteVenue, fetchMyVenues, fetchVenueDetail, fetchVenuePerformances, fetchVenues,
-  reportVenue, updateVenue, VenueCreateBody, VenueFilter,
+  createVenue, deleteVenue, fetchMyVenues, fetchNearbyVenues, fetchVenueDetail,
+  fetchVenuePerformances, fetchVenues, reportVenue, searchVenuesLive, updateVenue,
+  VenueCreateBody, VenueFilter, type LiveSearchParams, type NearbyParams,
 } from '../api/venues';
 import { addWishlist, fetchMyWishlists, removeWishlist } from '../api/wishlists';
-import { fetchNearbyVenues, type NearbyParams } from '../api/venues';
 import { useAuthStore } from '../store/authStore';
 
 // ---------- 장소 ----------
@@ -24,6 +24,15 @@ export function useVenuesQuery(filter: VenueFilter = {}) {
  * 지도 주변 조회. 지도를 움직일 때마다 부르지 않도록 호출부에서 좌표를 반올림해 넘긴다
  * (같은 키면 캐시가 재사용된다).
  */
+export function useLiveSearchQuery(p: LiveSearchParams | null) {
+  return useQuery({
+    queryKey: ['venues-search-live', p],
+    queryFn: () => searchVenuesLive(p as LiveSearchParams),
+    enabled: !!p,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useNearbyVenuesQuery(p: NearbyParams | null) {
   return useQuery({
     queryKey: ['venues-nearby', p],

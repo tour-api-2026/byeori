@@ -22,6 +22,12 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
     java.util.List<Venue> findByTourContentIdIn(java.util.Collection<String> tourContentIds);
 
     /**
+     * 시드로 들어온 장소는 tour_content_id가 자리표시자(TA-126508)라 공사 콘텐츠 ID와 맞물리지 않는다.
+     * 진짜 ID는 detail_content_id에 있으므로 실시간 결과를 붙일 때 이쪽도 함께 본다.
+     */
+    java.util.List<Venue> findByDetailContentIdIn(java.util.Collection<String> detailContentIds);
+
+    /**
      * 정렬이 없으면 DB가 돌려주는 순서가 임의라 페이지 간 중복·누락이 생기고,
      * 홈의 "맞춤 추천"에 사진 없는 장소가 먼저 뜨기도 한다.
      * 사진 있는 것 → 평점 높은 것 → 리뷰 많은 것 순으로 고정하고, 마지막에 id로 동점을 깬다.

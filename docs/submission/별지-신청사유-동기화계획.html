@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>[별지] 신청 사유 및 동기화 계획 — 벼리</title>
+<style>
+  @page { size: A4; margin: 20mm 18mm; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Malgun Gothic", "맑은 고딕", "NanumGothic", "Noto Sans KR", sans-serif;
+    font-size: 10.5pt; line-height: 1.75; color: #16161a;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  h1 {
+    font-size: 15pt; text-align: center; margin: 0 0 4mm;
+    letter-spacing: -0.4px;
+  }
+  .meta {
+    text-align: center; font-size: 9.5pt; color: #55555f;
+    padding-bottom: 4mm; margin-bottom: 7mm;
+    border-bottom: 2px solid #263176;
+  }
+  h2 {
+    font-size: 11.5pt; margin: 7mm 0 2.5mm; padding-left: 2.6mm;
+    border-left: 3.5px solid #263176; letter-spacing: -0.3px;
+  }
+  h3 { font-size: 10.5pt; margin: 4mm 0 1.5mm; color: #263176; }
+  p { margin: 0 0 2.5mm; text-align: justify; }
+  ol, ul { margin: 0 0 2.5mm; padding-left: 6mm; }
+  li { margin-bottom: 1.8mm; }
+  table {
+    width: 100%; border-collapse: collapse; margin: 2mm 0 3.5mm; font-size: 9.5pt;
+  }
+  th, td { border: 1px solid #c8c8d0; padding: 2mm 2.6mm; vertical-align: top; }
+  th { background: #eef0f7; font-weight: 700; text-align: left; }
+  td.c, th.c { text-align: center; }
+  code {
+    font-family: Consolas, "D2Coding", monospace; font-size: 9pt;
+    background: #f2f3f7; padding: 0.3mm 1.2mm; border-radius: 2px;
+  }
+  .note {
+    background: #f7f8fb; border: 1px solid #d8dae4; border-radius: 3px;
+    padding: 2.8mm 3.4mm; margin: 3mm 0; font-size: 9.5pt;
+  }
+  .note b { color: #263176; }
+  .sign { margin-top: 10mm; text-align: right; font-size: 10pt; line-height: 2.1; }
+  .keep { break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<h1>[별지] 신청 사유 및 동기화 계획</h1>
+<div class="meta">관광 데이터 로컬 서버 저장 신청서 · 서비스명 <b>벼리</b></div>
+
+<h2>1. 서비스 개요</h2>
+<p>벼리는 전국의 관광 명소와 전통 공연·축제를 하나의 지도에서 함께 찾아보고, 방문할 곳을 담아 하루 여행 일정까지 구성하는 웹 서비스입니다. 전통문화를 접하기 어려운 이유가 콘텐츠의 부족이 아니라 정보가 서로 연결되어 있지 않기 때문이라고 보고, 한국관광공사의 관광 정보와 공연 정보를 하나의 지도 위에 결합하는 것을 목표로 개발했습니다.</p>
+
+<h2>2. 실시간 호출 현황</h2>
+<p>주요 기능은 로컬 저장에 의존하지 않고, 이용자의 요청 시점에 공사 OpenAPI를 직접 호출하는 방식으로 구현했습니다.</p>
+
+<table class="keep">
+  <tr>
+    <th style="width:24%">기능</th>
+    <th style="width:26%">호출 오퍼레이션</th>
+    <th>호출 방식</th>
+  </tr>
+  <tr>
+    <td>지도 주변 탐색</td>
+    <td><code>locationBasedList2</code></td>
+    <td>지도가 멈춘 중심 좌표와 반경으로 호출하여 이용자가 보고 있는 영역의 장소만 조회합니다. 전국 데이터를 미리 받아 걸러내지 않으며, 지도 이동 1회당 1건을 호출합니다. 호출이 실패하는 경우에 한해 저장된 데이터로 대체합니다.</td>
+  </tr>
+  <tr>
+    <td>명칭 키워드 검색</td>
+    <td><code>searchKeyword2</code></td>
+    <td>이용자가 입력한 검색어로 호출합니다. 입력이 멈춘 뒤 0.4초 후 1건을 호출하여 타자 중 반복 호출을 방지합니다.</td>
+  </tr>
+  <tr>
+    <td>장소 상세 정보</td>
+    <td><code>detailCommon2</code><br><code>detailIntro2</code></td>
+    <td>상세 화면을 열 때마다 호출하여 소개글·이용시간·휴무일·문의처·주차 정보를 표시합니다. 장소 1건당 2건을 호출합니다.</td>
+  </tr>
+</table>
+
+<div class="note">
+  <b>중복 호출 억제</b> · 지도 중심 좌표는 약 100m 단위, 반경은 500m 단위로 반올림하여 같은 화면을 반복 호출하지 않습니다. 호출 결과는 5분간 재사용하며, 응답이 지연되거나 실패할 경우(연결 2초·읽기 3초 제한) 화면이 멈추지 않도록 처리합니다.
+</div>
+
+<h2>3. 로컬 저장이 필요한 기능</h2>
+<p>아래 세 항목은 좌표나 검색어를 기준으로 조회할 수 없거나, 공사 API 장애 시의 대비가 필요하여 사전 수집한 데이터가 있어야 합니다.</p>
+
+<h3>가. 이용자 관심사 기반 추천</h3>
+<p>가입 시 선택한 관심사(문화·체험·맛집 등)에 맞추어 전국에서 후보를 선정한 뒤, 자체 보유한 이용자 평점과 리뷰 수를 기준으로 정렬하여 노출합니다. 정렬 기준이 자체 데이터이므로 API 응답만으로는 순서를 구성할 수 없습니다.</p>
+
+<h3>나. 시도·시군구 단위 지역 탐색</h3>
+<p>이용자가 지역을 선택하면 해당 지역의 장소 목록을 즉시 제공합니다. 지도상의 특정 좌표가 아닌 행정구역 전체를 대상으로 하는 탐색입니다.</p>
+
+<h3>다. 장애 발생 시 서비스 연속성 확보</h3>
+<p>공사 API 호출이 지연되거나 실패하는 경우, 저장된 데이터로 대체하여 화면이 비지 않도록 합니다. 대체 표시 항목은 명칭·주소·좌표·분류에 한하며, 실시간으로만 조회하는 운영 정보는 표시하지 않습니다.</p>
+
+<h2>4. 저장 범위</h2>
+<p>저장 항목은 위 기능에 필요한 최소한으로 한정하였으며, 변동이 잦은 운영 정보는 저장하지 않고 매번 실시간으로 조회합니다.</p>
+
+<table class="keep">
+  <tr>
+    <th class="c" style="width:16%">구분</th>
+    <th style="width:42%">항목</th>
+    <th>비고</th>
+  </tr>
+  <tr>
+    <td class="c"><b>저장</b></td>
+    <td>콘텐츠 ID, 명칭, 주소, 좌표, 분류, 대표이미지, 전화번호</td>
+    <td>목록 표시와 자체 데이터 결합에 필요한 항목</td>
+  </tr>
+  <tr>
+    <td class="c"><b>미저장</b></td>
+    <td>소개글, 이용시간, 휴무일, 문의처, 주차 정보, 홈페이지</td>
+    <td>변동이 잦아 상세 화면을 열 때마다 실시간 조회</td>
+  </tr>
+</table>
+
+<p>현재 저장 규모는 장소 <b>29,537건</b>, 축제·행사 <b>417건</b>입니다.</p>
+
+<h2>5. 동기화 계획</h2>
+
+<table class="keep">
+  <tr>
+    <th class="c" style="width:20%">항목</th>
+    <th>내용</th>
+  </tr>
+  <tr>
+    <td class="c"><b>주기</b></td>
+    <td>1일 1회</td>
+  </tr>
+  <tr>
+    <td class="c"><b>시간</b></td>
+    <td>매일 05:00 (한국 표준시)</td>
+  </tr>
+  <tr>
+    <td class="c"><b>대상</b></td>
+    <td><code>areaBasedList2</code> — 관광지(12)·문화시설(14)·음식점(39)<br><code>searchFestival2</code> — 축제·행사<br><code>ldongCode2</code> — 시도 코드 조회</td>
+  </tr>
+  <tr>
+    <td class="c"><b>규모</b></td>
+    <td>1회 약 350건 호출, 호출 간 120밀리초 간격 유지</td>
+  </tr>
+</table>
+
+<h3>가. 수집 방법</h3>
+<p>전국 17개 시도별로 콘텐츠 유형 세 가지에 대해 페이지를 순회하며 목록을 수집하고, 축제·행사는 별도로 수집합니다. 수집한 항목은 콘텐츠 ID(<code>contentid</code>)를 기준으로 기존 레코드가 있으면 갱신하고 없으면 추가합니다.</p>
+
+<h3>나. 동기화 시간 설정 근거</h3>
+<p>공사의 원본 데이터 갱신 시각인 04:30 이후가 되도록 05:00으로 설정하였습니다. 그 이전에 수집할 경우 갱신 전 데이터를 받게 되므로 30분의 여유를 두었습니다.</p>
+
+<h3>다. 실패 시 처리</h3>
+<p>항목 단위로 독립하여 저장하므로 일부 항목의 처리가 실패하더라도 전체 동기화가 중단되지 않습니다. 실패한 항목은 기존에 저장된 데이터를 그대로 유지한 채 다음 회차에 다시 반영됩니다. 인증키 미설정 등으로 수집이 불가능한 경우에는 동기화를 수행하지 않고 기존 데이터를 유지합니다.</p>
+
+<div class="note">
+  <b>책임 인지</b> · 로컬 서버 저장 이후의 콘텐츠 동기화가 신청 기관의 책임으로 진행되어야 하며, 동기화 지연으로 발생하는 문제에 대하여 공사가 책임지지 않음을 확인하였습니다.
+</div>
+
+<h2>6. 출처 표기</h2>
+<p>장소 상세 화면과 마이페이지의 '데이터 출처' 항목에 <b>출처: ⓒ한국관광공사</b>로 표기하고 있습니다. API 서비스명을 단독으로 표기하는 방식은 사용하지 않습니다.</p>
+
+<div class="sign">
+  20&nbsp;&nbsp;&nbsp;&nbsp;.&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.<br>
+  작성 기관명 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (인)
+</div>
+
+</body>
+</html>

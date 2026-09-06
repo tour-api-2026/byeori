@@ -12,6 +12,17 @@ export function fetchVenues(filter: VenueFilter = {}): Promise<Page<Venue>> {
 /** 지도 주변 조회 — 보고 있는 좌표·반경만 한국관광공사 OpenAPI로 실시간 조회한다. */
 export type NearbyParams = { lat: number; lng: number; radius?: number; category?: string };
 
+export type LiveSearchParams = { keyword: string; category?: string; hanbokDiscount?: boolean };
+
+/** 공사 OpenAPI 실시간 키워드 검색. 실패·무결과면 빈 배열이라 호출부가 저장 검색으로 대체한다. */
+export function searchVenuesLive(p: LiveSearchParams): Promise<Venue[]> {
+  return unwrap<Venue[]>(
+    api.get<ApiEnvelope<Venue[]>>('/venues/search', {
+      params: { keyword: p.keyword, category: p.category, hanbokDiscount: p.hanbokDiscount, size: 60 },
+    }),
+  );
+}
+
 export function fetchNearbyVenues(p: NearbyParams): Promise<Venue[]> {
   return unwrap<Venue[]>(
     api.get<ApiEnvelope<Venue[]>>('/venues/nearby', {

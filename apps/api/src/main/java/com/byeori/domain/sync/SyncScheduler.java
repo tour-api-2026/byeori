@@ -13,7 +13,9 @@ public class SyncScheduler {
 
     private final SyncService syncService;
 
-    @Scheduled(cron = "0 0 4 * * *", zone = "Asia/Seoul")
+    // 한국관광공사가 04:30에 원본을 갱신한다(공사 안내 기준).
+    // 그 전에 받으면 하루 지난 데이터를 가져오므로 05:00에 돈다.
+    @Scheduled(cron = "0 0 5 * * *", zone = "Asia/Seoul")
     public void daily() {
         log.info("정기 동기화 시작");
         syncService.syncVenues();
