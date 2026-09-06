@@ -45,7 +45,9 @@ public class VenueService {
     public java.util.List<VenueResponse> nearby(double lat, double lng, int radius, String category) {
         int typeId = CategoryMapper.toTourContentTypeId(category);
         var items = tourClient.locationBasedList(lng, lat, radius, typeId, 50);
-        if (items.isEmpty()) return List.of();
+        // 공사 API가 실패하면 같은 영역의 저장 데이터로 대체한다. 전국 상위 목록으로 대체하면
+        // 화면 밖 장소만 잡혀 지도가 비어 보이므로, 보고 있는 사각 영역으로 좁혀서 찾는다.
+        if (items.isEmpty()) return nearbyFromStore(lat, lng, radius, category);
 
         return enrich(items);
     }
@@ -75,6 +77,17 @@ public class VenueService {
                         .thenComparing(VenueResponse::avgRating, java.util.Comparator.reverseOrder())
                         .thenComparing(VenueResponse::reviewCount, java.util.Comparator.reverseOrder()))
                 .toList();
+    }
+
+    /** 장애 시 대체 조회. 위도 1도 ≈ 111km, 경도 1도 ≈ 88km(한국 위도 기준)로 사각 영역을 잡는다. */
+    private java.util.List<VenueResponse> nearbyFromStore(double lat, double lng, int radius, String category) {
+        double dLat = radius / 111_000.0, dLng = radius / 88_000.0;
+        return repo.findInBounds(
+                        java.math.BigDecimal.valueOf(lat - dLat), java.math.BigDecimal.valueOf(lat + dLat),
+                        java.math.BigDecimal.valueOf(lng - dLng), java.math.BigDecimal.valueOf(lng + dLng),
+                        category == null || category.isBlank() ? null : category,
+                        org.springframework.data.domain.PageRequest.of(0, 50))
+                .stream().map(VenueResponse::from).toList();
     }
 
     /** 공사 응답에 우리 레코드(한복 혜택·평점)를 콘텐츠 ID로 붙인다. 저장분이 없으면 id는 null. */
