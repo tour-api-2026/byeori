@@ -4,11 +4,11 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Chip } from '@/components/Chip';
 import { VenueCard } from '@/components/VenueCard';
-import { useLiveSearchQuery, useVenuesQuery } from '@/lib/hooks/queries';
+import { useLiveSearchQuery, useNearbyVenuesQuery, useVenuesQuery } from '@/lib/hooks/queries';
+import { REGIONS, regionSpot } from '@/lib/regions';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 const CATS = ['전체', '문화', '카페', '체험', '맛집', '한복'];
-const REGIONS = ['전체', '서울', '부산', '대구', '전주', '제주'];
 const PER_PAGE = 6;
 
 export default function SearchScreen() {
@@ -29,19 +29,27 @@ export default function SearchScreen() {
     keyword ? { keyword, category: cat === '전체' ? undefined : cat } : null,
   );
 
+  // 검색어 없이 지역만 고른 경우: 그 지역 좌표로 실시간 조회한다.
+  const spot = keyword ? null : regionSpot(region);
+  const byRegion = useNearbyVenuesQuery(
+    spot ? { ...spot, category: cat === '전체' ? undefined : cat } : null,
+  );
+
   const { data, isLoading: listLoading } = useVenuesQuery({
     keyword: keyword || undefined,
     category: cat === '전체' ? undefined : cat,
     size: 60,
   });
 
-  const isLoading = keyword ? live.isLoading : listLoading;
+  const isLoading = keyword ? live.isLoading : spot ? byRegion.isLoading : listLoading;
 
   const filtered = useMemo(() => {
+    // 지역만 고른 경우는 이미 그 지역 좌표로 받아온 것이라 다시 거르지 않는다.
+    if (spot) return byRegion.data ?? [];
     // 실시간 조회가 실패하거나 결과가 없으면 저장된 검색으로 대체한다.
     const list = keyword && live.data?.length ? live.data : (data?.content ?? []);
     return region === '전체' ? list : list.filter((v) => v.address?.includes(region));
-  }, [keyword, live.data, data, region]);
+  }, [spot, byRegion.data, keyword, live.data, data, region]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const cur = Math.min(page, totalPages - 1);

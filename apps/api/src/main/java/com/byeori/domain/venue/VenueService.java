@@ -19,6 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class VenueService {
 
+    /** 공사 locationBasedList2가 받는 최대 반경(m). */
+    private static final int TOUR_RADIUS_MAX = 20_000;
+
     private final VenueRepository repo;
     private final VenueReportRepository reportRepo;
     private final TourApiClient tourClient;
@@ -43,11 +46,16 @@ public class VenueService {
      * 공사 API가 실패하면 빈 목록이 오므로, 그때는 저장된 데이터로 대체해 화면이 비지 않게 한다.
      */
     public java.util.List<VenueResponse> nearby(double lat, double lng, int radius, String category) {
+        // 공사 locationBasedList2는 반경 상한이 20km다. 그보다 넓게 보고 있으면
+        // 실시간으로는 화면 한가운데만 채워져 나머지가 텅 빈다(전국 뷰에서 서울 주변만
+        // 마커가 뜨던 원인). 이 구간은 저장 스냅샷으로 화면 전체를 덮는다.
+        if (radius > TOUR_RADIUS_MAX) return wideFromStore(lat, lng, radius, category, 300);
+
         int typeId = CategoryMapper.toTourContentTypeId(category);
         var items = tourClient.locationBasedList(lng, lat, radius, typeId, 50);
         // 공사 API가 실패하면 같은 영역의 저장 데이터로 대체한다. 전국 상위 목록으로 대체하면
         // 화면 밖 장소만 잡혀 지도가 비어 보이므로, 보고 있는 사각 영역으로 좁혀서 찾는다.
-        if (items.isEmpty()) return nearbyFromStore(lat, lng, radius, category);
+        if (items.isEmpty()) return nearbyFromStore(lat, lng, radius, category, 50);
 
         return enrich(items);
     }
@@ -79,14 +87,24 @@ public class VenueService {
                 .toList();
     }
 
-    /** 장애 시 대체 조회. 위도 1도 ≈ 111km, 경도 1도 ≈ 88km(한국 위도 기준)로 사각 영역을 잡는다. */
-    private java.util.List<VenueResponse> nearbyFromStore(double lat, double lng, int radius, String category) {
+    /** 전국 뷰용 표본. 한 지역이 목록을 독식하지 않도록 고르게 흩뿌려 뽑는다. */
+    private java.util.List<VenueResponse> wideFromStore(double lat, double lng, int radius, String category, int limit) {
+        double dLat = radius / 111_000.0, dLng = radius / 88_000.0;
+        return repo.sampleInBounds(
+                        java.math.BigDecimal.valueOf(lat - dLat), java.math.BigDecimal.valueOf(lat + dLat),
+                        java.math.BigDecimal.valueOf(lng - dLng), java.math.BigDecimal.valueOf(lng + dLng),
+                        category == null || category.isBlank() ? null : category, limit)
+                .stream().map(VenueResponse::from).toList();
+    }
+
+    /** 저장 스냅샷 조회. 위도 1도 ≈ 111km, 경도 1도 ≈ 88km(한국 위도 기준)로 사각 영역을 잡는다. */
+    private java.util.List<VenueResponse> nearbyFromStore(double lat, double lng, int radius, String category, int limit) {
         double dLat = radius / 111_000.0, dLng = radius / 88_000.0;
         return repo.findInBounds(
                         java.math.BigDecimal.valueOf(lat - dLat), java.math.BigDecimal.valueOf(lat + dLat),
                         java.math.BigDecimal.valueOf(lng - dLng), java.math.BigDecimal.valueOf(lng + dLng),
                         category == null || category.isBlank() ? null : category,
-                        org.springframework.data.domain.PageRequest.of(0, 50))
+                        org.springframework.data.domain.PageRequest.of(0, limit))
                 .stream().map(VenueResponse::from).toList();
     }
 
