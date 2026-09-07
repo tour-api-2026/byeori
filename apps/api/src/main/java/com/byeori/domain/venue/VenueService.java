@@ -130,7 +130,8 @@ public class VenueService {
                             v != null ? v.getAvgRating() : java.math.BigDecimal.ZERO,
                             v != null && v.getReviewCount() != null ? v.getReviewCount() : 0,
                             "TOURAPI",
-                            new java.math.BigDecimal(it.mapy()), new java.math.BigDecimal(it.mapx()));
+                            new java.math.BigDecimal(it.mapy()), new java.math.BigDecimal(it.mapx()),
+                            it.contentId());
                 })
                 .toList();
     }
@@ -140,6 +141,35 @@ public class VenueService {
      * 개요·이용시간·휴무일·문의처를 함께 내려준다(동기화 목록에는 없는 항목들이다).
      * 조회가 실패하거나 느려도 화면은 떠야 하므로 실패 시 저장된 정보만으로 응답한다.
      */
+    /**
+     * 상세 조회. 실시간 결과의 절반 가까이는 우리 DB에 없어(경복궁 반경 2km 기준 50건 중 24건)
+     * 우리 id가 없다. 숫자면 우리 레코드, 아니면 공사 콘텐츠 ID로 본다.
+     */
+    public VenueDetailResponse detailByKey(String key) {
+        if (key != null && key.chars().allMatch(Character::isDigit) && key.length() < 19) {
+            Long id = Long.valueOf(key);
+            // 콘텐츠 ID도 숫자라 우리 id와 겹칠 수 있다. 우리 레코드가 먼저다.
+            var mine = repo.findById(id);
+            if (mine.isPresent()) return VenueDetailResponse.from(mine.get(), tourClient.detail(mine.get().getDetailContentId()));
+        }
+        return detailByContentId(key);
+    }
+
+    private VenueDetailResponse detailByContentId(String contentId) {
+        // 저장분이 있으면 자체 정보(한복 혜택·평점)까지 붙은 쪽을 쓴다.
+        var stored = repo.findByTourContentId(contentId)
+                .or(() -> repo.findByDetailContentIdIn(java.util.List.of(contentId)).stream().findFirst());
+        if (stored.isPresent()) {
+            return VenueDetailResponse.from(stored.get(), tourClient.detail(contentId));
+        }
+        var basic = tourClient.basic(contentId);
+        if (basic == null) {
+            throw new NotFoundException("VENUE_NOT_FOUND", "장소를 찾을 수 없습니다.");
+        }
+        String category = CategoryMapper.fromTour(basic.contentTypeId(), basic.lclsSystm2(), basic.lclsSystm3());
+        return VenueDetailResponse.fromTour(basic, tourClient.detail(contentId), category);
+    }
+
     public VenueDetailResponse detail(Long id) {
         Venue v = repo.findById(id)
                 .orElseThrow(() -> new NotFoundException("VENUE_NOT_FOUND", "장소를 찾을 수 없습니다."));

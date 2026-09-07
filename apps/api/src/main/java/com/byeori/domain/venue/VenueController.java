@@ -71,9 +71,10 @@ public class VenueController {
         return ApiResponse.ok(service.listMine(userId));
     }
 
+    /** id는 우리 장소 id 또는 공사 콘텐츠 ID. 실시간 결과에는 우리 id가 없는 장소가 많다. */
     @GetMapping("/{id}")
-    public ApiResponse<VenueDetailResponse> detail(@PathVariable("id") Long id) {
-        return ApiResponse.ok(service.detail(id));
+    public ApiResponse<VenueDetailResponse> detail(@PathVariable("id") String id) {
+        return ApiResponse.ok(service.detailByKey(id));
     }
 
     @GetMapping("/{id}/performances")

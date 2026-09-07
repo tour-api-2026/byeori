@@ -1,4 +1,6 @@
 export type Venue = {
+  /** 공사 콘텐츠 ID. 우리 DB에 없는 장소는 id가 null이라 이 값으로 상세를 연다. */
+  tourContentId: string | null;
   id: number;
   name: string;
   address: string;

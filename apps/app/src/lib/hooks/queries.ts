@@ -41,7 +41,7 @@ export function useNearbyVenuesQuery(p: NearbyParams | null) {
     staleTime: 5 * 60 * 1000,
   });
 }
-export function useVenueDetailQuery(id: number) {
+export function useVenueDetailQuery(id: number | string) {
   return useQuery({ queryKey: ['venue', id], queryFn: () => fetchVenueDetail(id), enabled: !!id });
 }
 export function useVenuePerformancesQuery(id: number) {

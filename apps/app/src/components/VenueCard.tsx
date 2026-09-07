@@ -14,7 +14,7 @@ export function VenueCard({ venue, width = '48.5%' }: { venue: Venue; width?: Di
   if (venue.category && venue.category !== '한복') tags.push(venue.category);
 
   return (
-    <Pressable style={[styles.card, { width }]} onPress={() => router.push(`/venue/${venue.id}`)}>
+    <Pressable style={[styles.card, { width }]} onPress={() => router.push(`/venue/${venue.id ?? venue.tourContentId}`)}>
       <Image source={sized(venue.imageUrl, 360, 240)} style={styles.img} contentFit="cover" transition={200} cachePolicy="memory-disk" recyclingKey={String(venue.id)} />
       <View style={styles.body}>
         <Text style={styles.name} numberOfLines={1}>{venue.name}</Text>
