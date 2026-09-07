@@ -18,11 +18,13 @@ import { colors, fonts, radius, space } from '@/lib/theme';
 
 export default function VenueDetailScreen() {
   const { id, mine } = useLocalSearchParams<{ id: string; mine?: string }>();
-  const vid = Number(id);
+  const { data: v, isLoading } = useVenueDetailQuery(id);
+  // 콘텐츠 ID도 숫자라 URL만 보고 우리 id로 단정하면 엉뚱한 장소의 리뷰·위시리스트를
+  // 건드릴 수 있다. 우리 레코드 id는 응답에서만 받는다(없으면 0 → 관련 기능 비활성).
+  const vid = v?.id ?? 0;
   const isMine = mine === '1';
   const router = useRouter();
   const del = useDeleteVenueMutation();
-  const { data: v, isLoading } = useVenueDetailQuery(vid);
 
   const confirmDelete = () => {
     Alert.alert('장소 삭제', '이 장소를 삭제할까요? 되돌릴 수 없습니다.', [

@@ -31,7 +31,8 @@ export function fetchNearbyVenues(p: NearbyParams): Promise<Venue[]> {
   );
 }
 
-export function fetchVenueDetail(id: number): Promise<VenueDetail> {
+/** id는 우리 장소 id 또는 공사 콘텐츠 ID. 서버가 숫자 여부로 갈라 본다. */
+export function fetchVenueDetail(id: number | string): Promise<VenueDetail> {
   return unwrap<VenueDetail>(api.get<ApiEnvelope<VenueDetail>>(`/venues/${id}`));
 }
 

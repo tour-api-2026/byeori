@@ -48,6 +48,27 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
                                        Pageable pageable);
 
     /**
+     * 넓은 화면(전국 뷰)용 표본. 위와 달리 평점·id 순으로 뽑으면 수집 순서상 한 지역이
+     * 300건을 독식해 지도 한 곳만 뭉친다(실제로 전부 대구가 나왔다).
+     * id 해시로 섞어 전국에 고르게 흩뿌린다. 해시라 요청마다 결과가 흔들리지 않는다.
+     */
+    @Query(value = """
+            select * from venues
+            where status = 'ACTIVE' and visibility = 'PUBLIC'
+              and lat between :minLat and :maxLat
+              and lng between :minLng and :maxLng
+              and (cast(:category as varchar) is null or category = :category)
+            order by mod(id * 2654435761, 1000003)
+            limit :limit
+            """, nativeQuery = true)
+    java.util.List<Venue> sampleInBounds(@Param("minLat") java.math.BigDecimal minLat,
+                                         @Param("maxLat") java.math.BigDecimal maxLat,
+                                         @Param("minLng") java.math.BigDecimal minLng,
+                                         @Param("maxLng") java.math.BigDecimal maxLng,
+                                         @Param("category") String category,
+                                         @Param("limit") int limit);
+
+    /**
      * 정렬이 없으면 DB가 돌려주는 순서가 임의라 페이지 간 중복·누락이 생기고,
      * 홈의 "맞춤 추천"에 사진 없는 장소가 먼저 뜨기도 한다.
      * 사진 있는 것 → 평점 높은 것 → 리뷰 많은 것 순으로 고정하고, 마지막에 id로 동점을 깬다.

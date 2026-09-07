@@ -11,7 +11,8 @@ import { VenueCard } from '@/components/VenueCard';
 import * as WebBrowser from 'expo-web-browser';
 import { Performance, Venue } from '@/lib/api/types';
 import { sized } from '@/lib/img';
-import { usePerformancesQuery, useVenuesQuery } from '@/lib/hooks/queries';
+import { useNearbyVenuesQuery, usePerformancesQuery, useVenuesQuery } from '@/lib/hooks/queries';
+import { regionSpot } from '@/lib/regions';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 const KEYWORDS = ['전체', '문화', '카페', '체험', '맛집'];
@@ -38,11 +39,15 @@ export default function HomeScreen() {
   const top = banner.data?.content?.[0];
   // 배너에 건 공연이 바로 아래 목록 첫 칸에 또 나오면 같은 포스터가 두 번 보인다.
   const traditionalItems = (traditional.data?.content ?? []).filter((p) => p.id !== top?.id);
+  // 지역을 고르면 그 좌표로 실시간 조회한다. 저장 목록을 주소로 거르면
+  // 상위 50건이 전부 서울이라 서울 외 지역이 비어 보였다.
+  const spot = regionSpot(region);
+  const byRegion = useNearbyVenuesQuery(spot);
   const regionVenues = useMemo(() => {
-    const list = all.data?.content ?? [];
+    const list = spot ? (byRegion.data ?? []) : (all.data?.content ?? []);
     // 위 '맞춤 추천'·'키워드로 탐색'과 같은 6개로 맞춘다(줄 끝이 어긋나 보이지 않게).
-    return (region === '전체' ? list : list.filter((v) => v.address?.includes(region))).slice(0, 6);
-  }, [all.data, region]);
+    return list.slice(0, 6);
+  }, [spot, byRegion.data, all.data]);
   const recent = (all.data?.content ?? []).slice(-4).reverse();
 
   return (

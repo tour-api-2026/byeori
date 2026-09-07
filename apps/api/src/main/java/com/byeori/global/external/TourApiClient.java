@@ -1,6 +1,7 @@
 package com.byeori.global.external;
 
 import com.byeori.global.external.dto.RegionCode;
+import com.byeori.global.external.dto.TourBasic;
 import com.byeori.global.external.dto.TourDetail;
 import com.byeori.global.external.dto.TourFestivalItem;
 import com.byeori.global.external.dto.TourItem;
@@ -211,6 +212,24 @@ public class TourApiClient {
      * 화면을 막지 않는 것이 우선이라 실패·지연은 조용히 삼키고 null을 돌려준다.
      * 호출부는 null이면 DB에 저장된 정보만으로 화면을 구성한다.
      */
+    /**
+     * 상세 화면용 기본 정보(detailCommon2). 우리 DB에 없는 장소를 띄울 때 쓴다.
+     * 저장분이 있으면 굳이 부르지 않는다(그쪽 값이 이미 화면에 있다).
+     */
+    public TourBasic basic(String contentId) {
+        if (!props.tourApiEnabled() || contentId == null || contentId.isBlank()) return null;
+        try {
+            JsonNode c = firstItem(get("/detailCommon2", b -> b.queryParam("contentId", contentId)));
+            if (c == null) return null;
+            return new TourBasic(text(c, "contentid"), text(c, "contenttypeid"), text(c, "title"),
+                    text(c, "addr1"), text(c, "firstimage"), text(c, "mapx"), text(c, "mapy"),
+                    text(c, "tel"), text(c, "lclsSystm2"), text(c, "lclsSystm3"));
+        } catch (Exception e) {
+            log.warn("TourAPI 기본 조회 실패 contentId={}: {}", contentId, e.getMessage());
+            return null;
+        }
+    }
+
     public TourDetail detail(String contentId) {
         if (!props.tourApiEnabled() || contentId == null || contentId.isBlank()) return null;
         try {

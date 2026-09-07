@@ -16,6 +16,10 @@ export const MAP_CSS = `  html,body,#map{margin:0;padding:0;width:100%;height:10
   .pinE{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;
        background:#fff;font-size:18px;box-shadow:0 2px 6px rgba(0,0,0,.3);border:2px solid #fff;
        font-family:-apple-system,system-ui,sans-serif}
+  .pinC{display:flex;align-items:center;justify-content:center;border-radius:50%;
+       background:rgba(38,49,118,.92);color:#fff;font-weight:800;border:3px solid #fff;
+       box-shadow:0 3px 10px rgba(0,0,0,.3);cursor:pointer;
+       font-family:-apple-system,system-ui,sans-serif}
   .pinK{display:inline-block;min-width:24px;height:24px;line-height:24px;text-align:center;border-radius:999px;
        background:#3177D5;color:#fff;font-size:12px;font-weight:800;border:2px solid #fff;
        box-shadow:0 2px 6px rgba(0,0,0,.3);font-family:-apple-system,system-ui,sans-serif}
@@ -32,7 +36,7 @@ export function mapScript(segColors: string[]): string {
   const colorsJson = JSON.stringify(segColors);
   return `  var ROUTE_COLORS=${colorsJson};
   function segColor(i){ return ROUTE_COLORS[((i%ROUTE_COLORS.length)+ROUTE_COLORS.length)%ROUTE_COLORS.length]; }
-  var map, venueOv=[], kakaoOv=[], ready=false, pending=null, places=null, kakaoData=[];
+  var map, venueOv=[], kakaoOv=[], ready=false, pending=null, places=null, kakaoData=[], lastList=[];
   var routeLines=[], routeOv=[], pendingRoute=null;
   function sel(id){ post({type:'select', id:id}); }
   function selK(i){ post({type:'selectKakao', place:kakaoData[i]}); }
@@ -57,15 +61,59 @@ export function mapScript(segColors: string[]): string {
   // 주변 조회 마커는 지금 보고 있는 영역에서 받아온 것이라 지도를 다시 맞추지 않는다.
   // fitAll()을 부르면 setBounds가 지도를 움직여 idle이 또 발생하고,
   // 그 idle이 재조회를 부르는 되먹임 고리가 생겨 호출이 몇 배로 늘어난다.
-  window.setMarkers = function(list){
-    if(!ready){ pending=list; return; }
+  // 확대 단계별 격자 크기(도 단위). 레벨이 클수록(축소) 넓게 묶는다.
+  // 카카오 기본 클러스터러는 Marker 만 받아 이모지 CustomOverlay 를 못 쓴다. 직접 묶는다.
+  function cellSize(level){
+    if(level<=4) return 0;          // 4 이하: 묶지 않고 하나씩
+    if(level<=6) return 0.010;
+    if(level<=8) return 0.045;
+    if(level<=10) return 0.18;
+    if(level<=12) return 0.55;
+    return 1.4;
+  }
+  function zoomInto(lat,lng){
+    map.setLevel(Math.max(1, map.getLevel()-3), {anchor:new kakao.maps.LatLng(lat,lng)});
+  }
+  window.zoomInto = zoomInto;
+  function render(){
     clearArr(venueOv);
-    list.forEach(function(v){
-      var pos=new kakao.maps.LatLng(v.lat, v.lng);
-      var html='<div class="pinE" onclick="sel('+v.id+')">'+catEmoji(v.category)+'</div>';
-      var ov=new kakao.maps.CustomOverlay({position:pos, content:html, yAnchor:1, clickable:true});
+    var size=cellSize(map.getLevel());
+    if(!size){
+      lastList.forEach(function(v,i){
+        var html='<div class="pinE" onclick="sel('+v.id+')">'+catEmoji(v.category)+'</div>';
+        var ov=new kakao.maps.CustomOverlay({position:new kakao.maps.LatLng(v.lat,v.lng),
+          content:html, yAnchor:1, clickable:true});
+        ov.setMap(map); venueOv.push(ov);
+      });
+      return;
+    }
+    // 같은 격자에 든 장소를 하나로 묶고, 무게중심에 개수를 띄운다.
+    var cells={};
+    lastList.forEach(function(v){
+      var k=Math.floor(v.lat/size)+'_'+Math.floor(v.lng/size);
+      if(!cells[k]) cells[k]={n:0, lat:0, lng:0, one:v};
+      var c=cells[k]; c.n++; c.lat+=v.lat; c.lng+=v.lng;
+    });
+    Object.keys(cells).forEach(function(k){
+      var c=cells[k], la=c.lat/c.n, ln=c.lng/c.n;
+      var html;
+      if(c.n===1){
+        html='<div class="pinE" onclick="sel('+c.one.id+')">'+catEmoji(c.one.category)+'</div>';
+      } else {
+        // 개수가 많을수록 원을 키운다(34~60px).
+        var d=Math.min(60, 34+Math.round(Math.log(c.n)*9));
+        html='<div class="pinC" style="width:'+d+'px;height:'+d+'px;font-size:'+(d>46?15:13)+'px"'
+            +' onclick="zoomInto('+la+','+ln+')">'+c.n+'</div>';
+      }
+      var ov=new kakao.maps.CustomOverlay({position:new kakao.maps.LatLng(la,ln),
+        content:html, yAnchor:c.n===1?1:0.5, clickable:true});
       ov.setMap(map); venueOv.push(ov);
     });
+  }
+  window.setMarkers = function(list){
+    if(!ready){ pending=list; return; }
+    lastList=(list||[]).filter(function(v){ return v.lat!=null && v.lng!=null; });
+    render();
   };
   window.searchKakao = function(q){
     if(!ready || !q) return;
@@ -139,6 +187,8 @@ export function mapScript(segColors: string[]): string {
         var dLat=(ne.getLat()-sw.getLat())*111000, dLng=(ne.getLng()-sw.getLng())*88000;
         var r=Math.round(Math.sqrt(dLat*dLat+dLng*dLng)/2);
         post({type:'idle', lat:c.getLat(), lng:c.getLng(), radius:r, level:map.getLevel()});
+        render();   // 확대 단계가 바뀌었으면 묶음을 다시 계산한다
+
       });
       if(pendingRoute){ window.drawRoute(pendingRoute); pendingRoute=null; }
       else if(pending){ window.setMarkers(pending); pending=null; }

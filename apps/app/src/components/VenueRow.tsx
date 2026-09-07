@@ -22,7 +22,7 @@ export function VenueRow({ venue }: { venue: Venue }) {
   };
 
   return (
-    <Pressable style={styles.row} onPress={() => router.push(`/venue/${venue.id}`)}>
+    <Pressable style={styles.row} onPress={() => router.push(`/venue/${venue.id ?? venue.tourContentId}`)}>
       <Image source={venue.imageUrl} style={styles.img} contentFit="cover" transition={150} />
       <View style={styles.body}>
         <Text style={styles.name} numberOfLines={1}>{venue.name}</Text>

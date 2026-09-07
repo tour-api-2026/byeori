@@ -439,9 +439,9 @@ export default function MapScreen() {
       {selected && (
         <Pressable
           style={[styles.miniCard, { bottom: tabH + 12 }]}
-          // 아직 우리 DB에 없는 장소(id 없음)는 상세 화면이 없으므로 이동하지 않는다.
-          disabled={selected.id == null}
-          onPress={() => selected.id != null && router.push(`/venue/${selected.id}`)}
+          // 우리 DB에 없는 장소는 id가 없다. 그때는 공사 콘텐츠 ID로 상세를 연다.
+          disabled={selected.id == null && !selected.tourContentId}
+          onPress={() => router.push(`/venue/${selected.id ?? selected.tourContentId}`)}
         >
           <Image
             source={selected.imageUrl}
@@ -610,6 +610,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingVertical: 10,
     alignItems: "center",
+    // 칩이 화면 폭보다 좁으면 가운데로 모으고, 넘치면 평소대로 스크롤된다.
+    flexGrow: 1,
+    justifyContent: "center",
   },
   // 전체화면 배경 지도.
   map: {
