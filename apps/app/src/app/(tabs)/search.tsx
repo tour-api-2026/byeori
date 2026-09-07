@@ -124,7 +124,9 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, fontSize: 15, color: colors.text },
   chipsScroll: { flexGrow: 0, flexShrink: 0 },
-  chips: { gap: 8, paddingHorizontal: space.lg, paddingVertical: 6, alignItems: 'center' },
+  // 칩이 화면 폭보다 좁으면 가운데로 모으고, 넘치면 평소대로 스크롤된다.
+  chips: { gap: 8, paddingHorizontal: space.lg, paddingVertical: 6, alignItems: 'center',
+           flexGrow: 1, justifyContent: 'center' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: 6 },
   empty: { fontSize: 14, color: colors.textFaint, textAlign: 'center', marginTop: 40 },
   pager: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8 },

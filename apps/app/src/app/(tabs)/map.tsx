@@ -610,6 +610,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingVertical: 10,
     alignItems: "center",
+    // 칩이 화면 폭보다 좁으면 가운데로 모으고, 넘치면 평소대로 스크롤된다.
+    flexGrow: 1,
+    justifyContent: "center",
   },
   // 전체화면 배경 지도.
   map: {
