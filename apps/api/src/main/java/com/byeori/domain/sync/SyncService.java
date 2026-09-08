@@ -12,6 +12,7 @@ import com.byeori.global.external.dto.KopisItem;
 import com.byeori.global.external.dto.SeoulEventItem;
 import com.byeori.global.external.dto.TourFestivalItem;
 import com.byeori.global.external.dto.TourItem;
+import com.byeori.global.external.dto.TourSyncItem;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -43,9 +44,89 @@ public class SyncService {
     private final SeoulEventClient seoulClient;
     private final RegionResolver regionResolver;
     private final VenueRepository venueRepo;
+    private final SyncLogRepository syncLogRepo;
     private final PerformanceRepository perfRepo;
 
-    /** 장소(관광지·문화시설·음식점) 동기화. 항목별 독립 저장(실패 시 해당 항목만 skip). */
+    /**
+     * 증분 동기화. 공사가 로컬 저장용으로 제공하는 areaBasedSyncList2 를 쓴다.
+     *
+     * 전량을 다시 받는 syncVenues() 는 1회 약 350건을 호출하는데, 이쪽은 마지막 성공
+     * 이후 변경분만 받아 보통 유형당 1페이지(총 3건)로 끝난다. 공사 권고인 1일 1회
+     * 동기화를 지키면서 호출량을 1% 수준으로 줄이기 위한 경로다.
+     *
+     * showflag=0(공사에서 내린 콘텐츠)은 우리 쪽에서도 비노출로 바꾼다. 목록 조회만
+     * 쓰던 예전 방식으로는 "사라졌다"를 알 수 없어 내려간 장소가 계속 남아 있었다.
+     *
+     * 커서는 마지막 성공 실행일이다. 실패하면 커서가 전진하지 않아 다음 회차가 빠진
+     * 구간을 함께 가져간다.
+     */
+    @Transactional
+    public int syncVenuesIncremental() {
+        return syncVenuesIncremental(null);
+    }
+
+    /** @param overrideSince yyyyMMdd. 주면 커서 대신 이 날짜부터 받는다(따라잡기·점검용). */
+    @Transactional
+    public int syncVenuesIncremental(String overrideSince) {
+        if (!props.tourApiEnabled()) {
+            log.info("TOURAPI_KEY 미설정 → 증분 동기화 skip");
+            return 0;
+        }
+        String since = overrideSince != null && !overrideSince.isBlank() ? overrideSince : incrementalCursor();
+        SyncLog run = syncLogRepo.save(SyncLog.started("TOURAPI", "VENUE_SYNC"));
+        int changed = 0, hidden = 0;
+        try {
+            for (int contentType : CONTENT_TYPES) {
+                for (int page = 1; page <= MAX_PAGES; page++) {
+                    List<TourSyncItem> items = tourClient.syncList(contentType, since, page, ROWS);
+                    if (items.isEmpty()) break;
+                    for (TourSyncItem it : items) {
+                        if (it.visible()) {
+                            changed += upsertVenue(it.item());
+                        } else {
+                            hidden += hideVenue(it.item().contentId());
+                        }
+                    }
+                    run.progressed(changed + hidden);
+                    throttle();
+                    if (items.size() < ROWS) break;
+                }
+            }
+            run.succeeded(changed + hidden, "갱신 " + changed + "건, 비노출 " + hidden + "건 (since=" + since + ")");
+            log.info("증분 동기화 완료: 갱신 {}건, 비노출 {}건 (since={})", changed, hidden, since);
+            return changed + hidden;
+        } catch (Exception e) {
+            // 커서를 전진시키지 않아 다음 회차가 이 구간을 다시 가져간다.
+            run.failed(e.getMessage());
+            log.warn("증분 동기화 실패 (since={}): {}", since, e.getMessage());
+            return changed + hidden;
+        }
+    }
+
+    /**
+     * 마지막 성공 실행일. 하루 겹쳐서 받는다 — 공사의 modifiedtime 은 날짜 단위라
+     * 실행 당일에 늦게 반영된 변경분이 빠질 수 있다.
+     * 기록이 없으면 저장된 장소의 마지막 수집일을, 그것도 없으면 전량을 받는다.
+     */
+    private String incrementalCursor() {
+        LocalDate from = syncLogRepo
+                .findTopByProviderAndTargetTypeAndStatusOrderByStartedAtDesc("TOURAPI", "VENUE_SYNC", SyncLog.SUCCESS)
+                .map(s -> s.getStartedAt().toLocalDate())
+                .orElseGet(() -> venueRepo.findMaxSyncedAt()
+                        .map(java.time.LocalDateTime::toLocalDate)
+                        .orElse(null));
+        return from == null ? null : from.minusDays(1).format(TOUR_DATE);
+    }
+
+    /** 공사에서 내린 콘텐츠를 비노출로. 우리가 갖고 있지 않으면 할 일이 없다. */
+    private int hideVenue(String contentId) {
+        if (contentId == null) return 0;
+        return venueRepo.findByTourContentId(contentId)
+                .map(v -> { v.deactivateBySync(); venueRepo.save(v); return 1; })
+                .orElse(0);
+    }
+
+    /** 장소(관광지·문화시설·음식점) 전량 동기화. 초기 적재·수동 백필용. */
     public int syncVenues() {
         if (!props.tourApiEnabled()) {
             log.info("TOURAPI_KEY 미설정 → 장소 동기화 skip");

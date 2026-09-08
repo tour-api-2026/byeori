@@ -5,6 +5,7 @@ import com.byeori.global.external.dto.TourBasic;
 import com.byeori.global.external.dto.TourDetail;
 import com.byeori.global.external.dto.TourFestivalItem;
 import com.byeori.global.external.dto.TourItem;
+import com.byeori.global.external.dto.TourSyncItem;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
@@ -81,6 +82,49 @@ public class TourApiClient {
             log.warn("TourAPI areaBasedList 실패 regn={} signgu={} type={} page={}: {}",
                     lDongRegnCd, lDongSignguCd, contentTypeId, page, e.getMessage());
             return List.of();
+        }
+    }
+
+    /**
+     * 동기화 목록(areaBasedSyncList2). 공사가 로컬 저장용으로 제공하는 오퍼레이션이다.
+     *
+     * areaBasedList2 로 전량을 매번 다시 받으면 1회 약 350건을 호출해야 하는데, 이쪽은
+     * modifiedtime 이후 변경분만 받아 하루 3건이면 끝난다. showflag 로 공사가 내린
+     * 콘텐츠도 알 수 있어 삭제 반영이 가능하다.
+     *
+     * @param modifiedTime yyyyMMdd. 이 날짜 이후 변경분만. null 이면 전량.
+     */
+    public List<TourSyncItem> syncList(int contentTypeId, String modifiedTime, int page, int rows) {
+        if (!props.tourApiEnabled()) return List.of();
+        try {
+            URI uri = UriComponentsBuilder.fromUriString(BASE + "/areaBasedSyncList2")
+                    .queryParam("serviceKey", encKey())
+                    .queryParam("MobileOS", "ETC")
+                    .queryParam("MobileApp", "byeori")
+                    .queryParam("_type", "json")
+                    .queryParam("arrange", "C")   // C = 수정일순
+                    .queryParamIfPresent("contentTypeId",
+                            Optional.ofNullable(contentTypeId > 0 ? contentTypeId : null))
+                    .queryParamIfPresent("modifiedtime", Optional.ofNullable(modifiedTime))
+                    .queryParam("numOfRows", rows)
+                    .queryParam("pageNo", page)
+                    .build(true)
+                    .toUri();
+            String body = http.get().uri(uri).retrieve().body(String.class);
+            List<TourSyncItem> out = new ArrayList<>();
+            for (JsonNode n : items(body)) {
+                out.add(new TourSyncItem(
+                        new TourItem(text(n, "contentid"), text(n, "title"), text(n, "addr1"),
+                                text(n, "mapy"), text(n, "mapx"), text(n, "firstimage"),
+                                text(n, "contenttypeid"), text(n, "lclsSystm2"),
+                                text(n, "lclsSystm3"), text(n, "tel")),
+                        text(n, "showflag"), text(n, "modifiedtime")));
+            }
+            return out;
+        } catch (Exception e) {
+            log.warn("TourAPI syncList 실패 type={} since={} page={}: {}",
+                    contentTypeId, modifiedTime, page, e.getMessage());
+            throw new IllegalStateException("동기화 목록 조회 실패", e);
         }
     }
 

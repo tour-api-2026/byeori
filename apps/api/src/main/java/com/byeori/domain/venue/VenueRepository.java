@@ -18,6 +18,10 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
 
     java.util.Optional<Venue> findByTourContentId(String tourContentId);
 
+    /** 증분 동기화 커서의 기본값. 실행 기록이 아직 없을 때 여기서부터 받는다. */
+    @Query("select max(v.syncedAt) from Venue v where v.source = 'TOURAPI'")
+    java.util.Optional<java.time.LocalDateTime> findMaxSyncedAt();
+
     /** 실시간 조회 결과를 자체 정보(한복 혜택·평점)와 붙이기 위한 일괄 조회. */
     java.util.List<Venue> findByTourContentIdIn(java.util.Collection<String> tourContentIds);
 
