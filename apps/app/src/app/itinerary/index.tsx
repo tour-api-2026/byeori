@@ -1,12 +1,26 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useMyItinerariesQuery } from '@/lib/hooks/queries';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useDeleteItineraryMutation, useMyItinerariesQuery } from '@/lib/hooks/queries';
 import { colors, radius, shadow, space } from '@/lib/theme';
 
 export default function ItinerariesScreen() {
   const router = useRouter();
   const { data, isLoading } = useMyItinerariesQuery();
+  const del = useDeleteItineraryMutation();
+
+  // 만들기만 되고 지울 수단이 없었다. 서버·API·훅은 이미 있었고 화면만 비어 있었다.
+  const confirmDelete = (id: number, title: string) =>
+    Alert.alert('여행 일지 삭제', `'${title}'을(를) 삭제할까요? 되돌릴 수 없습니다.`, [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: () => del.mutate(id, {
+          onError: (e: any) => Alert.alert('삭제 실패', e?.message ?? '오류가 발생했습니다.'),
+        }),
+      },
+    ]);
 
   return (
     <View style={styles.safe}>
@@ -27,6 +41,13 @@ export default function ItinerariesScreen() {
                 <Text style={styles.title}>{it.title}</Text>
                 <Text style={styles.meta}>{it.startDate} ~ {it.endDate} · {it.itemCount}곳 · {it.sourceType === 'CURATED' ? '추천코스 복사' : '직접 구성'}</Text>
               </View>
+              <Pressable
+                hitSlop={10}
+                style={styles.delBtn}
+                onPress={() => confirmDelete(it.id, it.title)}
+              >
+                <Ionicons name="trash-outline" size={18} color={colors.textFaint} />
+              </Pressable>
               <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
             </Pressable>
           ))}
@@ -45,4 +66,5 @@ const styles = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bgCard, borderRadius: radius.md, padding: 16, marginBottom: 12, ...shadow.card },
   title: { fontSize: 16, fontWeight: '700', color: colors.text },
   meta: { fontSize: 12, color: colors.textFaint, marginTop: 4 },
+  delBtn: { padding: 6, marginRight: 2 },
 });

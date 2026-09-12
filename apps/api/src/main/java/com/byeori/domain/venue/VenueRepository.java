@@ -1,6 +1,10 @@
 package com.byeori.domain.venue;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,22 +18,22 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
     @Query("update Venue v set v.avgRating = :avg, v.reviewCount = :cnt where v.id = :id")
     void updateRating(@Param("id") Long id, @Param("avg") BigDecimal avg, @Param("cnt") int cnt);
 
-    java.util.List<Venue> findByCreatedByUserIdOrderByCreatedAtDesc(Long userId);
+    List<Venue> findByCreatedByUserIdOrderByCreatedAtDesc(Long userId);
 
-    java.util.Optional<Venue> findByTourContentId(String tourContentId);
+    Optional<Venue> findByTourContentId(String tourContentId);
 
     /** 증분 동기화 커서의 기본값. 실행 기록이 아직 없을 때 여기서부터 받는다. */
     @Query("select max(v.syncedAt) from Venue v where v.source = 'TOURAPI'")
-    java.util.Optional<java.time.LocalDateTime> findMaxSyncedAt();
+    Optional<LocalDateTime> findMaxSyncedAt();
 
     /** 실시간 조회 결과를 자체 정보(한복 혜택·평점)와 붙이기 위한 일괄 조회. */
-    java.util.List<Venue> findByTourContentIdIn(java.util.Collection<String> tourContentIds);
+    List<Venue> findByTourContentIdIn(Collection<String> tourContentIds);
 
     /**
      * 시드로 들어온 장소는 tour_content_id가 자리표시자(TA-126508)라 공사 콘텐츠 ID와 맞물리지 않는다.
      * 진짜 ID는 detail_content_id에 있으므로 실시간 결과를 붙일 때 이쪽도 함께 본다.
      */
-    java.util.List<Venue> findByDetailContentIdIn(java.util.Collection<String> detailContentIds);
+    List<Venue> findByDetailContentIdIn(Collection<String> detailContentIds);
 
     /**
      * 공사 API 장애 시의 지도 대체 조회. 보고 있는 사각 영역 안의 장소만 돌려준다.
@@ -44,12 +48,12 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
             order by case when v.imageUrl is null or v.imageUrl = '' then 1 else 0 end,
                      v.avgRating desc, v.reviewCount desc, v.id asc
             """)
-    java.util.List<Venue> findInBounds(@Param("minLat") java.math.BigDecimal minLat,
-                                       @Param("maxLat") java.math.BigDecimal maxLat,
-                                       @Param("minLng") java.math.BigDecimal minLng,
-                                       @Param("maxLng") java.math.BigDecimal maxLng,
-                                       @Param("category") String category,
-                                       Pageable pageable);
+    List<Venue> findInBounds(@Param("minLat") BigDecimal minLat,
+                             @Param("maxLat") BigDecimal maxLat,
+                             @Param("minLng") BigDecimal minLng,
+                             @Param("maxLng") BigDecimal maxLng,
+                             @Param("category") String category,
+                             Pageable pageable);
 
     /**
      * 넓은 화면(전국 뷰)용 표본. 위와 달리 평점·id 순으로 뽑으면 수집 순서상 한 지역이
@@ -65,12 +69,12 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
             order by mod(id * 2654435761, 1000003)
             limit :limit
             """, nativeQuery = true)
-    java.util.List<Venue> sampleInBounds(@Param("minLat") java.math.BigDecimal minLat,
-                                         @Param("maxLat") java.math.BigDecimal maxLat,
-                                         @Param("minLng") java.math.BigDecimal minLng,
-                                         @Param("maxLng") java.math.BigDecimal maxLng,
-                                         @Param("category") String category,
-                                         @Param("limit") int limit);
+    List<Venue> sampleInBounds(@Param("minLat") BigDecimal minLat,
+                               @Param("maxLat") BigDecimal maxLat,
+                               @Param("minLng") BigDecimal minLng,
+                               @Param("maxLng") BigDecimal maxLng,
+                               @Param("category") String category,
+                               @Param("limit") int limit);
 
     /**
      * 정렬이 없으면 DB가 돌려주는 순서가 임의라 페이지 간 중복·누락이 생기고,

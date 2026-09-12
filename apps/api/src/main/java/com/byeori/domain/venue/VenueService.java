@@ -6,11 +6,17 @@ import com.byeori.domain.venue.dto.VenueReportRequest;
 import com.byeori.domain.venue.dto.VenueResponse;
 import com.byeori.global.exception.BadRequestException;
 import com.byeori.global.exception.NotFoundException;
-import com.byeori.global.external.TourApiClient;
-import java.util.List;
-import com.byeori.global.external.dto.TourItem;
 import com.byeori.domain.sync.CategoryMapper;
+import com.byeori.global.external.TourApiClient;
+import com.byeori.global.external.dto.TourItem;
+import java.math.BigDecimal;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,7 +51,7 @@ public class VenueService {
      *
      * 공사 API가 실패하면 빈 목록이 오므로, 그때는 저장된 데이터로 대체해 화면이 비지 않게 한다.
      */
-    public java.util.List<VenueResponse> nearby(double lat, double lng, int radius, String category) {
+    public List<VenueResponse> nearby(double lat, double lng, int radius, String category) {
         // 공사 locationBasedList2는 반경 상한이 20km다. 그보다 넓게 보고 있으면
         // 실시간으로는 화면 한가운데만 채워져 나머지가 텅 빈다(전국 뷰에서 서울 주변만
         // 마커가 뜨던 원인). 이 구간은 저장 스냅샷으로 화면 전체를 덮는다.
@@ -69,7 +75,7 @@ public class VenueService {
      * 한복 혜택과 평점은 공사 데이터에 없는 자체 정보라 API 단계에서 거를 수 없다.
      * 콘텐츠 ID로 우리 레코드를 붙인 뒤 여기서 거르고 정렬한다.
      */
-    public java.util.List<VenueResponse> searchLive(String keyword, String category, Boolean hanbokDiscount, int rows) {
+    public List<VenueResponse> searchLive(String keyword, String category, Boolean hanbokDiscount, int rows) {
         if (keyword == null || keyword.isBlank()) return List.of();
         var items = tourClient.searchKeyword(keyword, CategoryMapper.toTourContentTypeId(category), rows);
         if (items.isEmpty()) return List.of();
@@ -80,40 +86,53 @@ public class VenueService {
         }
         // 저장 목록과 같은 기준으로 정렬한다: 이미지 있는 것 먼저, 그 다음 평점·리뷰 수.
         return out.stream()
-                .sorted(java.util.Comparator
+                .sorted(Comparator
                         .comparing((VenueResponse v) -> v.imageUrl() == null || v.imageUrl().isBlank())
-                        .thenComparing(VenueResponse::avgRating, java.util.Comparator.reverseOrder())
-                        .thenComparing(VenueResponse::reviewCount, java.util.Comparator.reverseOrder()))
+                        .thenComparing(VenueResponse::avgRating, Comparator.reverseOrder())
+                        .thenComparing(VenueResponse::reviewCount, Comparator.reverseOrder()))
                 .toList();
     }
 
-    /** 전국 뷰용 표본. 한 지역이 목록을 독식하지 않도록 고르게 흩뿌려 뽑는다. */
-    private java.util.List<VenueResponse> wideFromStore(double lat, double lng, int radius, String category, int limit) {
-        double dLat = radius / 111_000.0, dLng = radius / 88_000.0;
-        return repo.sampleInBounds(
-                        java.math.BigDecimal.valueOf(lat - dLat), java.math.BigDecimal.valueOf(lat + dLat),
-                        java.math.BigDecimal.valueOf(lng - dLng), java.math.BigDecimal.valueOf(lng + dLng),
-                        category == null || category.isBlank() ? null : category, limit)
-                .stream().map(VenueResponse::from).toList();
+    /** 좌표·반경을 사각 영역으로. 위도 1도 ≈ 111km, 경도 1도 ≈ 88km(한국 위도 기준). */
+    private record Bounds(BigDecimal minLat, BigDecimal maxLat, BigDecimal minLng, BigDecimal maxLng) {
+        static Bounds of(double lat, double lng, int radius) {
+            double dLat = radius / 111_000.0, dLng = radius / 88_000.0;
+            return new Bounds(BigDecimal.valueOf(lat - dLat), BigDecimal.valueOf(lat + dLat),
+                    BigDecimal.valueOf(lng - dLng), BigDecimal.valueOf(lng + dLng));
+        }
     }
 
-    /** 저장 스냅샷 조회. 위도 1도 ≈ 111km, 경도 1도 ≈ 88km(한국 위도 기준)로 사각 영역을 잡는다. */
-    private java.util.List<VenueResponse> nearbyFromStore(double lat, double lng, int radius, String category, int limit) {
-        double dLat = radius / 111_000.0, dLng = radius / 88_000.0;
-        return repo.findInBounds(
-                        java.math.BigDecimal.valueOf(lat - dLat), java.math.BigDecimal.valueOf(lat + dLat),
-                        java.math.BigDecimal.valueOf(lng - dLng), java.math.BigDecimal.valueOf(lng + dLng),
-                        category == null || category.isBlank() ? null : category,
-                        org.springframework.data.domain.PageRequest.of(0, limit))
-                .stream().map(VenueResponse::from).toList();
+    private static String nullIfBlank(String s) {
+        return s == null || s.isBlank() ? null : s;
+    }
+
+    /**
+     * 전국 뷰용 표본. 평점·id 순으로 뽑으면 수집 순서상 한 지역이 목록을 독식하므로
+     * (실제로 300건이 전부 대구였다) 해시로 섞어 고르게 흩뿌린다.
+     */
+    private List<VenueResponse> wideFromStore(double lat, double lng, int radius, String category, int limit) {
+        Bounds b = Bounds.of(lat, lng, radius);
+        return toResponses(repo.sampleInBounds(
+                b.minLat(), b.maxLat(), b.minLng(), b.maxLng(), nullIfBlank(category), limit));
+    }
+
+    /** 공사 API 실패 시의 대체 조회. 보고 있는 영역 안에서 좋은 것부터 준다. */
+    private List<VenueResponse> nearbyFromStore(double lat, double lng, int radius, String category, int limit) {
+        Bounds b = Bounds.of(lat, lng, radius);
+        return toResponses(repo.findInBounds(
+                b.minLat(), b.maxLat(), b.minLng(), b.maxLng(), nullIfBlank(category), PageRequest.of(0, limit)));
+    }
+
+    private static List<VenueResponse> toResponses(List<Venue> venues) {
+        return venues.stream().map(VenueResponse::from).toList();
     }
 
     /** 공사 응답에 우리 레코드(한복 혜택·평점)를 콘텐츠 ID로 붙인다. 저장분이 없으면 id는 null. */
-    private java.util.List<VenueResponse> enrich(java.util.List<TourItem> items) {
-        var ids = items.stream().map(TourItem::contentId).filter(java.util.Objects::nonNull).toList();
+    private List<VenueResponse> enrich(List<TourItem> items) {
+        var ids = items.stream().map(TourItem::contentId).filter(Objects::nonNull).toList();
         // 콘텐츠 ID는 두 컬럼에 나뉘어 있다. 시드 장소(경복궁·창경궁 등 한복 혜택 보유)는
         // tour_content_id가 자리표시자라 detail_content_id로만 맞물린다. 둘 다 훑는다.
-        var mine = new java.util.HashMap<String, Venue>();
+        var mine = new HashMap<String, Venue>();
         repo.findByTourContentIdIn(ids).forEach(v -> mine.putIfAbsent(v.getTourContentId(), v));
         repo.findByDetailContentIdIn(ids).forEach(v -> mine.put(v.getDetailContentId(), v));
 
@@ -127,10 +146,10 @@ public class VenueService {
                             it.title(), it.addr1(), cat, it.firstImage(),
                             v != null && v.isHanbokDiscount(),
                             v != null ? v.getHanbokDiscountDesc() : null,
-                            v != null ? v.getAvgRating() : java.math.BigDecimal.ZERO,
+                            v != null ? v.getAvgRating() : BigDecimal.ZERO,
                             v != null && v.getReviewCount() != null ? v.getReviewCount() : 0,
                             "TOURAPI",
-                            new java.math.BigDecimal(it.mapy()), new java.math.BigDecimal(it.mapx()),
+                            new BigDecimal(it.mapy()), new BigDecimal(it.mapx()),
                             it.contentId());
                 })
                 .toList();
@@ -158,7 +177,7 @@ public class VenueService {
     private VenueDetailResponse detailByContentId(String contentId) {
         // 저장분이 있으면 자체 정보(한복 혜택·평점)까지 붙은 쪽을 쓴다.
         var stored = repo.findByTourContentId(contentId)
-                .or(() -> repo.findByDetailContentIdIn(java.util.List.of(contentId)).stream().findFirst());
+                .or(() -> repo.findByDetailContentIdIn(List.of(contentId)).stream().findFirst());
         if (stored.isPresent()) {
             return VenueDetailResponse.from(stored.get(), tourClient.detail(contentId));
         }
@@ -176,7 +195,7 @@ public class VenueService {
         return VenueDetailResponse.from(v, tourClient.detail(v.getDetailContentId()));
     }
 
-    public java.util.List<VenueResponse> listMine(Long userId) {
+    public List<VenueResponse> listMine(Long userId) {
         return repo.findByCreatedByUserIdOrderByCreatedAtDesc(userId).stream().map(VenueResponse::from).toList();
     }
 

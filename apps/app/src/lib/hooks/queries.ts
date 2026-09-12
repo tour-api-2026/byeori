@@ -7,7 +7,7 @@ import {
 } from '../api/itineraries';
 import { fetchPerformances, PerformanceFilter } from '../api/performances';
 import { createReview, deleteReview, fetchMyReviews, fetchReviews, reportReview } from '../api/reviews';
-import { fetchCommentTags, fetchContentTags, unvoteTag, voteTag } from '../api/tags';
+import { fetchContentTags, unvoteTag, voteTag } from '../api/tags';
 import {
   createVenue, deleteVenue, fetchMyVenues, fetchNearbyVenues, fetchVenueDetail,
   fetchVenuePerformances, fetchVenues, reportVenue, searchVenuesLive, updateVenue,
@@ -87,9 +87,6 @@ export function useCourseDetailQuery(id: number) {
 }
 
 // ---------- 태그 ----------
-export function useCommentTagsQuery() {
-  return useQuery({ queryKey: ['comment-tags'], queryFn: fetchCommentTags });
-}
 export function useContentTagsQuery(targetType: string, targetId: number) {
   return useQuery({ queryKey: ['content-tags', targetType, targetId], queryFn: () => fetchContentTags(targetType, targetId), enabled: !!targetId });
 }
