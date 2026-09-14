@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { blockUser, fetchBlockedUsers, unblockUser } from '../api/account';
 import { fetchCourseDetail, fetchCourses } from '../api/courses';
 import {
@@ -30,6 +30,8 @@ export function useLiveSearchQuery(p: LiveSearchParams | null) {
     queryFn: () => searchVenuesLive(p as LiveSearchParams),
     enabled: !!p,
     staleTime: 5 * 60 * 1000,
+    // 검색어가 바뀌는 동안 목록이 비면 화면이 접혔다 펴진다. 새 결과가 올 때까지 이전 것을 둔다.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -39,6 +41,10 @@ export function useNearbyVenuesQuery(p: NearbyParams | null) {
     queryFn: () => fetchNearbyVenues(p as NearbyParams),
     enabled: !!p,
     staleTime: 5 * 60 * 1000,
+    // 지역 칩을 누르면 새 조회가 끝날 때까지 목록이 비어 아래 내용이 줄었다가
+    // 되돌아온다(칩이 156px 내려갔다 올라왔다). 이전 결과를 유지해 높이를 지킨다.
+    // 지도에서도 이동 중 마커가 사라지지 않아 덜 깜빡인다.
+    placeholderData: keepPreviousData,
   });
 }
 export function useVenueDetailQuery(id: number | string) {

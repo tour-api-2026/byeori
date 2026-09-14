@@ -8,13 +8,8 @@ import com.byeori.global.exception.BadRequestException;
 import com.byeori.global.exception.NotFoundException;
 import com.byeori.domain.sync.CategoryMapper;
 import com.byeori.global.external.TourApiClient;
-import com.byeori.global.external.dto.TourItem;
 import java.math.BigDecimal;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -25,8 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class VenueService {
 
-    /** 공사 locationBasedList2가 받는 최대 반경(m). */
-    private static final int TOUR_RADIUS_MAX = 20_000;
+    /** 이보다 넓게 보고 있으면 전국 뷰로 보고 표본을 고르게 뽑는다. */
+    private static final int WIDE_RADIUS = 20_000;
 
     private final VenueRepository repo;
     private final VenueReportRepository reportRepo;
@@ -51,62 +46,41 @@ public class VenueService {
      *
      * 공사 API가 실패하면 빈 목록이 오므로, 그때는 저장된 데이터로 대체해 화면이 비지 않게 한다.
      */
-    public List<VenueResponse> nearby(double lat, double lng, int radius, String category) {
-        // 공사 locationBasedList2는 반경 상한이 20km다. 그보다 넓게 보고 있으면
-        // 실시간으로는 화면 한가운데만 채워져 나머지가 텅 빈다(전국 뷰에서 서울 주변만
-        // 마커가 뜨던 원인). 이 구간은 저장 스냅샷으로 화면 전체를 덮는다.
-        if (radius > TOUR_RADIUS_MAX) return wideFromStore(lat, lng, radius, category, 300);
-
-        int typeId = CategoryMapper.toTourContentTypeId(category);
-        var items = tourClient.locationBasedList(lng, lat, radius, typeId, 50);
-        // 공사 API가 실패하면 같은 영역의 저장 데이터로 대체한다. 전국 상위 목록으로 대체하면
-        // 화면 밖 장소만 잡혀 지도가 비어 보이므로, 보고 있는 사각 영역으로 좁혀서 찾는다.
-        if (items.isEmpty()) return nearbyFromStore(lat, lng, radius, category, 50);
-
-        return byCategory(enrich(items), category);
-    }
-
     /**
-     * 공사 응답을 우리 카테고리로 다시 거른다.
+     * 지도 주변·지역 조회. 저장된 데이터로 응답한다.
      *
-     * 공사 contentTypeId 로는 카페와 맛집을 나눌 수 없다(둘 다 39). 그래서 '카페'를 골라도
-     * 맛집이 함께 나왔다. 우리 분류는 응답의 신분류(lclsSystm)로 갈리므로 여기서 거른다.
+     * 예전에는 공사 locationBasedList2 를 요청마다 호출했는데, 목록은 명칭·주소·좌표만
+     * 쓰므로 실시간일 필요가 없다. 저장분으로 주면 571ms → 330ms 로 줄고, 공사 API 가
+     * 느리거나 인증키가 막혀도 목록은 그대로 뜬다.
      *
-     * '한복'은 공사 분류에 없는 자체 표시(한복 착용 혜택)라 카테고리가 아니라 혜택 여부로 본다.
+     * 대신 상세 화면은 열 때마다 공사 API 를 호출한다(detail 참고). 이용시간·휴무일처럼
+     * 자주 바뀌는 정보는 저장해 두면 금세 낡기 때문이다.
      */
-    private static List<VenueResponse> byCategory(List<VenueResponse> list, String category) {
-        if (category == null || category.isBlank()) return list;
-        if ("한복".equals(category)) {
-            return list.stream().filter(VenueResponse::hanbokDiscount).toList();
-        }
-        return list.stream().filter(v -> category.equals(v.category())).toList();
+    public List<VenueResponse> nearby(double lat, double lng, int radius, String category) {
+        // 전국이 보이도록 축소한 구간은 한 지역이 목록을 독식하지 않게 고르게 흩뿌려 뽑는다.
+        if (radius > WIDE_RADIUS) return wideFromStore(lat, lng, radius, category, 300);
+        return nearbyFromStore(lat, lng, radius, category, 50);
     }
 
     /**
      * 키워드 검색. 저장된 목록 대신 공사 OpenAPI를 실시간으로 조회한다.
      *
      * 저장분은 관광지·문화시설·음식점 세 유형뿐이라 숙박·쇼핑·레포츠가 빠져 있었다.
-     * searchKeyword2는 전 유형을 대상으로 해 '한옥' 기준 57건 → 210건으로 늘어난다.
      *
      * 한복 혜택과 평점은 공사 데이터에 없는 자체 정보라 API 단계에서 거를 수 없다.
      * 콘텐츠 ID로 우리 레코드를 붙인 뒤 여기서 거르고 정렬한다.
      */
+    /**
+     * 명칭 검색. 저장된 데이터에서 찾는다.
+     *
+     * 공사 searchKeyword2 를 쓰면 저장에 없는 장소까지 나오지만, 수집 범위를 넓혀
+     * (관광지·문화시설·음식점·레포츠·전통시장·공예·한옥) 그 격차가 거의 사라졌다.
+     * 검색은 입력할 때마다 도는 경로라 응답이 빠른 쪽이 낫다.
+     */
     public List<VenueResponse> searchLive(String keyword, String category, Boolean hanbokDiscount, int rows) {
         if (keyword == null || keyword.isBlank()) return List.of();
-        var items = tourClient.searchKeyword(keyword, CategoryMapper.toTourContentTypeId(category), rows);
-        if (items.isEmpty()) return List.of();
-
-        var out = byCategory(enrich(items), category);
-        if (Boolean.TRUE.equals(hanbokDiscount)) {
-            out = out.stream().filter(VenueResponse::hanbokDiscount).toList();
-        }
-        // 저장 목록과 같은 기준으로 정렬한다: 이미지 있는 것 먼저, 그 다음 평점·리뷰 수.
-        return out.stream()
-                .sorted(Comparator
-                        .comparing((VenueResponse v) -> v.imageUrl() == null || v.imageUrl().isBlank())
-                        .thenComparing(VenueResponse::avgRating, Comparator.reverseOrder())
-                        .thenComparing(VenueResponse::reviewCount, Comparator.reverseOrder()))
-                .toList();
+        var page = PageRequest.of(0, Math.min(rows, 100));
+        return toResponses(repo.search(nullIfBlank(category), hanbokDiscount, keyword.trim(), page).getContent());
     }
 
     /** 좌표·반경을 사각 영역으로. 위도 1도 ≈ 111km, 경도 1도 ≈ 88km(한국 위도 기준). */
@@ -132,7 +106,7 @@ public class VenueService {
                 b.minLat(), b.maxLat(), b.minLng(), b.maxLng(), nullIfBlank(category), limit));
     }
 
-    /** 공사 API 실패 시의 대체 조회. 보고 있는 영역 안에서 좋은 것부터 준다. */
+    /** 보고 있는 영역 안에서 좋은 것부터 준다. */
     private List<VenueResponse> nearbyFromStore(double lat, double lng, int radius, String category, int limit) {
         Bounds b = Bounds.of(lat, lng, radius);
         return toResponses(repo.findInBounds(
@@ -141,34 +115,6 @@ public class VenueService {
 
     private static List<VenueResponse> toResponses(List<Venue> venues) {
         return venues.stream().map(VenueResponse::from).toList();
-    }
-
-    /** 공사 응답에 우리 레코드(한복 혜택·평점)를 콘텐츠 ID로 붙인다. 저장분이 없으면 id는 null. */
-    private List<VenueResponse> enrich(List<TourItem> items) {
-        var ids = items.stream().map(TourItem::contentId).filter(Objects::nonNull).toList();
-        // 콘텐츠 ID는 두 컬럼에 나뉘어 있다. 시드 장소(경복궁·창경궁 등 한복 혜택 보유)는
-        // tour_content_id가 자리표시자라 detail_content_id로만 맞물린다. 둘 다 훑는다.
-        var mine = new HashMap<String, Venue>();
-        repo.findByTourContentIdIn(ids).forEach(v -> mine.putIfAbsent(v.getTourContentId(), v));
-        repo.findByDetailContentIdIn(ids).forEach(v -> mine.put(v.getDetailContentId(), v));
-
-        return items.stream()
-                .filter(it -> it.contentId() != null && it.mapy() != null && it.mapx() != null)
-                .map(it -> {
-                    Venue v = mine.get(it.contentId());
-                    String cat = CategoryMapper.fromTour(it.contentTypeId(), it.lclsSystm2(), it.lclsSystm3());
-                    return new VenueResponse(
-                            v != null ? v.getId() : null,
-                            it.title(), it.addr1(), cat, it.firstImage(),
-                            v != null && v.isHanbokDiscount(),
-                            v != null ? v.getHanbokDiscountDesc() : null,
-                            v != null ? v.getAvgRating() : BigDecimal.ZERO,
-                            v != null && v.getReviewCount() != null ? v.getReviewCount() : 0,
-                            "TOURAPI",
-                            new BigDecimal(it.mapy()), new BigDecimal(it.mapx()),
-                            it.contentId());
-                })
-                .toList();
     }
 
     /**
@@ -202,6 +148,7 @@ public class VenueService {
             throw new NotFoundException("VENUE_NOT_FOUND", "장소를 찾을 수 없습니다.");
         }
         String category = CategoryMapper.fromTour(basic.contentTypeId(), basic.lclsSystm2(), basic.lclsSystm3());
+        if (category == null) category = "문화";   // 우리 분류 밖이어도 상세는 보여준다
         return VenueDetailResponse.fromTour(basic, tourClient.detail(contentId), category);
     }
 
