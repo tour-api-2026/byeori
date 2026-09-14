@@ -63,7 +63,23 @@ public class VenueService {
         // 화면 밖 장소만 잡혀 지도가 비어 보이므로, 보고 있는 사각 영역으로 좁혀서 찾는다.
         if (items.isEmpty()) return nearbyFromStore(lat, lng, radius, category, 50);
 
-        return enrich(items);
+        return byCategory(enrich(items), category);
+    }
+
+    /**
+     * 공사 응답을 우리 카테고리로 다시 거른다.
+     *
+     * 공사 contentTypeId 로는 카페와 맛집을 나눌 수 없다(둘 다 39). 그래서 '카페'를 골라도
+     * 맛집이 함께 나왔다. 우리 분류는 응답의 신분류(lclsSystm)로 갈리므로 여기서 거른다.
+     *
+     * '한복'은 공사 분류에 없는 자체 표시(한복 착용 혜택)라 카테고리가 아니라 혜택 여부로 본다.
+     */
+    private static List<VenueResponse> byCategory(List<VenueResponse> list, String category) {
+        if (category == null || category.isBlank()) return list;
+        if ("한복".equals(category)) {
+            return list.stream().filter(VenueResponse::hanbokDiscount).toList();
+        }
+        return list.stream().filter(v -> category.equals(v.category())).toList();
     }
 
     /**
@@ -80,7 +96,7 @@ public class VenueService {
         var items = tourClient.searchKeyword(keyword, CategoryMapper.toTourContentTypeId(category), rows);
         if (items.isEmpty()) return List.of();
 
-        var out = enrich(items);
+        var out = byCategory(enrich(items), category);
         if (Boolean.TRUE.equals(hanbokDiscount)) {
             out = out.stream().filter(VenueResponse::hanbokDiscount).toList();
         }

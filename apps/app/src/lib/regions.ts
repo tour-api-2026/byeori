@@ -13,6 +13,11 @@ export const REGIONS = ['전체', '서울', '부산', '대구', '전주', '제�
 export type RegionSpot = { lat: number; lng: number; radius: number };
 
 export const REGION_CENTER: Record<string, RegionSpot> = {
+  // '전체'는 전국을 뜻한다. 저장 목록을 그대로 쓰면 정렬 탓에 특정 지역으로 쏠려
+  // (전체인데 서울만, 카페는 부산만 나왔다) 지역 필터가 고장 난 것처럼 보였다.
+  // 반경이 공사 상한(20km)을 넘으므로 서버가 전국에 고르게 흩뿌린 표본을 돌려준다.
+  전체: { lat: 36.5, lng: 127.8, radius: 300000 },
+
   // 홈 화면은 서울 구 단위 칩을 쓴다(반경은 구 하나를 덮을 정도).
   종로구: { lat: 37.573, lng: 126.9794, radius: 3000 },
   중구: { lat: 37.5636, lng: 126.9976, radius: 3000 },
@@ -26,7 +31,7 @@ export const REGION_CENTER: Record<string, RegionSpot> = {
   제주: { lat: 33.4183, lng: 126.5622, radius: 20000 },
 };
 
-/** '전체'이거나 좌표가 없는 지역이면 null — 호출부는 저장 목록을 그대로 쓴다. */
+/** 좌표가 없는 지역이면 null — 호출부는 저장 목록을 그대로 쓴다. */
 export function regionSpot(region: string): RegionSpot | null {
   return REGION_CENTER[region] ?? null;
 }
