@@ -57,6 +57,10 @@ export type Performance = {
   reviewCount: number;
   source: string;
   traditional: boolean;
+  lat: number | null;
+  lng: number | null;
+  /** 공사 축제만. 상세를 열 때 실시간으로 받아온 소개글. */
+  overview: string | null;
 };
 
 export type CommentTag = { id: number; name: string };

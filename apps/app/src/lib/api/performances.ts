@@ -8,3 +8,7 @@ export function fetchPerformances(filter: PerformanceFilter = {}): Promise<Page<
     params: { ...filter, size: filter.size ?? 20 },
   }));
 }
+
+export function fetchPerformance(id: number): Promise<Performance> {
+  return unwrap<Performance>(api.get<ApiEnvelope<Performance>>(`/performances/${id}`));
+}

@@ -5,7 +5,7 @@ import {
   addItineraryItem, createItinerary, deleteItinerary, deleteItineraryItem,
   fetchItinerary, fetchItineraryRoute, fetchMyItineraries,
 } from '../api/itineraries';
-import { fetchPerformances, PerformanceFilter } from '../api/performances';
+import { fetchPerformance, fetchPerformances, PerformanceFilter } from '../api/performances';
 import { createReview, deleteReview, fetchMyReviews, fetchReviews, reportReview } from '../api/reviews';
 import { fetchContentTags, unvoteTag, voteTag } from '../api/tags';
 import {
@@ -80,6 +80,9 @@ export function useReportVenueMutation() {
 }
 
 // ---------- 공연 ----------
+export function usePerformanceQuery(id: number) {
+  return useQuery({ queryKey: ['performance', id], queryFn: () => fetchPerformance(id), enabled: !!id });
+}
 export function usePerformancesQuery(filter: PerformanceFilter = {}) {
   return useQuery({ queryKey: ['performances', filter], queryFn: () => fetchPerformances(filter) });
 }

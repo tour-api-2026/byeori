@@ -1,6 +1,5 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,10 +29,9 @@ export default function TraditionalPerformancesScreen() {
 
   const items = useMemo(() => query.data?.content ?? [], [query.data]);
 
-  const open = (p: Performance) => {
-    if (p.venueId) router.push(`/venue/${p.venueId}`);
-    else if (p.externalBookingUrl) WebBrowser.openBrowserAsync(p.externalBookingUrl);
-  };
+  // 전에는 예매처로 바로 튕기거나(서울 행사) 아무 일도 없었다(KOPIS 공연은 예매
+  // 링크가 없다 — 전통 행사 1,398건 중 637건이 무반응이었다). 우리 상세로 보낸다.
+  const open = (p: Performance) => router.push(`/performances/${p.id}`);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>

@@ -8,7 +8,6 @@ import { Chip } from '@/components/Chip';
 import { useTabBarHeight } from '@/components/TabBar';
 import { SectionHeader } from '@/components/SectionHeader';
 import { VenueCard } from '@/components/VenueCard';
-import * as WebBrowser from 'expo-web-browser';
 import { Performance, VenueCardItem } from '@/lib/api/types';
 import { sized } from '@/lib/img';
 import { useNearbyVenuesQuery, usePerformancesQuery, useVenuesQuery } from '@/lib/hooks/queries';
@@ -85,7 +84,7 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <SectionHeader title="오늘의 추천" />
           {top ? (
-            <Pressable style={styles.hero} onPress={() => top.venueId ? router.push(`/venue/${top.venueId}`) : router.push('/search')}>
+            <Pressable style={styles.hero} onPress={() => router.push(`/performances/${top.id}`)}>
               <Image source={sized(top.posterImageUrl, 760, 380)} style={styles.heroImg} contentFit="cover" transition={250} cachePolicy="memory-disk" />
               <View style={styles.heroOverlay}>
                 <Text style={styles.heroTitle} numberOfLines={1}>{top.title}</Text>
@@ -102,10 +101,7 @@ export default function HomeScreen() {
           {traditional.isLoading
             ? <Loading />
             : (traditionalItems.length
-              ? <PerformanceRow items={traditionalItems} onPress={(p) => {
-                  if (p.venueId) router.push(`/venue/${p.venueId}`);
-                  else if (p.externalBookingUrl) WebBrowser.openBrowserAsync(p.externalBookingUrl);
-                }} />
+              ? <PerformanceRow items={traditionalItems} onPress={(p) => router.push(`/performances/${p.id}`)} />
               : <Text style={styles.empty}>진행 중인 전통 행사가 아직 없어요</Text>)}
         </View>
 
