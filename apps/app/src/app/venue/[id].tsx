@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Rating } from '@/components/Rating';
@@ -14,6 +14,7 @@ import {
 } from '@/lib/hooks/queries';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useBookmarkStore } from '@/lib/store/bookmarkStore';
+import { useRecentStore } from '@/lib/store/recentStore';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 export default function VenueDetailScreen() {
@@ -22,6 +23,20 @@ export default function VenueDetailScreen() {
   // 콘텐츠 ID도 숫자라 URL만 보고 우리 id로 단정하면 엉뚱한 장소의 리뷰·위시리스트를
   // 건드릴 수 있다. 우리 레코드 id는 응답에서만 받는다(없으면 0 → 관련 기능 비활성).
   const vid = v?.id ?? 0;
+
+  // 홈의 '최근 본 장소'에 쓰려고 기기에 남긴다. 서버로는 보내지 않는다.
+  const pushRecent = useRecentStore((s) => s.push);
+  useEffect(() => {
+    if (!v?.name) return;
+    void pushRecent({
+      id: v.id ?? null,
+      tourContentId: v.tourContentId ?? null,
+      name: v.name,
+      address: v.address ?? null,
+      category: v.category ?? null,
+      imageUrl: v.imageUrl ?? null,
+    });
+  }, [v?.id, v?.tourContentId, v?.name, pushRecent]);
   const isMine = mine === '1';
   const router = useRouter();
   const del = useDeleteVenueMutation();

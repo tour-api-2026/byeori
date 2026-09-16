@@ -15,6 +15,15 @@ export type Venue = {
   lng: number;
 };
 
+/**
+ * 목록 카드가 그리는 데 필요한 만큼. 좌표는 쓰지 않는다.
+ * 최근 본 장소처럼 Venue 전체를 갖고 있지 않은 자료도 같은 카드로 그리기 위한 것이다.
+ */
+export type VenueCardItem = Pick<
+  Venue,
+  'id' | 'tourContentId' | 'name' | 'category' | 'imageUrl' | 'hanbokDiscount' | 'avgRating' | 'reviewCount'
+>;
+
 /** 상세 화면을 열 때 한국관광공사 OpenAPI에서 실시간으로 받아온 값. 없으면 null. */
 export type VenueLiveInfo = {
   overview: string | null;

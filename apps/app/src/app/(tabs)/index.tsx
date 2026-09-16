@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Chip } from '@/components/Chip';
@@ -9,14 +9,14 @@ import { useTabBarHeight } from '@/components/TabBar';
 import { SectionHeader } from '@/components/SectionHeader';
 import { VenueCard } from '@/components/VenueCard';
 import * as WebBrowser from 'expo-web-browser';
-import { Performance, Venue } from '@/lib/api/types';
+import { Performance, VenueCardItem } from '@/lib/api/types';
 import { sized } from '@/lib/img';
 import { useNearbyVenuesQuery, usePerformancesQuery, useVenuesQuery } from '@/lib/hooks/queries';
-import { regionSpot } from '@/lib/regions';
+import { useRecentStore } from '@/lib/store/recentStore';
+import { REGIONS, regionSpot } from '@/lib/regions';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 const KEYWORDS = ['전체', '문화', '카페', '체험', '맛집'];
-const REGIONS = ['전체', '종로구', '중구', '용산구'];
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -48,7 +48,26 @@ export default function HomeScreen() {
     // 위 '맞춤 추천'·'키워드로 탐색'과 같은 6개로 맞춘다(줄 끝이 어긋나 보이지 않게).
     return list.slice(0, 6);
   }, [spot, byRegion.data, all.data]);
-  const recent = (all.data?.content ?? []).slice(-4).reverse();
+  // 예전에는 저장 목록의 뒤 4개를 뒤집어 보여줘 무엇을 봐도 바뀌지 않았다.
+  // 상세 화면에서 기기에 남긴 실제 열람 기록을 쓴다.
+  const recentItems = useRecentStore((s) => s.items);
+  const hydrateRecent = useRecentStore((s) => s.hydrate);
+  useEffect(() => { void hydrateRecent(); }, [hydrateRecent]);
+  // Grid 는 Venue 를 받는다. 최근 기록은 카드에 필요한 값만 갖고 있어 나머지를 채운다
+  // (평점·리뷰는 그 시점 값을 남길 이유가 없어 저장하지 않는다).
+  const recent = useMemo<VenueCardItem[]>(
+    () => recentItems.slice(0, 4).map((r) => ({
+      id: r.id as number,
+      tourContentId: r.tourContentId,
+      name: r.name,
+      category: r.category,
+      imageUrl: r.imageUrl,
+      hanbokDiscount: false,
+      avgRating: 0,
+      reviewCount: 0,
+    })),
+    [recentItems],
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -110,23 +129,25 @@ export default function HomeScreen() {
         {/* 지역으로 탐색 */}
         <View style={styles.section}>
           <SectionHeader title="지역으로 탐색" onMore={() => router.push('/search')} />
-          <Chips items={REGIONS} value={region} onChange={setRegion} />
+          <Chips items={[...REGIONS]} value={region} onChange={setRegion} />
           {regionVenues.length
             ? <Grid venues={regionVenues} />
             : <Text style={styles.empty}>해당 지역의 장소가 아직 없어요</Text>}
         </View>
 
-        {/* 최근 본 장소 */}
-        <View style={styles.section}>
-          <SectionHeader title="최근 본 장소" onMore={() => router.push('/search')} />
-          <Grid venues={recent} />
-        </View>
+        {/* 최근 본 장소 — 아직 본 게 없으면 섹션째 숨긴다(빈 칸이 남지 않게) */}
+        {recent.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeader title="최근 본 장소" onMore={() => router.push('/search')} />
+            <Grid venues={recent} />
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function Grid({ venues }: { venues: Venue[] }) {
+function Grid({ venues }: { venues: VenueCardItem[] }) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rowScroll} contentContainerStyle={styles.row}>
       {venues.map((v) => <VenueCard key={v.id} venue={v} width={150} />)}
