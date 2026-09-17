@@ -61,6 +61,8 @@ export type Performance = {
   lng: number | null;
   /** 공사 축제만. 상세를 열 때 실시간으로 받아온 소개글. */
   overview: string | null;
+  /** 원문 페이지(KOPIS 공연 상세 · 공사 축제 홈페이지). 없으면 null. */
+  infoUrl: string | null;
 };
 
 export type CommentTag = { id: number; name: string };

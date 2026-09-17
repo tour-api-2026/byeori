@@ -111,7 +111,19 @@ export default function PerformanceDetailScreen() {
               style={styles.bookBtn}
               onPress={() => WebBrowser.openBrowserAsync(p.externalBookingUrl as string)}
             >
-              <Text style={styles.bookText}>예매·자세히 보기</Text>
+              <Text style={styles.bookText}>예매하기</Text>
+            </Pressable>
+          ) : null}
+
+          {/* KOPIS 공연은 예매 링크가 없어 원문 페이지로 안내한다(거기에 예매처가 있다). */}
+          {p.infoUrl ? (
+            <Pressable
+              style={[styles.bookBtn, p.externalBookingUrl ? styles.subBtn : null]}
+              onPress={() => WebBrowser.openBrowserAsync(p.infoUrl as string)}
+            >
+              <Text style={[styles.bookText, p.externalBookingUrl ? styles.subText : null]}>
+                {p.source === 'KOPIS' ? '공연 정보 자세히 보기' : '주최 측 홈페이지'}
+              </Text>
             </Pressable>
           ) : null}
         </View>
@@ -165,5 +177,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14, alignItems: 'center',
   },
   bookText: { color: colors.white, fontSize: 15, fontWeight: '800' },
+  subBtn: { backgroundColor: colors.bgCard },
+  subText: { color: colors.primary },
   empty: { textAlign: 'center', marginTop: 60, color: colors.textFaint, fontSize: 14 },
 });

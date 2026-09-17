@@ -37,7 +37,16 @@ public class PerformanceService {
         PerformanceResponse res = PerformanceResponse.from(p);
         if (p.getTourContentId() == null) return res;
         var d = tourClient.detail(p.getTourContentId());
-        return d == null ? res : res.withOverview(d.overview());
+        return d == null ? res : res.withLive(d.overview(), firstUrl(d.homepage()));
+    }
+
+    /** 공사 homepage 는 "www.example.com" 처럼 설명이 섞여 오기도 한다. 주소만 뽑는다. */
+    private static String firstUrl(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        var m = java.util.regex.Pattern.compile("(https?://\\S+|www\\.\\S+)").matcher(raw);
+        if (!m.find()) return null;
+        String u = m.group(1).replaceAll("[,)\\]}'\"]+$", "");
+        return u.startsWith("http") ? u : "https://" + u;
     }
 
     public List<PerformanceResponse> byVenue(Long venueId) {
