@@ -36,7 +36,7 @@ class AuthServiceLoginTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuthService(userRepository, null, null, tokenProvider);
+        service = new AuthService(userRepository, null, null, null, tokenProvider);
         ReflectionTestUtils.setField(service, "adminId", "admin");
         ReflectionTestUtils.setField(service, "adminPassword", "admin-pw");
         ReflectionTestUtils.setField(service, "reviewId", "review");

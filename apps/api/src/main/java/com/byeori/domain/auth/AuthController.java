@@ -40,4 +40,10 @@ public class AuthController {
     public ApiResponse<UserSummary> me(@AuthenticationPrincipal Long userId) {
         return ApiResponse.ok(service.me(userId));
     }
+
+    @PatchMapping("/users/me")
+    public ApiResponse<UserSummary> updateMe(@AuthenticationPrincipal Long userId,
+                                             @RequestBody UpdateProfileRequest req) {
+        return ApiResponse.ok(service.updateMe(userId, req));
+    }
 }

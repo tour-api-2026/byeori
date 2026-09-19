@@ -107,11 +107,22 @@ public class User {
         return u;
     }
 
-    /** 재로그인 시 변경된 프로필 동기화. */
-    public void updateProfile(String name, String email, String profileImageUrl) {
-        if (name != null && !name.isBlank()) this.name = name;
+    /**
+     * 재로그인 시 제공자 프로필 반영.
+     *
+     * 닉네임·사진은 가입할 때만 제공자 값을 쓰고 이후에는 건드리지 않는다. 벼리에서 고치거나
+     * 지운 값을 로그인할 때마다 카카오·구글 값으로 되돌리면 안 되기 때문이다. 이메일은 로그인
+     * 계정에 묶인 값이라 사용자가 고칠 수 없고, 제공자 쪽 변경을 그대로 따른다.
+     */
+    public void syncFromProvider(String email) {
         if (email != null && !email.isBlank()) this.email = email;
-        if (profileImageUrl != null && !profileImageUrl.isBlank()) this.profileImageUrl = profileImageUrl;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /** 마이페이지에서 고친 닉네임·프로필 사진. 사진이 null 이면 지운다. */
+    public void editProfile(String name, String profileImageUrl) {
+        this.name = name;
+        this.profileImageUrl = profileImageUrl;
         this.updatedAt = LocalDateTime.now();
     }
 }

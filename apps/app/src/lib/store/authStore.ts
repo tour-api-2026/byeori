@@ -30,6 +30,8 @@ type AuthState = {
   setSession: (s: Session) => Promise<void>;
   /** refresh 인터셉터에서 토큰만 갱신할 때 사용 */
   setTokens: (t: { accessToken: string; refreshToken: string }) => Promise<void>;
+  /** 프로필 수정 후 화면에 보이는 사용자 정보만 바꾼다(토큰은 그대로). */
+  setUser: (user: AuthUser) => Promise<void>;
   logout: () => Promise<void>;
   hydrate: () => Promise<void>;
 };
@@ -103,6 +105,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setTokens: async ({ accessToken, refreshToken }) => {
     set({ accessToken, refreshToken, isLoggedIn: !!accessToken });
     await Promise.all([setItem(KEY_ACCESS, accessToken), setItem(KEY_REFRESH, refreshToken)]);
+  },
+
+  setUser: async (user) => {
+    set({ user });
+    await setItem(KEY_USER, JSON.stringify(user));
   },
 
   logout: async () => {

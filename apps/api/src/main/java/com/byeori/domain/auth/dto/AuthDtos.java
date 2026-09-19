@@ -22,4 +22,7 @@ public final class AuthDtos {
 
     /** 사용자 요약. */
     public record UserSummary(Long id, String name, String email, String profileImageUrl) {}
+
+    /** 프로필 수정. profileImageUrl 이 비어 있으면 사진을 지운다. */
+    public record UpdateProfileRequest(String name, String profileImageUrl) {}
 }

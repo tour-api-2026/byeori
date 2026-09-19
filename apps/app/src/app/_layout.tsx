@@ -66,6 +66,7 @@ export default function RootLayout() {
           <Stack.Screen name="performances/traditional" options={{ title: '전통 테마 행사' }} />
           <Stack.Screen name="my/blocked" options={{ title: '차단한 사용자' }} />
           <Stack.Screen name="my/service-info" options={{ title: '서비스 정보' }} />
+          <Stack.Screen name="my/profile" options={{ title: '프로필 수정' }} />
         </Stack>
       </SafeAreaProvider>
     </QueryClientProvider>
