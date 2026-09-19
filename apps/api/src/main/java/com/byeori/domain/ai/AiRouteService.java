@@ -25,7 +25,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,12 +47,11 @@ public class AiRouteService {
 
     static final int MIN_STOPS = 3;
     static final int MAX_STOPS = 6;
-    private static final int RADIUS_M = 3000;
+    private static final int RADIUS_M = 2000; // 3km 에서는 코스가 권역을 넘나들었다
     private static final int VENUE_CANDIDATES = 40;
-    private static final int EVENT_CANDIDATES = 8;
+    private static final int EVENT_CANDIDATES = 5;
     private static final Duration CACHE_TTL = Duration.ofHours(1);
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final Pattern TIME = Pattern.compile("^([01]\\d|2[0-3]):[0-5]\\d$");
 
     private final VenueRepository venueRepo;
     private final PerformanceRepository performanceRepo;
@@ -107,7 +105,8 @@ public class AiRouteService {
 
         // 후보가 모자라면 AI를 부르지 않는다(비용도, 한도도 쓰지 않는다)
         List<Candidate> candidates = candidates(c);
-        if (candidates.size() < MIN_STOPS) {
+        List<Slot> slots = slots(c.categories(), candidates);
+        if (candidates.size() < MIN_STOPS || slots.size() < MIN_STOPS) {
             throw new BadRequestException("AI_NOT_ENOUGH_PLACES",
                     "이 지역에는 고른 테마의 장소가 부족해요. 테마를 더 고르거나 다른 지역을 선택해 주세요.");
         }
@@ -118,8 +117,8 @@ public class AiRouteService {
                     : "오늘 만들 수 있는 AI 루트를 모두 사용했어요. 내일 다시 이용해 주세요.");
         }
 
-        JsonNode answer = ai.completeJson(systemPrompt(), userPrompt(c, candidates), "day_route", schema());
-        Preview preview = answer == null ? null : toPreview(answer, candidates, c.date());
+        JsonNode answer = ai.completeJson(systemPrompt(), userPrompt(c, slots, candidates), "day_route", schema());
+        Preview preview = answer == null ? null : toPreview(answer, slots, candidates, c.date());
         if (preview == null) {
             quota.refund(userId);
             throw new BadRequestException("AI_FAILED", "루트를 만들지 못했어요. 잠시 후 다시 시도해 주세요.");
@@ -191,29 +190,97 @@ public class AiRouteService {
         return b == null ? null : b.doubleValue();
     }
 
+    // ── 하루 틀 ─────────────────────────────────────────
+
+    /** 관람 칸에 들어갈 수 있는 분류. 행사도 관람으로 본다. */
+    private static final Set<String> SIGHTS = Set.of("문화", "체험", "전통시장", "공예");
+    private static final Set<String> EVENTS = Set.of("행사", "전통 행사");
+
+    /** 하루 틀의 한 칸. kinds 는 이 칸에 들어갈 수 있는 후보 분류. */
+    record Slot(int no, String time, String label, Set<String> kinds) {}
+
+    /**
+     * 고른 테마로 하루 틀을 서버가 정한다.
+     *
+     * 처음에는 "점심 1회, 카페 1곳, 숙소는 마지막" 같은 규칙을 프롬프트로만 부탁했는데,
+     * 모델이 매번 어겼다(맛집 연달아, 카페 두 곳, 카페에 '식당에서 식사' 이유). 규칙을 구조로
+     * 옮겨, AI는 칸마다 허용된 분류 안에서 한 곳만 고르게 한다. 후보가 없는 칸은 만들지 않는다.
+     */
+    static List<Slot> slots(List<String> categories, List<Candidate> candidates) {
+        Set<String> present = new HashSet<>();
+        for (Candidate k : candidates) present.add(k.category());
+
+        Set<String> sights = new HashSet<>();
+        for (String cat : categories) if (SIGHTS.contains(cat) && present.contains(cat)) sights.add(cat);
+        // 행사는 오후 관람 첫 칸 하나에만 허용한다. 모든 관람 칸에 열어 두면 같은 공연이 두 번
+        // 들어가거나(회차별로 행이 따로 있다) 야간 행사가 오전 10시에 들어갔다.
+        // 관람 테마를 하나라도 골랐을 때만 섞는다(맛집·카페만 고른 사람에게 공연을 넣지 않는다).
+        Set<String> sightsOrEvent = new HashSet<>(sights);
+        if (!sights.isEmpty()) for (String e : EVENTS) if (present.contains(e)) sightsOrEvent.add(e);
+        boolean food = categories.contains("맛집") && present.contains("맛집");
+        boolean cafe = categories.contains("카페") && present.contains("카페");
+        boolean stay = categories.contains("한옥스테이") && present.contains("한옥스테이");
+        boolean sight = !sights.isEmpty();
+
+        List<String[]> plan = new ArrayList<>(); // {시각, 이름, 분류 구분}
+        if (sight) {
+            plan.add(new String[]{"10:00", "오전 관람", "S"});
+            plan.add(new String[]{"11:00", "오전 관람", "S"});
+        }
+        if (food) plan.add(new String[]{"12:30", "점심", "맛집"});
+        if (cafe) plan.add(new String[]{"14:00", "오후 카페", "카페"});
+        if (sight) {
+            plan.add(new String[]{cafe ? "15:30" : "14:00", "오후 관람", "SE"});
+            if (!cafe) plan.add(new String[]{"15:30", "오후 관람", "S"});
+        }
+        // 관람 없이 먹고 쉬는 코스는 저녁까지 넣어야 하루가 된다
+        if (food && plan.size() < 4) plan.add(new String[]{"18:00", "저녁", "맛집"});
+        if (stay) plan.add(new String[]{"18:30", "숙소", "한옥스테이"});
+
+        List<Slot> slots = new ArrayList<>();
+        for (String[] p : plan) {
+            Set<String> kinds = switch (p[2]) {
+                case "S" -> sights;
+                case "SE" -> sightsOrEvent;
+                default -> Set.of(p[2]);
+            };
+            slots.add(new Slot(slots.size() + 1, p[0], p[1], kinds));
+        }
+        return slots.size() > MAX_STOPS ? slots.subList(0, MAX_STOPS) : slots;
+    }
+
     // ── 프롬프트 ─────────────────────────────────────────
 
     private static String systemPrompt() {
         return """
                 너는 한국 전통문화 여행 서비스 '벼리'의 하루 여행 코스 설계자다.
-                규칙:
-                - 반드시 사용자가 준 후보 목록 안에서만 고른다. 목록에 없는 장소를 만들지 않는다.
-                - 4~6곳을 고른다. 좌표를 보고 이동이 짧아지도록 순서를 정한다.
-                - 하루 흐름을 지킨다: 오전은 관람·체험, 점심 무렵 맛집, 오후 카페·시장 순이 자연스럽다.
-                - 맛집은 최대 2곳, 카페는 최대 1곳. 행사가 있으면 어울릴 때 1곳까지 넣는다.
-                - time 은 방문 시작 시각(HH:mm, 09:00~20:00).
-                - reason 은 왜 이 순서에 이곳인지 한국어 한 문장, 40자 이내.
-                  운영시간·가격·전화번호처럼 목록에 없는 사실은 쓰지 않는다.
+                하루 틀(칸 목록)과 후보 목록이 주어진다. 칸마다 그 칸의 허용 분류에 속한 후보를
+                정확히 1곳씩 고른다. 목록에 없는 장소를 만들지 않고, 같은 장소를 두 번 쓰지 않는다.
+
+                [동선]
+                - 좌표를 보고 앞 칸 장소와 가까운 곳을 고른다. 위도·경도 0.01 차이는 약 1km다.
+                - 연속한 두 곳은 되도록 1km 이내. 멀리 갔다가 되돌아오는 선택은 피한다.
+
+                [문장]
+                - reason 은 왜 이 칸에 이곳을 골랐는지 한국어 한 문장 35자 이내.
+                  근거는 이름·분류·시간대·앞 장소와의 거리뿐이다. 메뉴·전시 내용·체험 종류·운영시간·
+                  가격처럼 목록에 없는 사실은 추측해서 쓰지 않는다.
+                  좋은 예: "앞 장소에서 걸어갈 수 있는 거리예요", "점심 시간대라 근처 식당을 골랐어요"
+                  나쁜 예: "전통 차를 즐길 수 있어요"(목록에 없는 사실)
                 - title 은 20자 이내, summary 는 코스 전체를 소개하는 한 문장 80자 이내.
                 """;
     }
 
-    private static String userPrompt(Condition c, List<Candidate> candidates) {
+    private static String userPrompt(Condition c, List<Slot> slots, List<Candidate> candidates) {
         StringBuilder sb = new StringBuilder()
                 .append("지역: ").append(c.areaName()).append('\n')
                 .append("날짜: ").append(c.date()).append('\n')
-                .append("원하는 테마: ").append(String.join(", ", c.categories())).append('\n')
-                .append("후보 (ID | 이름 | 분류 | 위도,경도):\n");
+                .append("하루 틀 (칸 번호 | 시각 | 이름 | 허용 분류):\n");
+        for (Slot sl : slots) {
+            sb.append(sl.no()).append(" | ").append(sl.time()).append(" | ").append(sl.label()).append(" | ")
+                    .append(String.join("/", new TreeSet<>(sl.kinds()))).append('\n');
+        }
+        sb.append("후보 (ID | 이름 | 분류 | 위도,경도):\n");
         for (Candidate k : candidates) {
             sb.append(k.key()).append(" | ").append(k.name()).append(" | ").append(k.category()).append(" | ")
                     .append(k.lat() == null ? "-" : String.format("%.4f,%.4f", k.lat(), k.lng())).append('\n');
@@ -222,14 +289,14 @@ public class AiRouteService {
     }
 
     static Map<String, Object> schema() {
-        Map<String, Object> stop = obj(Map.of(
+        Map<String, Object> pick = obj(Map.of(
+                "slot", Map.of("type", "integer"),
                 "id", Map.of("type", "string"),
-                "time", Map.of("type", "string"),
                 "reason", Map.of("type", "string")));
         return obj(Map.of(
                 "title", Map.of("type", "string"),
                 "summary", Map.of("type", "string"),
-                "stops", Map.of("type", "array", "items", stop)));
+                "picks", Map.of("type", "array", "items", pick)));
     }
 
     /** strict 모드: 모든 필드 required, 추가 필드 금지. */
@@ -244,22 +311,26 @@ public class AiRouteService {
 
     // ── 응답 검증 ─────────────────────────────────────────
 
-    /** AI 응답을 후보와 대조한다. 쓸 수 있는 곳이 MIN_STOPS 미만이면 null. */
-    static Preview toPreview(JsonNode answer, List<Candidate> candidates, LocalDate date) {
+    /**
+     * AI 응답을 틀·후보와 대조한다. 칸의 허용 분류가 아니거나, 후보에 없거나, 이미 쓴 장소면 그 칸은
+     * 비운다. 시각은 AI가 아니라 틀에서 가져온다. 채운 칸이 MIN_STOPS 미만이면 null.
+     */
+    static Preview toPreview(JsonNode answer, List<Slot> slots, List<Candidate> candidates, LocalDate date) {
         Map<String, Candidate> byKey = new LinkedHashMap<>();
         for (Candidate k : candidates) byKey.put(k.key(), k);
+        Map<Integer, JsonNode> bySlot = new LinkedHashMap<>();
+        for (JsonNode p : answer.path("picks")) bySlot.putIfAbsent(p.path("slot").asInt(-1), p);
 
         List<Stop> stops = new ArrayList<>();
-        Set<String> seen = new HashSet<>();
-        for (JsonNode s : answer.path("stops")) {
-            String key = s.path("id").asText("").strip();
+        Set<String> used = new HashSet<>();
+        for (Slot sl : slots) {
+            JsonNode p = bySlot.get(sl.no());
+            if (p == null) continue;
+            String key = p.path("id").asText("").strip();
             Candidate k = byKey.get(key);
-            if (k == null || !seen.add(key)) continue; // 지어낸 ID·중복은 버린다
-            String time = s.path("time").asText("").strip();
+            if (k == null || !sl.kinds().contains(k.category()) || !used.add(key)) continue;
             stops.add(new Stop(k.targetType(), k.targetId(), k.name(), k.category(), k.imageUrl(),
-                    k.lat(), k.lng(), TIME.matcher(time).matches() ? time : null,
-                    clip(s.path("reason").asText(""), 60)));
-            if (stops.size() == MAX_STOPS) break;
+                    k.lat(), k.lng(), sl.time(), clip(p.path("reason").asText(""), 60)));
         }
         if (stops.size() < MIN_STOPS) return null;
 
