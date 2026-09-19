@@ -18,7 +18,11 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
     @Query("update Venue v set v.avgRating = :avg, v.reviewCount = :cnt where v.id = :id")
     void updateRating(@Param("id") Long id, @Param("avg") BigDecimal avg, @Param("cnt") int cnt);
 
-    List<Venue> findByCreatedByUserIdOrderByCreatedAtDesc(Long userId);
+    /** 내가 등록한 장소. 루트에 넣으려고 카카오에서 고른 개인 장소(source=KAKAO)는 빼야 해서 source 로 거른다. */
+    List<Venue> findByCreatedByUserIdAndSourceOrderByCreatedAtDesc(Long userId, String source);
+
+    /** 같은 사용자가 카카오에서 같은 곳을 다시 고르면 재사용한다. */
+    Optional<Venue> findFirstByCreatedByUserIdAndKakaoPlaceId(Long userId, String kakaoPlaceId);
 
     Optional<Venue> findByTourContentId(String tourContentId);
 

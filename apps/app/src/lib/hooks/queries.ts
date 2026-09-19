@@ -3,8 +3,8 @@ import { blockUser, fetchBlockedUsers, unblockUser } from '../api/account';
 import { fetchAiStatus } from '../api/ai';
 import { fetchCourseDetail, fetchCourses } from '../api/courses';
 import {
-  addItineraryItem, createItinerary, deleteItinerary, deleteItineraryItem,
-  fetchItinerary, fetchItineraryRoute, fetchMyItineraries,
+  addItineraryItem, addPlaceItem, createItinerary, deleteItinerary, deleteItineraryItem,
+  fetchItinerary, fetchItineraryRoute, fetchMyItineraries, type KakaoPlace,
 } from '../api/itineraries';
 import { fetchPerformance, fetchPerformances, PerformanceFilter } from '../api/performances';
 import { createReview, deleteReview, fetchMyReviews, fetchReviews, reportReview } from '../api/reviews';
@@ -206,6 +206,11 @@ export function useItineraryItemMutation(itineraryId: number) {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['itinerary', itineraryId] });
   return {
     add: useMutation({ mutationFn: (body: Parameters<typeof addItineraryItem>[1]) => addItineraryItem(itineraryId, body), onSuccess: invalidate }),
+    addPlace: useMutation({
+      mutationFn: (v: { place: KakaoPlace; visitDate: string; sortOrder?: number }) =>
+        addPlaceItem(itineraryId, v.place, v.visitDate, v.sortOrder),
+      onSuccess: invalidate,
+    }),
     remove: useMutation({ mutationFn: (itemId: number) => deleteItineraryItem(itineraryId, itemId), onSuccess: invalidate }),
   };
 }

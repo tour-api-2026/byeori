@@ -159,7 +159,7 @@ public class VenueService {
     }
 
     public List<VenueResponse> listMine(Long userId) {
-        return repo.findByCreatedByUserIdOrderByCreatedAtDesc(userId).stream().map(VenueResponse::from).toList();
+        return repo.findByCreatedByUserIdAndSourceOrderByCreatedAtDesc(userId, "USER").stream().map(VenueResponse::from).toList();
     }
 
     @Transactional

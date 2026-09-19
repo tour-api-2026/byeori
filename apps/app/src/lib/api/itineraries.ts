@@ -14,6 +14,8 @@ export type ItineraryItem = {
   sortOrder: number;
   plannedTime: string | null;
   memo: string | null;
+  lat: number | null;
+  lng: number | null;
 };
 
 export type ItineraryDetail = {
@@ -60,4 +62,37 @@ export function deleteItineraryItem(id: number, itemId: number): Promise<void> {
 
 export function fetchItineraryRoute(id: number, priority = 'RECOMMEND'): Promise<ItineraryRoute> {
   return unwrap<ItineraryRoute>(api.get<ApiEnvelope<ItineraryRoute>>(`/itineraries/${id}/route`, { params: { priority } }));
+}
+
+/** 카카오에서 찾은 장소(벼리 DB 밖). 서버 PlaceController.PlaceResult 와 같다. */
+export type KakaoPlace = {
+  kakaoPlaceId: string;
+  name: string;
+  category: string;          // 벼리 분류(맛집·카페·문화)
+  categoryName: string | null; // 카카오 원래 분류(국밥·한식 등, 표시용)
+  address: string;
+  phone: string;
+  lat: number;
+  lng: number;
+};
+
+export function searchKakaoPlaces(query: string, near?: { lat: number; lng: number } | null): Promise<KakaoPlace[]> {
+  return unwrap<KakaoPlace[]>(api.get<ApiEnvelope<KakaoPlace[]>>('/places/search', {
+    params: { query, lat: near?.lat, lng: near?.lng },
+  }));
+}
+
+/** 카카오 장소를 루트에 넣는다. 서버가 나만 보는 장소로 저장한다. */
+export function addPlaceItem(id: number, place: KakaoPlace, visitDate: string, sortOrder?: number): Promise<ItineraryItem> {
+  return unwrap<ItineraryItem>(api.post<ApiEnvelope<ItineraryItem>>(`/itineraries/${id}/items/place`, {
+    kakaoPlaceId: place.kakaoPlaceId,
+    name: place.name,
+    address: place.address,
+    category: place.category === '맛집' ? 'FD6' : place.category === '카페' ? 'CE7' : '',
+    phone: place.phone,
+    lat: place.lat,
+    lng: place.lng,
+    visitDate,
+    sortOrder,
+  }));
 }

@@ -4,6 +4,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert, ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCourseDetailQuery, useCreateItineraryMutation } from '@/lib/hooks/queries';
+import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -15,14 +16,22 @@ export default function CourseDetailScreen() {
   const insets = useSafeAreaInsets();
   const { data, isLoading } = useCourseDetailQuery(Number(id));
   const create = useCreateItineraryMutation();
+  const isLoggedIn = useAuthStore((st) => st.isLoggedIn);
 
   const copyToItinerary = () => {
     if (!data) return;
+    // 로그인 전이면 담을 곳이 없다. 실패 알림은 웹에서 뜨지 않아 아무 반응이 없는 것처럼 보였다.
+    if (!isLoggedIn) {
+      router.push('/login');
+      return;
+    }
     const today = todayIso();
     create.mutate(
       { title: data.title, startDate: today, endDate: today, sourceType: 'CURATED', sourceCourseId: data.id },
       {
-        onSuccess: (it) => router.push(`/itinerary/${it.id}`),
+        // 편집 화면이 아니라 내 루트 탭으로 보낸다. 편집 화면에서 뒤로 가면 루트 탐색으로
+        // 돌아와 담기가 안 된 것처럼 보였다. 오늘 날짜라 내 루트의 대표 카드로 뜬다.
+        onSuccess: () => router.dismissTo('/routes'),
         onError: (e: any) => Alert.alert('담기 실패', e?.message ?? '오류'),
       },
     );
