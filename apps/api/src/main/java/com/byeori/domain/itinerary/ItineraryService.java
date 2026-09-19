@@ -114,7 +114,11 @@ public class ItineraryService {
         if (req.endDate().isBefore(req.startDate())) {
             throw new BadRequestException("ITINERARY_INVALID", "종료일은 시작일보다 앞설 수 없습니다.");
         }
-        String sourceType = "CURATED".equals(req.sourceType()) ? "CURATED" : "CUSTOM";
+        String sourceType = switch (req.sourceType() == null ? "" : req.sourceType()) {
+            case "CURATED" -> "CURATED";
+            case "AI" -> "AI";
+            default -> "CUSTOM";
+        };
         Itinerary saved = repo.save(new Itinerary(userId, req.title(), req.startDate(), req.endDate(),
                 sourceType, sourceType.equals("CURATED") ? req.sourceCourseId() : null));
 
@@ -124,6 +128,19 @@ public class ItineraryService {
             for (CuratedCourseItem ci : courseItems) {
                 itemRepo.save(new ItineraryItem(saved.getId(), ci.getPerformanceId(), ci.getVenueId(),
                         req.startDate(), ci.getSortOrder(), ci.getRecommendedTime(), ci.getNote()));
+            }
+        }
+
+        // AI 루트 저장: 미리보기의 방문지를 순서대로 담는다. 저장 날짜는 일정 시작일로 고정.
+        if (sourceType.equals("AI") && req.items() != null) {
+            if (req.items().size() > 10) {
+                throw new BadRequestException("ITINERARY_INVALID", "한 번에 담을 수 있는 장소는 10곳까지예요.");
+            }
+            int order = 0;
+            for (ItemRequest it : req.items()) {
+                ContentTarget t = new ContentTarget(ContentType.from(it.targetType()), it.targetId());
+                itemRepo.save(new ItineraryItem(saved.getId(), t.performanceId(), t.venueId(),
+                        req.startDate(), order++, it.plannedTime(), it.memo()));
             }
         }
         return get(userId, saved.getId());

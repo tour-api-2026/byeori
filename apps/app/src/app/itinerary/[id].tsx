@@ -142,6 +142,8 @@ function Editor({ id }: { id: number }) {
               <View style={{ flex: 1 }}>
                 <Text style={styles.stopName}>{it.name}</Text>
                 <Text style={styles.stopMeta}>{it.targetType === 'PERFORMANCE' ? '행사' : '장소'}{it.plannedTime ? ` · ${it.plannedTime}` : ''}</Text>
+                {/* AI 루트는 추천 이유를 메모로 저장한다 */}
+                {it.memo ? <Text style={styles.stopMemo}>{it.memo}</Text> : null}
               </View>
               <Pressable onPress={() => remove.mutate(it.id)} hitSlop={8} style={styles.delBtn}>
                 <Text style={styles.delText}>제거</Text>
@@ -220,6 +222,7 @@ const styles = StyleSheet.create({
   stopNumText: { color: colors.white, fontSize: 12, fontWeight: '800' },
   stopName: { fontSize: 15, fontWeight: '700', color: colors.text },
   stopMeta: { fontSize: 12, color: colors.textFaint, marginTop: 2 },
+  stopMemo: { fontSize: 12, color: colors.textSub, marginTop: 4, lineHeight: 17 },
   delBtn: { borderWidth: 1, borderColor: colors.danger, borderRadius: radius.sm, paddingHorizontal: 12, paddingVertical: 6 },
   delText: { fontSize: 12, color: colors.danger, fontWeight: '700' },
   // 추가하기

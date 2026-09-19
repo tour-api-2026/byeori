@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { blockUser, fetchBlockedUsers, unblockUser } from '../api/account';
+import { fetchAiStatus } from '../api/ai';
 import { fetchCourseDetail, fetchCourses } from '../api/courses';
 import {
   addItineraryItem, createItinerary, deleteItinerary, deleteItineraryItem,
@@ -176,6 +177,12 @@ export function useToggleWishlistMutation() {
 }
 
 // ---------- 여행일지 ----------
+/** AI 루트 사용 가능 여부. 서버에 키가 없으면 enabled=false 라 버튼을 숨긴다. */
+export function useAiStatusQuery() {
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  return useQuery({ queryKey: ['ai-status', isLoggedIn], queryFn: fetchAiStatus, staleTime: 60_000 });
+}
+
 export function useMyItinerariesQuery() {
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   return useQuery({ queryKey: ['itineraries'], queryFn: fetchMyItineraries, enabled: isLoggedIn });

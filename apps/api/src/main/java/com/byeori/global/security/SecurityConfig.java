@@ -49,6 +49,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/users/me/blocks/**").authenticated()
                         .requestMatchers("/api/v1/wishlists/**").authenticated()
                         .requestMatchers("/api/v1/itineraries/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/ai/routes").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/venues/mine").authenticated()
                         // 리뷰/장소 쓰기
                         .requestMatchers(HttpMethod.POST, "/api/v1/reviews", "/api/v1/reviews/**").authenticated()

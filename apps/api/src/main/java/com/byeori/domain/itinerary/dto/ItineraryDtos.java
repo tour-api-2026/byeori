@@ -8,9 +8,10 @@ import java.util.List;
 public final class ItineraryDtos {
     private ItineraryDtos() {}
 
+    /** items 는 AI 루트를 저장할 때 방문지를 한 번에 넣는 용도(sourceType=AI). */
     public record CreateRequest(
             String title, LocalDate startDate, LocalDate endDate,
-            String sourceType, Long sourceCourseId) {}
+            String sourceType, Long sourceCourseId, List<ItemRequest> items) {}
 
     public record UpdateRequest(String title, LocalDate startDate, LocalDate endDate) {}
 

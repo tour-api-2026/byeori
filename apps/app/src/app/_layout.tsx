@@ -67,6 +67,7 @@ export default function RootLayout() {
           <Stack.Screen name="my/blocked" options={{ title: '차단한 사용자' }} />
           <Stack.Screen name="my/service-info" options={{ title: '서비스 정보' }} />
           <Stack.Screen name="my/profile" options={{ title: '프로필 수정' }} />
+          <Stack.Screen name="ai-route" options={{ title: 'AI 루트 만들기' }} />
         </Stack>
       </SafeAreaProvider>
     </QueryClientProvider>

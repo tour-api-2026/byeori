@@ -40,6 +40,13 @@ byeori:
   maps:
     # 카카오모빌리티 길찾기(여러 경유지) REST 키 — 로그인 키와 동일 값 재사용. 서버 전용.
     kakao-rest-key: ${KAKAO_REST_KEY:}
+  ai:
+    # AI 루트 생성. 키가 비어 있으면 기능 자체가 꺼진다(앱은 버튼을 숨긴다). 서버 전용.
+    openai-api-key: ${OPENAI_API_KEY:}
+    openai-model: ${OPENAI_MODEL:gpt-4o-mini}
+    # 비용 상한: 사용자당 하루, 서비스 전체 하루 생성 횟수
+    daily-limit-per-user: ${AI_DAILY_LIMIT_PER_USER:10}
+    daily-limit-total: ${AI_DAILY_LIMIT_TOTAL:300}
 
 server:
   port: ${SERVER_PORT:8080}
