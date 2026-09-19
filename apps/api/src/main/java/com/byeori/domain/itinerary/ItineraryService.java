@@ -11,6 +11,7 @@ import com.byeori.global.content.ContentTarget;
 import com.byeori.global.content.ContentType;
 import com.byeori.global.exception.BadRequestException;
 import com.byeori.global.exception.NotFoundException;
+import com.byeori.global.external.KakaoLocalClient;
 import com.byeori.global.external.KakaoMobilityClient;
 import com.byeori.global.external.dto.KakaoRoute;
 import java.math.BigDecimal;
@@ -172,6 +173,40 @@ public class ItineraryService {
         return toItemResponse(saved);
     }
 
+    /**
+     * 카카오에서 고른 장소를 루트에 넣는다. 같은 사용자가 같은 곳을 이미 넣은 적이 있으면 그 장소를
+     * 재사용하고, 없으면 그 사용자만 보는 장소로 만든다.
+     */
+    @Transactional
+    public ItemResponse addPlaceItem(Long userId, Long id, PlaceItemRequest req) {
+        own(userId, id);
+        if (req == null || req.visitDate() == null) {
+            throw new BadRequestException("ITEM_INVALID", "방문 날짜는 필수입니다.");
+        }
+        String kakaoId = req.kakaoPlaceId() == null ? "" : req.kakaoPlaceId().strip();
+        String name = req.name() == null ? "" : req.name().strip();
+        if (!kakaoId.matches("\\d{1,20}") || name.isEmpty() || name.length() > 100) {
+            throw new BadRequestException("PLACE_INVALID", "장소 정보가 올바르지 않아요.");
+        }
+        if (req.lat() == null || req.lng() == null
+                || req.lat() < 33 || req.lat() > 39 || req.lng() < 124 || req.lng() > 132) {
+            throw new BadRequestException("PLACE_INVALID", "국내 장소만 추가할 수 있어요.");
+        }
+        Venue venue = venueRepo.findFirstByCreatedByUserIdAndKakaoPlaceId(userId, kakaoId)
+                .orElseGet(() -> venueRepo.save(Venue.privatePlace(userId, kakaoId, name,
+                        clip(req.address(), 300), BigDecimal.valueOf(req.lat()), BigDecimal.valueOf(req.lng()),
+                        KakaoLocalClient.toByeoriCategory(req.category()), clip(req.phone(), 30))));
+        ItineraryItem saved = itemRepo.save(new ItineraryItem(id, null, venue.getId(),
+                req.visitDate(), req.sortOrder(), null, null));
+        return toItemResponse(saved);
+    }
+
+    private static String clip(String s, int max) {
+        if (s == null || s.isBlank()) return null;
+        String t = s.strip();
+        return t.length() > max ? t.substring(0, max) : t;
+    }
+
     @Transactional
     public ItemResponse updateItem(Long userId, Long id, Long itemId, ItemRequest req) {
         own(userId, id);
@@ -201,14 +236,16 @@ public class ItineraryService {
     private ItemResponse toItemResponse(ItineraryItem item) {
         ContentTarget t = ContentTarget.of(item.getPerformanceId(), item.getVenueId());
         String name = null, image = null;
+        BigDecimal lat = null, lng = null;
         if (t.targetType() == ContentType.VENUE) {
             Venue v = venueRepo.findById(t.targetId()).orElse(null);
-            if (v != null) { name = v.getName(); image = v.getImageUrl(); }
+            if (v != null) { name = v.getName(); image = v.getImageUrl(); lat = v.getLat(); lng = v.getLng(); }
         } else {
             Performance p = performanceRepo.findById(t.targetId()).orElse(null);
-            if (p != null) { name = p.getTitle(); image = p.getPosterImageUrl(); }
+            if (p != null) { name = p.getTitle(); image = p.getPosterImageUrl(); lat = p.getLat(); lng = p.getLng(); }
         }
         return new ItemResponse(item.getId(), t.targetType().name(), t.targetId(), name, image,
-                item.getVisitDate(), item.getSortOrder(), item.getPlannedTime(), item.getMemo());
+                item.getVisitDate(), item.getSortOrder(), item.getPlannedTime(), item.getMemo(),
+                lat == null ? null : lat.doubleValue(), lng == null ? null : lng.doubleValue());
     }
 }

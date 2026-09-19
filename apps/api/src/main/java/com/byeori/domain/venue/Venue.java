@@ -48,6 +48,8 @@ public class Venue {
     private String detailContentId;
     private LocalDateTime syncedAt;
     private Long createdByUserId;
+    /** 카카오 로컬에서 골라 루트에 넣은 개인 장소의 카카오 장소 ID. */
+    private String kakaoPlaceId;
     private String visibility;
     private LocalDateTime createdAt;
 
@@ -68,6 +70,31 @@ public class Venue {
         v.description = description;
         v.source = "USER";
         v.visibility = "PUBLIC";
+        v.status = "ACTIVE";
+        v.hanbokDiscount = false;
+        v.avgRating = BigDecimal.ZERO;
+        v.reviewCount = 0;
+        v.createdByUserId = userId;
+        v.createdAt = LocalDateTime.now();
+        return v;
+    }
+
+    /**
+     * 카카오 로컬 검색에서 골라 루트에 넣은 장소. 고른 사람만 쓰는 장소라 지도·검색·목록에는
+     * 나오지 않는다(목록 조회는 모두 visibility = 'PUBLIC' 만 본다).
+     */
+    public static Venue privatePlace(Long userId, String kakaoPlaceId, String name, String address,
+                                     BigDecimal lat, BigDecimal lng, String category, String phone) {
+        Venue v = new Venue();
+        v.kakaoPlaceId = kakaoPlaceId;
+        v.name = name;
+        v.address = address;
+        v.lat = lat;
+        v.lng = lng;
+        v.category = category;
+        v.phone = phone;
+        v.source = "KAKAO";
+        v.visibility = "PRIVATE";
         v.status = "ACTIVE";
         v.hanbokDiscount = false;
         v.avgRating = BigDecimal.ZERO;

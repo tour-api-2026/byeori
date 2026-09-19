@@ -105,9 +105,10 @@ export default function AiRouteScreen() {
     setBusy('save');
     setError(null);
     try {
-      const saved = await saveAiRoute(preview);
+      await saveAiRoute(preview);
       await qc.invalidateQueries({ queryKey: ['itineraries'] });
-      router.replace(`/itinerary/${saved.id}`);
+      // 추천 코스 담기와 같이 내 루트 탭으로 보낸다(오늘·가까운 날짜라 대표 카드로 뜬다)
+      router.dismissTo('/routes');
     } catch (e: any) {
       setError(e?.message ?? '저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
       setBusy(null);

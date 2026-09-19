@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Calendar } from '@/components/Calendar';
+import PlacePicker from '@/components/PlacePicker';
 import {
-  useCreateItineraryMutation, useItineraryItemMutation, useItineraryQuery, useVenuesQuery,
+  useCreateItineraryMutation, useItineraryItemMutation, useItineraryQuery,
 } from '@/lib/hooks/queries';
 import { colors, radius, shadow, space } from '@/lib/theme';
 
@@ -79,10 +79,9 @@ function Editor({ id }: { id: number }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data, isLoading } = useItineraryQuery(id);
-  const { add, remove } = useItineraryItemMutation(id);
+  const { add, addPlace, remove } = useItineraryItemMutation(id);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const venues = useVenuesQuery({ size: 30 });
 
   if (isLoading || !data) return <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>;
 
@@ -91,6 +90,11 @@ function Editor({ id }: { id: number }) {
   data.items.forEach((it) => { (byDate[it.visitDate] ||= []).push(it); });
   const dates = Object.keys(byDate).sort();
   const activeDay = selectedDay ?? data.startDate;
+  // 장소 추가 창의 "이 루트 주변" 기준: 그날 마지막으로 담은 곳(없으면 루트 전체의 마지막)
+  const dayItems = byDate[activeDay] ?? [];
+  const withCoords = (arr: typeof data.items) => [...arr].reverse().find((it) => it.lat != null && it.lng != null);
+  const last = withCoords(dayItems) ?? withCoords(data.items);
+  const near = last ? { lat: last.lat as number, lng: last.lng as number } : null;
 
   return (
     <View style={styles.safe}>
@@ -158,32 +162,21 @@ function Editor({ id }: { id: number }) {
         </Pressable>
       </ScrollView>
 
-      {/* 장소 선택 모달 */}
-      <Modal visible={pickerOpen} animationType="slide" transparent onRequestClose={() => setPickerOpen(false)}>
-        <View style={styles.modalBg}>
-          <View style={styles.modal}>
-            <View style={styles.modalHead}>
-              <Text style={styles.modalTitle}>장소 추가</Text>
-              <Pressable onPress={() => setPickerOpen(false)}><Ionicons name="close" size={22} color={colors.text} /></Pressable>
-            </View>
-            <ScrollView>
-              {venues.data?.content.map((v) => (
-                <Pressable
-                  key={v.id}
-                  style={styles.pickRow}
-                  onPress={() => {
-                    add.mutate({ targetType: 'VENUE', targetId: v.id, visitDate: activeDay });
-                    setPickerOpen(false);
-                  }}>
-                  <Image source={v.imageUrl} style={styles.pickImg} contentFit="cover" />
-                  <Text style={styles.pickName}>{v.name}</Text>
-                  <Ionicons name="add-circle" size={22} color={colors.primary} style={{ marginLeft: 'auto' }} />
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      {/* 장소 선택: 이름 검색 · 이 루트 주변 · 카카오맵에서 직접 찾기 */}
+      <PlacePicker
+        visible={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        near={near}
+        excludeIds={data.items.filter((it) => it.targetType === 'VENUE').map((it) => it.targetId)}
+        onPickVenue={(venueId) => {
+          add.mutate({ targetType: 'VENUE', targetId: venueId, visitDate: activeDay, sortOrder: dayItems.length });
+          setPickerOpen(false);
+        }}
+        onPickPlace={(place) => {
+          addPlace.mutate({ place, visitDate: activeDay, sortOrder: dayItems.length });
+          setPickerOpen(false);
+        }}
+      />
     </View>
   );
 }
@@ -228,11 +221,4 @@ const styles = StyleSheet.create({
   // 추가하기
   addStop: { backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 15, alignItems: 'center', marginTop: 20 },
   addStopText: { color: colors.white, fontSize: 15, fontWeight: '800' },
-  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  modal: { backgroundColor: colors.bg, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: space.lg, maxHeight: '70%' },
-  modalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  modalTitle: { fontSize: 17, fontWeight: '800', color: colors.text },
-  pickRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
-  pickImg: { width: 48, height: 48, borderRadius: radius.sm, backgroundColor: colors.bgSoft },
-  pickName: { fontSize: 14, fontWeight: '600', color: colors.text },
 });

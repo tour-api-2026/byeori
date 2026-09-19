@@ -19,9 +19,15 @@ public final class ItineraryDtos {
             String targetType, Long targetId, LocalDate visitDate,
             Integer sortOrder, String plannedTime, String memo) {}
 
+    /** lat/lng 는 장소 추가 창이 "이 루트 주변"을 보여주는 기준점으로 쓴다. */
     public record ItemResponse(
             Long id, String targetType, Long targetId, String name, String imageUrl,
-            LocalDate visitDate, int sortOrder, String plannedTime, String memo) {}
+            LocalDate visitDate, int sortOrder, String plannedTime, String memo, Double lat, Double lng) {}
+
+    /** 카카오에서 고른 장소를 루트에 넣는다. 서버가 개인 장소(PRIVATE)로 저장한 뒤 항목을 만든다. */
+    public record PlaceItemRequest(
+            String kakaoPlaceId, String name, String address, String category, String phone,
+            Double lat, Double lng, LocalDate visitDate, Integer sortOrder) {}
 
     public record Summary(
             Long id, String title, LocalDate startDate, LocalDate endDate, String sourceType, int itemCount) {

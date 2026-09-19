@@ -60,6 +60,14 @@ public class ItineraryController {
         return ApiResponse.ok(service.addItem(userId, id, req));
     }
 
+    /** 카카오에서 고른 장소(벼리 DB 밖)를 루트에 넣는다. */
+    @PostMapping("/itineraries/{id}/items/place")
+    public ApiResponse<ItemResponse> addPlaceItem(@AuthenticationPrincipal Long userId,
+                                                  @PathVariable("id") Long id,
+                                                  @RequestBody PlaceItemRequest req) {
+        return ApiResponse.ok(service.addPlaceItem(userId, id, req));
+    }
+
     @PatchMapping("/itineraries/{id}/items/{itemId}")
     public ApiResponse<ItemResponse> updateItem(@AuthenticationPrincipal Long userId,
                                                 @PathVariable("id") Long id, @PathVariable("itemId") Long itemId,
