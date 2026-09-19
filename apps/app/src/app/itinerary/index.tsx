@@ -39,7 +39,7 @@ export default function ItinerariesScreen() {
             <Pressable key={it.id} style={styles.card} onPress={() => router.push(`/itinerary/${it.id}`)}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.title}>{it.title}</Text>
-                <Text style={styles.meta}>{it.startDate} ~ {it.endDate} · {it.itemCount}곳 · {it.sourceType === 'CURATED' ? '추천코스 복사' : '직접 구성'}</Text>
+                <Text style={styles.meta}>{it.startDate} ~ {it.endDate} · {it.itemCount}곳 · {it.sourceType === 'CURATED' ? '추천코스 복사' : it.sourceType === 'AI' ? 'AI 추천' : '직접 구성'}</Text>
               </View>
               <Pressable
                 hitSlop={10}

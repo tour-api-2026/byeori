@@ -1,6 +1,7 @@
 package com.byeori.domain.performance;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -40,4 +41,19 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
                              Pageable pageable);
 
     List<Performance> findByVenueIdOrderByStartDateAsc(Long venueId);
+
+    /** AI 루트 후보: 그날 열리는, 좌표가 있는 행사. */
+    @Query("""
+            select p from Performance p
+            where p.startDate <= :date and p.endDate >= :date
+              and p.lat between :minLat and :maxLat
+              and p.lng between :minLng and :maxLng
+            order by p.traditional desc, p.id asc
+            """)
+    List<Performance> findOnDateInBounds(@Param("date") LocalDate date,
+                                         @Param("minLat") BigDecimal minLat,
+                                         @Param("maxLat") BigDecimal maxLat,
+                                         @Param("minLng") BigDecimal minLng,
+                                         @Param("maxLng") BigDecimal maxLng,
+                                         Pageable pageable);
 }

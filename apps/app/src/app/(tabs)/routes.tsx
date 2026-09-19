@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import LoginRequired from "@/components/LoginRequired";
 import { useTabBarHeight } from "@/components/TabBar";
 import { ItinerarySummary } from "@/lib/api/itineraries";
-import { useItineraryQuery, useMyItinerariesQuery } from "@/lib/hooks/queries";
+import { useAiStatusQuery, useItineraryQuery, useMyItinerariesQuery } from "@/lib/hooks/queries";
 import { useAuthStore } from "@/lib/store/authStore";
 import { colors, fonts, radius, shadow, space } from "@/lib/theme";
 import { segmentColor } from "@/lib/routeColors";
@@ -65,6 +65,7 @@ export default function RoutesScreen() {
   const tabH = useTabBarHeight();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const mine = useMyItinerariesQuery();
+  const aiStatus = useAiStatusQuery();
   const today = todayIso();
   // 지금에 가까운 순으로 정렬: 대표(상단)·목록 모두 이 순서를 따른다.
   const list = [...(mine.data ?? [])].sort((a, b) => {
@@ -107,6 +108,20 @@ export default function RoutesScreen() {
                 </Text>
               </View>
             )}
+            {aiStatus.data?.enabled ? (
+              <Pressable style={styles.aiCard} onPress={() => router.push("/ai-route")}>
+                <View style={styles.aiIcon}>
+                  <Ionicons name="sparkles" size={20} color={colors.white} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.aiTitle}>AI로 하루 코스 만들기</Text>
+                  <Text style={styles.aiDesc}>
+                    지역과 테마만 고르면 벼리의 장소·행사로 코스를 짜 드려요
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+              </Pressable>
+            ) : null}
             <View style={styles.makeCard}>
               <Text style={styles.makeText}>
                 나만의 새로운 루트를{"\n"}만들어 보세요!
@@ -380,6 +395,25 @@ const styles = StyleSheet.create({
   },
   tlEmpty: { fontSize: 13, color: colors.textFaint },
   // 새 루트 만들기 카드
+  aiCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.lg,
+    padding: 16,
+    marginTop: 14,
+  },
+  aiIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  aiTitle: { fontSize: 15, fontFamily: fonts.bold, fontWeight: "800", color: colors.primary },
+  aiDesc: { fontSize: 12, color: colors.textSub, marginTop: 3, lineHeight: 17 },
   makeCard: {
     flexDirection: "row",
     alignItems: "center",

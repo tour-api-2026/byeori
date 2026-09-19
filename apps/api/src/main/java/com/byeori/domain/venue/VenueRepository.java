@@ -94,4 +94,25 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
                        @Param("hanbokDiscount") Boolean hanbokDiscount,
                        @Param("keyword") String keyword,
                        Pageable pageable);
+
+    /**
+     * AI 루트 후보. 사진 있는 장소만, 매번 순서를 섞어 뽑는다.
+     * 같은 조건으로 "다시 만들기"를 눌렀을 때 AI에게 다른 후보가 가야 결과가 달라진다.
+     */
+    @Query(value = """
+            select * from venues
+            where status = 'ACTIVE' and visibility = 'PUBLIC'
+              and image_url is not null and image_url <> ''
+              and lat between :minLat and :maxLat
+              and lng between :minLng and :maxLng
+              and category = :category
+            order by random()
+            limit :limit
+            """, nativeQuery = true)
+    List<Venue> sampleForRoute(@Param("minLat") BigDecimal minLat,
+                               @Param("maxLat") BigDecimal maxLat,
+                               @Param("minLng") BigDecimal minLng,
+                               @Param("maxLng") BigDecimal maxLng,
+                               @Param("category") String category,
+                               @Param("limit") int limit);
 }
