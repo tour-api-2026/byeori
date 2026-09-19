@@ -167,6 +167,7 @@ function Editor({ id }: { id: number }) {
         visible={pickerOpen}
         onClose={() => setPickerOpen(false)}
         near={near}
+        excludeIds={data.items.filter((it) => it.targetType === 'VENUE').map((it) => it.targetId)}
         onPickVenue={(venueId) => {
           add.mutate({ targetType: 'VENUE', targetId: venueId, visitDate: activeDay, sortOrder: dayItems.length });
           setPickerOpen(false);

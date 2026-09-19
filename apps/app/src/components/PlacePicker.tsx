@@ -17,6 +17,8 @@ type Props = {
   onClose: () => void;
   /** "이 루트 주변"의 기준점(보통 마지막 방문지). 없으면 추천 장소를 보여준다. */
   near: { lat: number; lng: number } | null;
+  /** 이미 루트에 담은 장소 id. 목록에서 뺀다. */
+  excludeIds?: number[];
   onPickVenue: (venueId: number) => void;
   onPickPlace: (place: KakaoPlace) => void;
 };
@@ -38,7 +40,7 @@ function useDebounced<T>(value: T, ms = 300) {
  * 검색 전에는 루트의 마지막 장소 주변을 보여준다. 벼리 DB에 없는 식당·카페는
  * 카카오맵에서 찾아 넣는다(서버가 나만 보는 장소로 저장한다).
  */
-export default function PlacePicker({ visible, onClose, near, onPickVenue, onPickPlace }: Props) {
+export default function PlacePicker({ visible, onClose, near, excludeIds = [], onPickVenue, onPickPlace }: Props) {
   const [keyword, setKeyword] = useState('');
   const [category, setCategory] = useState<string>('전체');
   const [mode, setMode] = useState<'byeori' | 'kakao'>('byeori');
@@ -126,7 +128,7 @@ export default function PlacePicker({ visible, onClose, near, onPickVenue, onPic
                     {searching ? '벼리에 등록된 장소 중에는 없어요.' : '주변에 등록된 장소가 없어요. 이름으로 찾아보세요.'}
                   </Text>
                 ) : null}
-                {venues.filter((v) => v.id != null).map((v) => (
+                {venues.filter((v) => v.id != null && !excludeIds.includes(v.id)).map((v) => (
                   <Pressable key={v.id} style={styles.row} onPress={() => onPickVenue(v.id)}>
                     {v.imageUrl ? (
                       <Image source={sized(v.imageUrl, 120, 120)} style={styles.img} contentFit="cover" />
@@ -193,11 +195,12 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   title: { fontSize: 17, fontFamily: fonts.bold, fontWeight: '800', color: colors.text },
   searchBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.white,
+    flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.white,
     borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12, height: 42,
   },
   input: { flex: 1, fontSize: 14, color: colors.text, outlineStyle: 'none' } as any,
-  chipRow: { flexGrow: 0, marginTop: 10 },
+  // 아래 목록이 길면 칩 줄이 눌려 글자가 사라졌다. 높이를 줄이지 않게 고정한다.
+  chipRow: { flexGrow: 0, flexShrink: 0, marginTop: 10 },
   chip: {
     paddingHorizontal: 11, paddingVertical: 6, borderRadius: radius.pill,
     backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border,
