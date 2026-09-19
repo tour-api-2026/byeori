@@ -150,6 +150,9 @@ export async function loginGoogle() {
     redirectUri: activeRedirectUri(),
     responseType: AuthSession.ResponseType.IdToken,
     scopes: ['openid', 'profile', 'email'],
+    // PKCE는 인가 코드 플로우 전용이다. 기본값(true)대로 code_challenge 를 붙이면
+    // 구글이 id_token 요청을 400 invalid_request 로 거부한다.
+    usePKCE: false,
     // id_token implicit 플로우는 nonce 필수
     extraParams: { nonce: Math.random().toString(36).slice(2) + Date.now().toString(36) },
   });
