@@ -5,6 +5,7 @@ import com.byeori.global.external.dto.TourBasic;
 import com.byeori.global.external.dto.TourDetail;
 import com.byeori.global.external.dto.TourFestivalItem;
 import com.byeori.global.external.dto.TourItem;
+import com.byeori.global.external.dto.TourSyncItem;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
@@ -85,63 +86,45 @@ public class TourApiClient {
     }
 
     /**
-     * 위치기반 목록(locationBasedList2). 좌표와 반경으로 주변 장소를 실시간 조회한다.
+     * 동기화 목록(areaBasedSyncList2). 공사가 로컬 저장용으로 제공하는 오퍼레이션이다.
      *
-     * 지도 화면이 보고 있는 영역만 그때그때 받아오므로, 전국 데이터를 미리 저장해 둘 필요가 없다.
-     * 사용자 요청 경로에서 호출되므로 짧은 타임아웃(liveHttp)을 쓰고, 실패하면 빈 목록을 돌려
-     * 호출부가 저장된 데이터로 대체할 수 있게 한다.
+     * areaBasedList2 로 전량을 매번 다시 받으면 1회 약 350건을 호출해야 하는데, 이쪽은
+     * modifiedtime 이후 변경분만 받아 하루 3건이면 끝난다. showflag 로 공사가 내린
+     * 콘텐츠도 알 수 있어 삭제 반영이 가능하다.
      *
-     * @param radius 미터 단위(공사 API 최대 20,000)
-     * @param contentTypeId 0이면 전체 유형
+     * @param modifiedTime yyyyMMdd. 이 날짜 이후 변경분만. null 이면 전량.
      */
-    public List<TourItem> locationBasedList(double lng, double lat, int radius, int contentTypeId, int rows) {
+    public List<TourSyncItem> syncList(int contentTypeId, String modifiedTime, int page, int rows) {
         if (!props.tourApiEnabled()) return List.of();
         try {
-            URI uri = UriComponentsBuilder.fromUriString(BASE + "/locationBasedList2")
+            URI uri = UriComponentsBuilder.fromUriString(BASE + "/areaBasedSyncList2")
                     .queryParam("serviceKey", encKey())
                     .queryParam("MobileOS", "ETC")
                     .queryParam("MobileApp", "byeori")
                     .queryParam("_type", "json")
-                    .queryParam("arrange", "E")            // E = 거리순
-                    .queryParam("mapX", lng)
-                    .queryParam("mapY", lat)
-                    .queryParam("radius", Math.min(radius, 20000))
+                    .queryParam("arrange", "C")   // C = 수정일순
                     .queryParamIfPresent("contentTypeId",
                             Optional.ofNullable(contentTypeId > 0 ? contentTypeId : null))
+                    .queryParamIfPresent("modifiedtime", Optional.ofNullable(modifiedTime))
                     .queryParam("numOfRows", rows)
-                    .queryParam("pageNo", 1)
+                    .queryParam("pageNo", page)
                     .build(true)
                     .toUri();
-            return parseItems(liveHttp.get().uri(uri).retrieve().body(String.class));
+            String body = http.get().uri(uri).retrieve().body(String.class);
+            List<TourSyncItem> out = new ArrayList<>();
+            for (JsonNode n : items(body)) {
+                out.add(new TourSyncItem(
+                        new TourItem(text(n, "contentid"), text(n, "title"), text(n, "addr1"),
+                                text(n, "mapy"), text(n, "mapx"), text(n, "firstimage"),
+                                text(n, "contenttypeid"), text(n, "lclsSystm2"),
+                                text(n, "lclsSystm3"), text(n, "tel")),
+                        text(n, "showflag"), text(n, "modifiedtime")));
+            }
+            return out;
         } catch (Exception e) {
-            log.warn("TourAPI locationBasedList 실패 ({},{}) r={}: {}", lat, lng, radius, e.getMessage());
-            return List.of();
-        }
-    }
-
-    /**
-     * 키워드 검색(searchKeyword2). 지도 검색창에서 사용자가 입력한 말로 실시간 조회한다.
-     */
-    public List<TourItem> searchKeyword(String keyword, int contentTypeId, int rows) {
-        if (!props.tourApiEnabled() || keyword == null || keyword.isBlank()) return List.of();
-        try {
-            URI uri = UriComponentsBuilder.fromUriString(BASE + "/searchKeyword2")
-                    .queryParam("serviceKey", encKey())
-                    .queryParam("MobileOS", "ETC")
-                    .queryParam("MobileApp", "byeori")
-                    .queryParam("_type", "json")
-                    .queryParam("arrange", "A")
-                    .queryParam("keyword", URLEncoder.encode(keyword.trim(), StandardCharsets.UTF_8))
-                    .queryParamIfPresent("contentTypeId",
-                            Optional.ofNullable(contentTypeId > 0 ? contentTypeId : null))
-                    .queryParam("numOfRows", rows)
-                    .queryParam("pageNo", 1)
-                    .build(true)
-                    .toUri();
-            return parseItems(liveHttp.get().uri(uri).retrieve().body(String.class));
-        } catch (Exception e) {
-            log.warn("TourAPI searchKeyword 실패 kw={}: {}", keyword, e.getMessage());
-            return List.of();
+            log.warn("TourAPI syncList 실패 type={} since={} page={}: {}",
+                    contentTypeId, modifiedTime, page, e.getMessage());
+            throw new IllegalStateException("동기화 목록 조회 실패", e);
         }
     }
 

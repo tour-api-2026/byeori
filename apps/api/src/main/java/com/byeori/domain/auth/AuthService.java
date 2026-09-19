@@ -1,6 +1,7 @@
 package com.byeori.domain.auth;
 
 import com.byeori.domain.auth.dto.AuthDtos.*;
+import com.byeori.domain.upload.UploadedImageRepository;
 import com.byeori.domain.user.User;
 import com.byeori.domain.user.UserRepository;
 import com.byeori.global.auth.GoogleClient;
@@ -10,6 +11,8 @@ import com.byeori.global.exception.BadRequestException;
 import com.byeori.global.exception.NotFoundException;
 import com.byeori.global.security.JwtTokenProvider;
 import io.jsonwebtoken.Claims;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -21,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final UploadedImageRepository uploadedImageRepository;
     private final KakaoClient kakaoClient;
     private final GoogleClient googleClient;
     private final JwtTokenProvider tokenProvider;
@@ -52,7 +56,7 @@ public class AuthService {
         User user = userRepository
                 .findByAuthProviderAndProviderUserId(profile.provider(), profile.providerUserId())
                 .map(u -> {
-                    u.updateProfile(profile.nickname(), profile.email(), profile.imageUrl());
+                    u.syncFromProvider(profile.email());
                     return u;
                 })
                 .orElseGet(() -> userRepository.save(User.social(
@@ -126,6 +130,41 @@ public class AuthService {
     public UserSummary me(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("USER_NOT_FOUND", "사용자를 찾을 수 없습니다."));
+        return toSummary(user);
+    }
+
+    /** 프로필 사진으로 받는 값: 우리 업로드 경로(절대 URL이어도 된다). */
+    private static final Pattern UPLOAD_URL =
+            Pattern.compile("^(https?://[^/]+)?/api/v1/uploads/images/([0-9a-f]{32})$");
+
+    /**
+     * 닉네임·프로필 사진 수정.
+     *
+     * 사진은 지우거나(null), 지금 사진을 그대로 두거나, 본인이 올린 이미지로만 바꿀 수 있다.
+     * 아무 외부 URL이나 받으면 남의 업로드나 추적용 이미지를 프로필에 걸 수 있다.
+     */
+    @Transactional
+    public UserSummary updateMe(Long userId, UpdateProfileRequest req) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("USER_NOT_FOUND", "사용자를 찾을 수 없습니다."));
+        String name = req == null || req.name() == null ? "" : req.name().strip();
+        if (name.length() < 2 || name.length() > 20) {
+            throw new BadRequestException("INVALID_NAME", "닉네임은 2~20자로 입력해 주세요.");
+        }
+
+        String image = req.profileImageUrl() == null || req.profileImageUrl().isBlank()
+                ? null : req.profileImageUrl().strip();
+        if (image != null && !image.equals(user.getProfileImageUrl())) {
+            Matcher m = UPLOAD_URL.matcher(image);
+            boolean mine = m.matches() && uploadedImageRepository.findById(m.group(2))
+                    .map(img -> userId.equals(img.getUploaderId()))
+                    .orElse(false);
+            if (!mine) {
+                throw new BadRequestException("INVALID_IMAGE", "직접 올린 사진만 프로필로 쓸 수 있어요.");
+            }
+        }
+
+        user.editProfile(name, image);
         return toSummary(user);
     }
 

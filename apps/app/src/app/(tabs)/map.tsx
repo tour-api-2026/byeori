@@ -20,6 +20,7 @@ import { Chip } from "@/components/Chip";
 import { useTabBarHeight } from "@/components/TabBar";
 import { Rating } from "@/components/Rating";
 import { Venue } from "@/lib/api/types";
+import { CATEGORIES, inKorea } from "@/lib/categories";
 import { useItineraryRouteQuery, useNearbyVenuesQuery, useVenuesQuery } from "@/lib/hooks/queries";
 import { colors, fonts, radius, shadow, space } from "@/lib/theme";
 import { ROUTE_SEGMENT_COLORS } from "@/lib/routeColors";
@@ -30,7 +31,6 @@ const fmtMin = (s: number) => {
   return m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${m}분`;
 };
 
-const CATS = ["전체", "문화", "카페", "체험", "맛집", "한복"];
 const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? "";
 // WebView 문서의 origin. 카카오 개발자센터 Web 플랫폼 사이트 도메인에 등록된 값과 일치해야 한다.
 const KAKAO_WEB_ORIGIN = "https://byeori.seoulride.site";
@@ -157,39 +157,22 @@ export default function MapScreen() {
     return { left: `${8 + x * 84}%`, top: `${10 + y * 78}%` } as const;
   };
 
-  // 지도가 준비됐고 venues가 바뀌면 마커를 다시 주입한다.
-  // 마커로 그릴 대상(한국 범위 안). 선택 인덱스도 이 배열 기준이다.
-  const plotted = useMemo(
-    () =>
-      venues.filter(
-        (v) =>
-          v.lat != null && v.lng != null &&
-          Number(v.lat) >= 33 && Number(v.lat) <= 38.7 &&
-          Number(v.lng) >= 124.5 && Number(v.lng) <= 132,
-      ),
-    [venues],
-  );
+  // 마커로 그릴 대상. 선택 인덱스가 이 배열 기준이므로, 거르는 곳은 여기 한 곳뿐이어야 한다
+  // (두 군데서 걸렀다가 조건이 어긋나면 마커를 눌렀을 때 엉뚱한 장소가 잡힌다).
+  // 지오코딩 실패 placeholder(예: 19.69,117.99)가 섞여 들어와 지도를 외국까지 넓히는 것도 막는다.
+  const plotted = useMemo(() => venues.filter(inKorea), [venues]);
 
   const markerPayload = useMemo(
     () =>
       JSON.stringify(
-        plotted
-          // 한국 범위(위도 33~38.7, 경도 124.5~132) 밖 좌표는 제외 —
-          // 지오코딩 실패 placeholder(예: 19.69,117.99)가 fitAll을 외국까지 넓히는 것 방지.
-          .filter(
-            (v) =>
-              v.lat != null && v.lng != null &&
-              Number(v.lat) >= 33 && Number(v.lat) <= 38.7 &&
-              Number(v.lng) >= 124.5 && Number(v.lng) <= 132,
-          )
-          // 실시간 조회 결과에는 아직 우리 DB에 없는 장소가 섞여 id가 null일 수 있다.
-          // 마커 식별자는 목록 인덱스를 쓴다(선택 시 그대로 되짚는다).
-          .map((v, i) => ({
-            id: i,
-            lat: Number(v.lat),
-            lng: Number(v.lng),
-            category: v.category ?? "",
-          })),
+        // 실시간 조회 결과에는 아직 우리 DB에 없는 장소가 섞여 id가 null일 수 있다.
+        // 마커 식별자는 목록 인덱스를 쓴다(선택 시 그대로 되짚는다).
+        plotted.map((v, i) => ({
+          id: i,
+          lat: Number(v.lat),
+          lng: Number(v.lng),
+          category: v.category ?? "",
+        })),
       ),
     [plotted],
   );
@@ -386,7 +369,7 @@ export default function MapScreen() {
             style={styles.chipsScroll}
             contentContainerStyle={styles.chips}
           >
-            {CATS.map((c) => (
+            {CATEGORIES.map((c) => (
               <Chip
                 key={c}
                 label={c}

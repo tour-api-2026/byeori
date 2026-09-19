@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
@@ -11,6 +12,13 @@ import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts } from '@/lib/theme';
 
 applyGlobalFont();
+
+// 소셜 로그인 팝업이 받은 인가 코드를 원래 창으로 넘기고 닫는다.
+// 웹은 redirect_uri 가 오리진(루트)이라 팝업이 로그인 화면이 아니라 홈으로 돌아온다.
+// 이 호출이 로그인 화면에만 있을 때는 팝업이 코드를 쥔 채 홈을 띄우고 멈춰,
+// 카카오 로그인이 서버(/auth/social)까지 한 번도 닿지 못했다. 어느 화면으로
+// 돌아오든 처리되도록 루트에서 부른다(해당 없으면 아무 일도 하지 않는다).
+WebBrowser.maybeCompleteAuthSession();
 
 export default function RootLayout() {
   useAutoUpdate();
@@ -50,6 +58,7 @@ export default function RootLayout() {
           }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="venue/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="performances/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="login" options={{ headerShown: false, presentation: 'modal' }} />
           <Stack.Screen name="email-login" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
@@ -57,6 +66,7 @@ export default function RootLayout() {
           <Stack.Screen name="performances/traditional" options={{ title: '전통 테마 행사' }} />
           <Stack.Screen name="my/blocked" options={{ title: '차단한 사용자' }} />
           <Stack.Screen name="my/service-info" options={{ title: '서비스 정보' }} />
+          <Stack.Screen name="my/profile" options={{ title: '프로필 수정' }} />
         </Stack>
       </SafeAreaProvider>
     </QueryClientProvider>

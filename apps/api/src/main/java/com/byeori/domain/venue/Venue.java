@@ -126,6 +126,17 @@ public class Venue {
         if (category != null) this.category = category;
         if (imageUrl != null) this.imageUrl = imageUrl;
         if (phone != null) this.phone = phone;
+        this.status = "ACTIVE";   // 내려갔다가 다시 노출된 콘텐츠를 되살린다
+        this.syncedAt = LocalDateTime.now();
+    }
+
+    /**
+     * 공사에서 내린 콘텐츠(showflag=0)를 우리 쪽에서도 내린다.
+     * 조회는 모두 status='ACTIVE'로 거르므로 목록·지도·검색에서 함께 빠진다.
+     * 리뷰·위시리스트가 걸려 있을 수 있어 삭제하지 않고 상태만 바꾼다.
+     */
+    public void deactivateBySync() {
+        this.status = "INACTIVE";
         this.syncedAt = LocalDateTime.now();
     }
 }

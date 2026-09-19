@@ -5,10 +5,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Chip } from '@/components/Chip';
 import { VenueCard } from '@/components/VenueCard';
 import { useLiveSearchQuery, useNearbyVenuesQuery, useVenuesQuery } from '@/lib/hooks/queries';
+import { CATEGORIES } from '@/lib/categories';
 import { REGIONS, regionSpot } from '@/lib/regions';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
-const CATS = ['전체', '문화', '카페', '체험', '맛집', '한복'];
 const PER_PAGE = 6;
 
 export default function SearchScreen() {
@@ -73,7 +73,7 @@ export default function SearchScreen() {
 
       {/* 카테고리 칩 */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chips}>
-        {CATS.map((c) => <Chip key={c} label={c} selected={c === cat} onPress={() => reset(() => setCat(c))} />)}
+        {CATEGORIES.map((c) => <Chip key={c} label={c} selected={c === cat} onPress={() => reset(() => setCat(c))} />)}
       </ScrollView>
       {/* 지역 칩 */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chips}>

@@ -89,17 +89,23 @@ export default function ProfileScreen() {
 
         <Text style={styles.sectionLabel}>내 정보</Text>
         {isLoggedIn ? (
-          <View style={styles.profile}>
+          <Pressable style={styles.profile} onPress={() => router.push('/my/profile')} accessibilityLabel="프로필 수정">
             {user?.profileImageUrl ? (
               <Image source={user.profileImageUrl} style={styles.avatar} contentFit="cover" />
             ) : (
-              <View style={styles.avatar} />
+              <View style={[styles.avatar, styles.avatarEmpty]}>
+                <Ionicons name="person" size={26} color={colors.textFaint} />
+              </View>
             )}
             <View style={{ flex: 1 }}>
               <Text style={styles.name} numberOfLines={1}>{user?.name ?? '벼리 회원'}</Text>
               {!!user?.email && <Text style={styles.email} numberOfLines={1}>{user.email}</Text>}
             </View>
-          </View>
+            <View style={styles.editChip}>
+              <Ionicons name="pencil" size={12} color={colors.primary} />
+              <Text style={styles.editChipText}>수정</Text>
+            </View>
+          </Pressable>
         ) : (
           <Pressable style={styles.loginCard} onPress={() => router.push('/login')}>
             <View style={styles.loginIcon}><Ionicons name="person" size={20} color={colors.primary} /></View>
@@ -142,7 +148,13 @@ const styles = StyleSheet.create({
   loginCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: colors.bgCard, borderRadius: radius.lg, padding: 16, ...shadow.card },
   loginIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.white, borderWidth: 2, borderColor: colors.accent },
+  avatarEmpty: { alignItems: 'center', justifyContent: 'center', borderColor: colors.border },
   name: { fontSize: 18, fontFamily: fonts.bold, fontWeight: '800', color: colors.text },
+  editChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: radius.pill, backgroundColor: colors.primarySoft,
+  },
+  editChipText: { fontSize: 12, fontFamily: fonts.bold, fontWeight: '700', color: colors.primary },
   email: { fontSize: 13, fontFamily: fonts.medium, fontWeight: '500', color: colors.textSub, marginTop: 4 },
   card: { backgroundColor: colors.bgCard, borderRadius: radius.lg, ...shadow.card, overflow: 'hidden' },
   menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 15 },

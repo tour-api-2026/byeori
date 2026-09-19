@@ -1,13 +1,13 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { DimensionValue, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Venue } from '@/lib/api/types';
+import { VenueCardItem } from '@/lib/api/types';
 import { sized } from '@/lib/img';
 import { colors, fonts, radius, shadow } from '@/lib/theme';
 import { Rating } from './Rating';
 
 // 카드: 이미지 + 이름 + 골드 별점 + 태그 (Figma 리디자인). 2열 그리드/가로 스크롤 공용.
-export function VenueCard({ venue, width = '48.5%' }: { venue: Venue; width?: DimensionValue }) {
+export function VenueCard({ venue, width = '48.5%' }: { venue: VenueCardItem; width?: DimensionValue }) {
   const router = useRouter();
   const tags: string[] = [];
   if (venue.hanbokDiscount) tags.push('한복');

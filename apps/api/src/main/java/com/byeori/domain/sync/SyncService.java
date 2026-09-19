@@ -12,6 +12,7 @@ import com.byeori.global.external.dto.KopisItem;
 import com.byeori.global.external.dto.SeoulEventItem;
 import com.byeori.global.external.dto.TourFestivalItem;
 import com.byeori.global.external.dto.TourItem;
+import com.byeori.global.external.dto.TourSyncItem;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -29,9 +30,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class SyncService {
 
-    private static final int[] CONTENT_TYPES = {12, 14, 39}; // 관광지/문화시설/음식점
+    // 관광지·문화시설·음식점에 더해 레포츠(체험), 쇼핑(전통시장·공예), 숙박(한옥)을 받는다.
+    // 쇼핑·숙박은 대부분 우리와 무관해 CategoryMapper 가 null 을 돌려주는 항목을 걸러낸다.
+    private static final int[] CONTENT_TYPES = {12, 14, 39, 28, 38, 32};
     private static final int ROWS = 100;        // 페이지당(최대)
-    private static final int MAX_PAGES = 50;     // 장소(지역×타입별) 안전 상한
+    private static final int MAX_PAGES = 400;    // 유형별 안전 상한(음식점 19,900건 = 199페이지)
     private static final int KOPIS_MAX_PAGES = 300;  // 공연: 전국 단일 스트림이라 상한을 크게(최대 3만건)
     private static final int KOPIS_MONTHS = 12;  // 공연 수집 기간(개월)
     private static final DateTimeFormatter KOPIS_DATE = DateTimeFormatter.ofPattern("yyyy.MM.dd");
@@ -43,9 +46,110 @@ public class SyncService {
     private final SeoulEventClient seoulClient;
     private final RegionResolver regionResolver;
     private final VenueRepository venueRepo;
+    private final SyncLogRepository syncLogRepo;
     private final PerformanceRepository perfRepo;
 
-    /** 장소(관광지·문화시설·음식점) 동기화. 항목별 독립 저장(실패 시 해당 항목만 skip). */
+    /**
+     * 증분 동기화. 공사가 로컬 저장용으로 제공하는 areaBasedSyncList2 를 쓴다.
+     *
+     * modifiedtime 은 "그 날짜에 수정된 것"을 뜻한다. "그 이후 전부"가 아니다
+     * (20260908 → 181건이 전부 수정일 9월 8일, 20200101 → 0건). 그래서 마지막 성공일
+     * 다음날부터 오늘까지 하루씩 훑는다. 날짜 하나만 넘기면 그 하루치만 받고 나머지를
+     * 놓친다.
+     *
+     * 평소에는 2~3일 × 유형 6개 = 십여 건으로 끝난다. 장애로 며칠 걸러도 그만큼만
+     * 늘어나고, 그 이상 벌어지면 전량 재수집(only=incremental&since=all)이 낫다.
+     *
+     * showflag=0(공사에서 내린 콘텐츠)은 우리 쪽에서도 비노출로 바꾼다.
+     * 커서는 마지막 성공 실행일이라, 실패하면 전진하지 않아 다음 회차가 빠진 구간을
+     * 함께 가져간다.
+     */
+    @Transactional
+    public int syncVenuesIncremental() {
+        return syncVenuesIncremental(null);
+    }
+
+    /**
+     * @param mode null 이면 커서부터 오늘까지, "all" 이면 전량(modifiedtime 없이),
+     *             yyyyMMdd 면 그 날짜부터 오늘까지.
+     */
+    @Transactional
+    public int syncVenuesIncremental(String mode) {
+        if (!props.tourApiEnabled()) {
+            log.info("TOURAPI_KEY 미설정 → 증분 동기화 skip");
+            return 0;
+        }
+        boolean full = "all".equalsIgnoreCase(mode);
+        List<String> dates = full ? java.util.Collections.singletonList(null) : datesToFetch(mode);
+        SyncLog run = syncLogRepo.save(SyncLog.started("TOURAPI", "VENUE_SYNC"));
+        int changed = 0, hidden = 0;
+        try {
+            for (String day : dates) {
+                for (int contentType : CONTENT_TYPES) {
+                    for (int page = 1; page <= MAX_PAGES; page++) {
+                        List<TourSyncItem> items = tourClient.syncList(contentType, day, page, ROWS);
+                        if (items.isEmpty()) break;
+                        for (TourSyncItem it : items) {
+                            if (it.visible()) {
+                                changed += upsertVenue(it.item());
+                            } else {
+                                hidden += hideVenue(it.item().contentId());
+                            }
+                        }
+                        run.progressed(changed + hidden);
+                        throttle();
+                        if (items.size() < ROWS) break;
+                    }
+                }
+            }
+            String span = full ? "전량" : dates.size() + "일치(" + dates.get(0) + "~)";
+            run.succeeded(changed + hidden, "갱신 " + changed + "건, 비노출 " + hidden + "건 (" + span + ")");
+            log.info("증분 동기화 완료: 갱신 {}건, 비노출 {}건 ({})", changed, hidden, span);
+            return changed + hidden;
+        } catch (Exception e) {
+            // 커서를 전진시키지 않아 다음 회차가 이 구간을 다시 가져간다.
+            run.failed(e.getMessage());
+            log.warn("증분 동기화 실패: {}", e.getMessage());
+            return changed + hidden;
+        }
+    }
+
+    /** 최대 며칠까지 거슬러 올라갈지. 이보다 벌어지면 전량 재수집이 낫다. */
+    private static final int MAX_CATCHUP_DAYS = 30;
+
+    /**
+     * 받아야 할 날짜들. 마지막 성공일부터 오늘까지(하루 겹쳐서 — 공사 반영이 늦을 수 있다).
+     * 기록이 없으면 저장된 장소의 마지막 수집일을 쓰고, 그것도 없으면 오늘 하루만 본다.
+     */
+    private List<String> datesToFetch(String from) {
+        LocalDate start;
+        if (from != null && !from.isBlank()) {
+            start = LocalDate.parse(from, TOUR_DATE);
+        } else {
+            start = syncLogRepo
+                    .findTopByProviderAndTargetTypeAndStatusOrderByStartedAtDesc("TOURAPI", "VENUE_SYNC", SyncLog.SUCCESS)
+                    .map(s -> s.getStartedAt().toLocalDate())
+                    .orElseGet(() -> venueRepo.findMaxSyncedAt()
+                            .map(java.time.LocalDateTime::toLocalDate)
+                            .orElse(LocalDate.now()))
+                    .minusDays(1);
+        }
+        LocalDate today = LocalDate.now();
+        if (start.isBefore(today.minusDays(MAX_CATCHUP_DAYS))) start = today.minusDays(MAX_CATCHUP_DAYS);
+        List<String> out = new java.util.ArrayList<>();
+        for (LocalDate d = start; !d.isAfter(today); d = d.plusDays(1)) out.add(d.format(TOUR_DATE));
+        return out;
+    }
+
+    /** 공사에서 내린 콘텐츠를 비노출로. 우리가 갖고 있지 않으면 할 일이 없다. */
+    private int hideVenue(String contentId) {
+        if (contentId == null) return 0;
+        return venueRepo.findByTourContentId(contentId)
+                .map(v -> { v.deactivateBySync(); venueRepo.save(v); return 1; })
+                .orElse(0);
+    }
+
+    /** 장소(관광지·문화시설·음식점) 전량 동기화. 초기 적재·수동 백필용. */
     public int syncVenues() {
         if (!props.tourApiEnabled()) {
             log.info("TOURAPI_KEY 미설정 → 장소 동기화 skip");
@@ -78,6 +182,8 @@ public class SyncService {
         double latD = lat.doubleValue(), lngD = lng.doubleValue();
         if (latD < 33.0 || latD > 38.7 || lngD < 124.5 || lngD > 132.0) return 0;
         String category = CategoryMapper.fromTour(it.contentTypeId(), it.lclsSystm2(), it.lclsSystm3());
+        // 쇼핑·숙박은 전통문화와 닿는 소분류만 담는다(약국·모텔 등은 category가 null).
+        if (category == null) return 0;
         try {
             venueRepo.findByTourContentId(it.contentId())
                     .ifPresentOrElse(

@@ -1,15 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isCancelled, loginGoogle, loginKakao } from '@/lib/auth/oauth';
 import { colors, fonts, radius, space } from '@/lib/theme';
-
-// OAuth 리다이렉트 후 브라우저 세션이 깔끔히 닫히도록 보장
-WebBrowser.maybeCompleteAuthSession();
 
 type Provider = 'kakao' | 'google' | null;
 

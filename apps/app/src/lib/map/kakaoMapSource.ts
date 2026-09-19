@@ -55,6 +55,9 @@ export function mapScript(segColors: string[]): string {
     if(c==='카페') return '☕';
     if(c==='문화') return '🎭';
     if(c==='체험') return '🎨';
+    if(c==='전통시장') return '🏮';
+    if(c==='공예') return '🪡';
+    if(c==='한옥스테이') return '🏯';
     if(c==='한복') return '👘';
     return '📍';
   }

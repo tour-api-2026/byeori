@@ -70,6 +70,9 @@ public class KakaoClient {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", "authorization_code");
         form.add("client_id", props.getKakaoRestKey());
+        // 콘솔에서 Client Secret 을 켜 두었으면 함께 보내야 한다. 빠지면 KOE010.
+        String secret = props.getKakaoClientSecret();
+        if (secret != null && !secret.isBlank()) form.add("client_secret", secret);
         if (redirectUri != null && !redirectUri.isBlank()) form.add("redirect_uri", redirectUri);
         form.add("code", code);
 
