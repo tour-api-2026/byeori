@@ -81,16 +81,17 @@ for sh in tables(prs.slides[5]):
 # 8쪽 핵심기능4 — 제목·설명·흐름도 캡처
 slide = prs.slides[7]
 STEPS = [('f4-1-ai-card', '루트 탭의 AI 카드로 시작한다'),
-         ('f4-2-ai-form', '지역·테마·날짜를 칩으로 고른다'),
-         ('f4-3-ai-preview', 'AI가 벼리의 장소 안에서 하루 코스를 짠다'),
+         ('f4-2-ai-form', '지역·테마·날짜와 원하는 조건을 고른다'),
+         ('f4-3-ai-preview', 'AI가 벼리의 장소 안에서 코스를 짜고 요청대로 다듬는다'),
          ('f4-4-ai-route', '저장한 코스의 이동 경로와 소요 시간을 지도에서 본다')]
 for sh in tables(slide):
     tb = sh.table
     if tb.cell(0, 0).text.strip() == '핵심 기능4':
         set_cell(tb.cell(0, 1), 'AI 하루 코스와 경로 안내')
         set_cell(tb.cell(1, 1),
-                 '지역·테마·날짜를 고르면 서버가 벼리의 장소·행사에서 후보와 하루 틀을 정하고, AI가 그 안에서 '
-                 '코스를 짭니다. 저장하면 일정이 되어 실제 이동 경로와 총 거리·소요 시간을 지도에서 확인합니다.')
+                 '지역·테마·날짜와 "아이와 함께" 같은 요청을 받아, 서버가 벼리의 장소·행사에서 후보와 하루 틀을 '
+                 '정하고 AI가 그 안에서 코스를 짭니다. 결과는 "점심을 바꿔 주세요"처럼 말해 다듬을 수 있고, '
+                 '저장하면 일정이 되어 이동 경로와 총 거리·소요 시간을 지도에서 확인합니다.')
 for pic in [s for s in slide.shapes if s.__class__.__name__ == 'Picture']:
     pic._element.getparent().remove(pic._element)
 shape = next(sh for sh in tables(slide) if len(sh.table.rows) == 3 and len(sh.table.columns) == 4)
