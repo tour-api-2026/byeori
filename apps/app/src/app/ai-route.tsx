@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import * as Location from 'expo-location';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import LoginRequired from '@/components/LoginRequired';
 import { AI_THEMES, generateAiRoute, saveAiRoute, type AiRoutePreview } from '@/lib/api/ai';
 import { sized } from '@/lib/img';
@@ -58,8 +58,10 @@ export default function AiRouteScreen() {
   const [area, setArea] = useState<string>(AREAS[0].name);
   const [themes, setThemes] = useState<string[]>(DEFAULT_THEMES);
   const [date, setDate] = useState(DATES[0].value);
+  const [note, setNote] = useState('');          // 칩으로 못 고르는 요청
+  const [tweak, setTweak] = useState('');        // 결과를 보고 고쳐 달라는 요청
   const [preview, setPreview] = useState<AiRoutePreview | null>(null);
-  const [busy, setBusy] = useState<'generate' | 'save' | null>(null);
+  const [busy, setBusy] = useState<'generate' | 'tweak' | 'save' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (!isLoggedIn) {
@@ -83,16 +85,26 @@ export default function AiRouteScreen() {
     return { lat: pos.coords.latitude, lng: pos.coords.longitude, name: MY_LOCATION };
   };
 
-  const generate = async (regenerate: boolean) => {
+  /**
+   * 코스 만들기.
+   * - tweakWith 가 있으면 "이렇게 바꿔 주세요"(다듬기)다. 지금 코스를 함께 보내 고쳐 받는다.
+   * - 아니면 새로 만든다(regenerate=true 면 같은 조건이라도 캐시를 쓰지 않는다).
+   */
+  const generate = async (regenerate: boolean, tweakWith?: string) => {
     if (!themes.length || busy) return;
-    setBusy('generate');
+    setBusy(tweakWith ? 'tweak' : 'generate');
     setError(null);
     try {
       const c = await resolveCenter();
       const p = await generateAiRoute({
         lat: c.lat, lng: c.lng, areaName: c.name, categories: themes, date, regenerate,
+        note: tweakWith ?? (note.trim() || undefined),
+        previous: tweakWith
+          ? preview?.stops.map((s) => ({ slot: s.slot, targetType: s.targetType, targetId: s.targetId, reason: s.reason }))
+          : undefined,
       });
       setPreview(p);
+      if (tweakWith) setTweak('');
     } catch (e: any) {
       setError(e?.message ?? '루트를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
@@ -145,6 +157,17 @@ export default function AiRouteScreen() {
               on={date === d.value} onPress={() => setDate(d.value)} />
           ))}
         </View>
+
+        <Text style={styles.label}>더 알려주실 게 있나요? <Text style={styles.sub}>(선택)</Text></Text>
+        <TextInput
+          style={styles.noteInput}
+          value={note}
+          onChangeText={setNote}
+          maxLength={100}
+          placeholder="예: 아이와 함께, 많이 걷지 않게"
+          placeholderTextColor={colors.textFaint}
+          returnKeyType="done"
+        />
 
         <Pressable
           style={[styles.primary, (!themes.length || !!busy) && styles.disabled]}
@@ -200,6 +223,27 @@ export default function AiRouteScreen() {
               </Pressable>
             ))}
 
+            <View style={styles.tweakBox}>
+              <TextInput
+                style={styles.tweakInput}
+                value={tweak}
+                onChangeText={setTweak}
+                maxLength={100}
+                placeholder="이렇게 바꿔 주세요 (예: 3번을 실내로)"
+                placeholderTextColor={colors.textFaint}
+                returnKeyType="send"
+                onSubmitEditing={() => tweak.trim() && generate(true, tweak.trim())}
+              />
+              <Pressable
+                style={[styles.tweakBtn, (!tweak.trim() || !!busy) && styles.disabled]}
+                disabled={!tweak.trim() || !!busy}
+                onPress={() => generate(true, tweak.trim())}
+              >
+                {busy === 'tweak' ? <ActivityIndicator color={colors.white} size="small" />
+                  : <Ionicons name="arrow-up" size={16} color={colors.white} />}
+              </Pressable>
+            </View>
+
             <Pressable style={[styles.primary, !!busy && styles.disabled]} disabled={!!busy} onPress={save}>
               {busy === 'save' ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryText}>내 일정으로 저장</Text>}
             </Pressable>
@@ -245,6 +289,19 @@ const styles = StyleSheet.create({
   },
   disabled: { backgroundColor: colors.textFaint },
   primaryText: { color: colors.white, fontSize: 15, fontFamily: fonts.bold, fontWeight: '800' },
+  noteInput: {
+    backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
+    paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: colors.text,
+  },
+  tweakBox: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18 },
+  tweakInput: {
+    flex: 1, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill,
+    paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: colors.text,
+  },
+  tweakBtn: {
+    width: 38, height: 38, borderRadius: 19, backgroundColor: colors.primary,
+    alignItems: 'center', justifyContent: 'center',
+  },
   error: { fontSize: 13, color: colors.danger, marginTop: 14, lineHeight: 19 },
   result: { marginTop: 28, backgroundColor: colors.bgCard, borderRadius: radius.lg, padding: 16 },
   aiBadge: {
