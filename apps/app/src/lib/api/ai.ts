@@ -6,6 +6,8 @@ import type { ItineraryDetail } from './itineraries';
 export const AI_THEMES = ['문화', '체험', '전통시장', '공예', '한옥스테이', '맛집', '카페'] as const;
 
 export type AiStop = {
+  /** 하루 틀의 칸 번호. 다듬기 때 이 번호로 칸을 짝짓는다. */
+  slot: number;
   targetType: 'VENUE' | 'PERFORMANCE';
   targetId: number;
   name: string;
@@ -43,6 +45,10 @@ export function fetchAiStatus(): Promise<AiStatus> {
 
 export function generateAiRoute(body: {
   lat: number; lng: number; areaName: string; categories: string[]; date: string; regenerate: boolean;
+  /** 칩으로 못 고르는 요청("아이와 함께"). 다듬기에서는 수정 요청이 들어간다. */
+  note?: string;
+  /** 다듬기: 지금 코스. 있으면 서버가 이 코스를 고쳐 준다. */
+  previous?: { slot: number; targetType: string; targetId: number; reason: string }[];
 }): Promise<AiRoutePreview> {
   // AI 응답을 기다리는 호출이라 기본 타임아웃보다 길게 둔다
   return withServerMessage(
