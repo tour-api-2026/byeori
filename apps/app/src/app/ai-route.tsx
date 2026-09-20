@@ -3,10 +3,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
 import { Stack, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Calendar } from '@/components/Calendar';
 import LoginRequired from '@/components/LoginRequired';
 import { AI_THEMES, generateAiRoute, saveAiRoute, type AiRoutePreview } from '@/lib/api/ai';
+import { searchKakaoPlaces, type KakaoPlace } from '@/lib/api/itineraries';
 import { sized } from '@/lib/img';
 import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius, space } from '@/lib/theme';
@@ -42,6 +44,19 @@ const DATES = [
   { label: '내일', value: isoDate(1) },
   { label: '모레', value: isoDate(2) },
 ];
+/** 서버가 받는 범위와 같다(오늘부터 90일). */
+const DATE_MIN = isoDate(0);
+const DATE_MAX = isoDate(90);
+
+/** 'YYYY-MM-DD' → '9/24 (수)' */
+function dateLabel(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const w = ['일', '월', '화', '수', '목', '금', '토'][new Date(y, m - 1, d).getDay()];
+  return `${m}/${d} (${w})`;
+}
+
+/** 고른 지역. 칩·내 위치·검색으로 찾은 곳을 한 가지로 다룬다. */
+type Area = { name: string; lat?: number; lng?: number; my?: boolean };
 
 /**
  * AI 루트 만들기.
@@ -55,7 +70,9 @@ export default function AiRouteScreen() {
   const qc = useQueryClient();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
 
-  const [area, setArea] = useState<string>(AREAS[0].name);
+  const [area, setArea] = useState<Area>({ ...AREAS[0] });
+  const [areaSearchOpen, setAreaSearchOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [themes, setThemes] = useState<string[]>(DEFAULT_THEMES);
   const [date, setDate] = useState(DATES[0].value);
   const [note, setNote] = useState('');          // 칩으로 못 고르는 요청
@@ -77,8 +94,7 @@ export default function AiRouteScreen() {
     setThemes((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
 
   const resolveCenter = async (): Promise<{ lat: number; lng: number; name: string }> => {
-    const preset = AREAS.find((a) => a.name === area);
-    if (preset) return preset;
+    if (area.lat != null && area.lng != null) return { lat: area.lat, lng: area.lng, name: area.name };
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') throw new Error('내 위치를 쓰려면 위치 권한을 허용해 주세요.');
     const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -137,10 +153,18 @@ export default function AiRouteScreen() {
 
         <Text style={styles.label}>어디로 갈까요?</Text>
         <View style={styles.chips}>
-          {[...AREAS.map((a) => a.name), MY_LOCATION].map((name) => (
-            <Chip key={name} label={name} on={area === name} onPress={() => setArea(name)}
-              icon={name === MY_LOCATION ? 'navigate' : undefined} />
+          {AREAS.map((a) => (
+            <Chip key={a.name} label={a.name} on={area.name === a.name} onPress={() => setArea({ ...a })} />
           ))}
+          <Chip label={MY_LOCATION} icon="navigate" on={!!area.my}
+            onPress={() => setArea({ name: MY_LOCATION, my: true })} />
+          {/* 칩에 없는 곳은 검색해서 그 좌표를 중심으로 쓴다 */}
+          <Chip
+            label={area.lat != null && !AREAS.some((a) => a.name === area.name) ? area.name : '다른 지역 찾기'}
+            icon="search"
+            on={area.lat != null && !AREAS.some((a) => a.name === area.name)}
+            onPress={() => setAreaSearchOpen(true)}
+          />
         </View>
 
         <Text style={styles.label}>무엇을 하고 싶나요? <Text style={styles.sub}>(여러 개 선택)</Text></Text>
@@ -156,6 +180,12 @@ export default function AiRouteScreen() {
             <Chip key={d.value} label={`${d.label} ${d.value.slice(5).replace('-', '/')}`}
               on={date === d.value} onPress={() => setDate(d.value)} />
           ))}
+          <Chip
+            label={DATES.some((d) => d.value === date) ? '날짜 선택' : dateLabel(date)}
+            icon="calendar-outline"
+            on={!DATES.some((d) => d.value === date)}
+            onPress={() => setCalendarOpen(true)}
+          />
         </View>
 
         <Text style={styles.label}>더 알려주실 게 있나요? <Text style={styles.sub}>(선택)</Text></Text>
@@ -254,7 +284,121 @@ export default function AiRouteScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      <AreaSearchModal
+        visible={areaSearchOpen}
+        onClose={() => setAreaSearchOpen(false)}
+        onPick={(p) => {
+          setArea({ name: p.name, lat: p.lat, lng: p.lng });
+          setAreaSearchOpen(false);
+        }}
+      />
+
+      <Modal visible={calendarOpen} animationType="slide" transparent onRequestClose={() => setCalendarOpen(false)}>
+        <View style={styles.modalBg}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHead}>
+              <Text style={styles.modalTitle}>언제 가나요?</Text>
+              <Pressable onPress={() => setCalendarOpen(false)} hitSlop={8}>
+                <Ionicons name="close" size={22} color={colors.text} />
+              </Pressable>
+            </View>
+            <Calendar
+              rangeStart={date}
+              min={DATE_MIN}
+              max={DATE_MAX}
+              initialMonth={date.slice(0, 7)}
+              onSelectDate={(d) => {
+                setDate(d);
+                setCalendarOpen(false);
+              }}
+            />
+            <Text style={styles.modalNote}>오늘부터 90일 안에서 고를 수 있어요.</Text>
+          </View>
+        </View>
+      </Modal>
     </View>
+  );
+}
+
+/** 칩에 없는 지역을 찾는다. 고른 곳의 좌표가 코스의 중심이 된다. */
+function AreaSearchModal({ visible, onClose, onPick }: {
+  visible: boolean; onClose: () => void; onPick: (p: KakaoPlace) => void;
+}) {
+  const [keyword, setKeyword] = useState('');
+  const [results, setResults] = useState<KakaoPlace[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!visible) {
+      setKeyword('');
+      setResults([]);
+      return;
+    }
+    const q = keyword.trim();
+    if (!q) {
+      setResults([]);
+      return;
+    }
+    let live = true;
+    const t = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const r = await searchKakaoPlaces(q);
+        if (live) setResults(r);
+      } catch {
+        if (live) setResults([]);
+      } finally {
+        if (live) setLoading(false);
+      }
+    }, 350);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [keyword, visible]);
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.modalBg}>
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHead}>
+            <Text style={styles.modalTitle}>다른 지역 찾기</Text>
+            <Pressable onPress={onClose} hitSlop={8}><Ionicons name="close" size={22} color={colors.text} /></Pressable>
+          </View>
+          <View style={styles.searchBox}>
+            <Ionicons name="search" size={16} color={colors.textFaint} />
+            <TextInput
+              style={styles.searchInput}
+              value={keyword}
+              onChangeText={setKeyword}
+              placeholder="지역·역·명소 이름 (예: 강릉역, 해운대)"
+              placeholderTextColor={colors.textFaint}
+              returnKeyType="search"
+              autoCorrect={false}
+            />
+          </View>
+          <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }}>
+            {loading ? <ActivityIndicator color={colors.primary} style={{ marginVertical: 18 }} /> : null}
+            {!loading && keyword.trim() && results.length === 0 ? (
+              <Text style={styles.modalNote}>검색 결과가 없어요.</Text>
+            ) : null}
+            {results.map((p) => (
+              <Pressable key={p.kakaoPlaceId} style={styles.areaRow} onPress={() => onPick(p)}>
+                <Ionicons name="location-outline" size={16} color={colors.textSub} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.areaName} numberOfLines={1}>{p.name}</Text>
+                  <Text style={styles.areaAddr} numberOfLines={1}>{p.address}</Text>
+                </View>
+              </Pressable>
+            ))}
+            <Text style={styles.modalNote}>
+              고른 곳 주변 2km 안에서 코스를 짜요. 장소가 드문 곳이면 가까운 역이나 번화가로 찾아 주세요.
+            </Text>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -289,6 +433,22 @@ const styles = StyleSheet.create({
   },
   disabled: { backgroundColor: colors.textFaint },
   primaryText: { color: colors.white, fontSize: 15, fontFamily: fonts.bold, fontWeight: '800' },
+  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalSheet: {
+    backgroundColor: colors.bg, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl,
+    padding: space.lg, maxHeight: '80%',
+  },
+  modalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  modalTitle: { fontSize: 17, fontFamily: fonts.bold, fontWeight: '800', color: colors.text },
+  modalNote: { fontSize: 12, color: colors.textFaint, textAlign: 'center', marginTop: 12, lineHeight: 18 },
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.white,
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12, height: 42,
+  },
+  searchInput: { flex: 1, fontSize: 14, color: colors.text, outlineStyle: 'none' } as any,
+  areaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11 },
+  areaName: { fontSize: 14, fontFamily: fonts.bold, fontWeight: '700', color: colors.text },
+  areaAddr: { fontSize: 12, color: colors.textFaint, marginTop: 2 },
   noteInput: {
     backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
     paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: colors.text,
