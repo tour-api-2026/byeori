@@ -15,6 +15,7 @@ import com.byeori.global.external.KakaoLocalClient;
 import com.byeori.global.external.KakaoMobilityClient;
 import com.byeori.global.external.dto.KakaoRoute;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -132,16 +133,20 @@ public class ItineraryService {
             }
         }
 
-        // AI 루트 저장: 미리보기의 방문지를 순서대로 담는다. 저장 날짜는 일정 시작일로 고정.
+        // AI 루트 저장: 미리보기의 방문지를 순서대로 담는다. 여러 날 코스는 항목마다 날짜가 다르다.
         if (sourceType.equals("AI") && req.items() != null) {
-            if (req.items().size() > 10) {
-                throw new BadRequestException("ITINERARY_INVALID", "한 번에 담을 수 있는 장소는 10곳까지예요.");
+            if (req.items().size() > 20) {
+                throw new BadRequestException("ITINERARY_INVALID", "한 번에 담을 수 있는 장소는 20곳까지예요.");
             }
             int order = 0;
             for (ItemRequest it : req.items()) {
                 ContentTarget t = new ContentTarget(ContentType.from(it.targetType()), it.targetId());
+                LocalDate visit = it.visitDate() == null ? req.startDate() : it.visitDate();
+                if (visit.isBefore(req.startDate()) || visit.isAfter(req.endDate())) {
+                    throw new BadRequestException("ITINERARY_INVALID", "방문 날짜가 여행 기간을 벗어났어요.");
+                }
                 itemRepo.save(new ItineraryItem(saved.getId(), t.performanceId(), t.venueId(),
-                        req.startDate(), order++, it.plannedTime(), it.memo()));
+                        visit, order++, it.plannedTime(), it.memo()));
             }
         }
         return get(userId, saved.getId());

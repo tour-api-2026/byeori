@@ -15,9 +15,14 @@ public final class AiRouteDtos {
      * previous  - 앞서 만든 코스. 이게 있으면 "이렇게 바꿔 주세요"(다듬기) 요청으로 본다.
      */
     public record GenerateRequest(
-            Double lat, Double lng, String areaName,
-            List<String> categories, LocalDate date, Boolean regenerate,
-            String note, List<PreviousStop> previous) {}
+            List<DayRequest> days,
+            List<String> categories, Boolean regenerate,
+            String note, List<PreviousStop> previous,
+            // 예전 앱(하루 코스)에서 오는 형식. days 가 없을 때만 쓴다.
+            Double lat, Double lng, String areaName, LocalDate date) {}
+
+    /** 하루치 조건. 날짜마다 지역을 따로 고를 수 있다(1일차 경주, 2일차 부산). */
+    public record DayRequest(LocalDate date, Double lat, Double lng, String areaName) {}
 
     /** 다듬기 요청에서 넘어오는 현재 코스의 방문지. 그대로 두는 칸은 추천 이유도 유지한다. */
     public record PreviousStop(int slot, String targetType, Long targetId, String reason) {}
@@ -27,12 +32,14 @@ public final class AiRouteDtos {
      * slot 은 하루 틀의 칸 번호 — 다듬기 때 이 번호로 칸을 짝지어야 순서가 어긋나지 않는다.
      */
     public record Stop(
-            int slot, String targetType, Long targetId, String name, String category,
+            int day, LocalDate date, int slot,
+            String targetType, Long targetId, String name, String category,
             String imageUrl, Double lat, Double lng, String time, String reason) {}
 
     /** 저장 전 미리보기. remainingToday 는 오늘 남은 생성 횟수. */
     public record Preview(
-            String title, String summary, LocalDate date, List<Stop> stops, int remainingToday) {}
+            String title, String summary, LocalDate startDate, LocalDate endDate,
+            List<Stop> stops, int remainingToday) {}
 
     /** 앱이 버튼을 보여줄지, 오늘 몇 번 남았는지. */
     public record Status(boolean enabled, Integer remainingToday) {}
