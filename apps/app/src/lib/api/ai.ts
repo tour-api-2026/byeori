@@ -6,7 +6,10 @@ import type { ItineraryDetail } from './itineraries';
 export const AI_THEMES = ['문화', '체험', '전통시장', '공예', '한옥스테이', '맛집', '카페'] as const;
 
 export type AiStop = {
-  /** 하루 틀의 칸 번호. 다듬기 때 이 번호로 칸을 짝짓는다. */
+  /** 며칠째인지(1부터)와 그 날짜. */
+  day: number;
+  date: string;
+  /** 일정 틀의 칸 번호. 다듬기 때 이 번호로 칸을 짝짓는다. 날짜를 넘어 이어진다. */
   slot: number;
   targetType: 'VENUE' | 'PERFORMANCE';
   targetId: number;
@@ -22,10 +25,14 @@ export type AiStop = {
 export type AiRoutePreview = {
   title: string;
   summary: string;
-  date: string;
+  startDate: string;
+  endDate: string;
   stops: AiStop[];
   remainingToday: number;
 };
+
+/** 하루치 조건. 날짜마다 지역을 따로 고른다. */
+export type AiDay = { date: string; lat: number; lng: number; areaName: string };
 
 export type AiStatus = { enabled: boolean; remainingToday: number | null };
 
@@ -44,7 +51,7 @@ export function fetchAiStatus(): Promise<AiStatus> {
 }
 
 export function generateAiRoute(body: {
-  lat: number; lng: number; areaName: string; categories: string[]; date: string; regenerate: boolean;
+  days: AiDay[]; categories: string[]; regenerate: boolean;
   /** 칩으로 못 고르는 요청("아이와 함께"). 다듬기에서는 수정 요청이 들어간다. */
   note?: string;
   /** 다듬기: 지금 코스. 있으면 서버가 이 코스를 고쳐 준다. */
@@ -61,13 +68,13 @@ export function saveAiRoute(p: AiRoutePreview): Promise<ItineraryDetail> {
   return withServerMessage(
     unwrap<ItineraryDetail>(api.post<ApiEnvelope<ItineraryDetail>>('/itineraries', {
       title: p.title,
-      startDate: p.date,
-      endDate: p.date,
+      startDate: p.startDate,
+      endDate: p.endDate,
       sourceType: 'AI',
       items: p.stops.map((s, i) => ({
         targetType: s.targetType,
         targetId: s.targetId,
-        visitDate: p.date,
+        visitDate: s.date,
         sortOrder: i,
         plannedTime: s.time,
         memo: s.reason,

@@ -46,11 +46,12 @@ public class AiRouteService {
     static final Set<String> CATEGORIES = Set.of("문화", "체험", "전통시장", "공예", "한옥스테이", "맛집", "카페");
 
     static final int MIN_STOPS = 3;
-    static final int MAX_STOPS = 6;
     private static final int RADIUS_M = 2000; // 3km 에서는 코스가 권역을 넘나들었다
+    static final int MAX_STOPS_PER_DAY = 6;
     private static final int VENUE_CANDIDATES = 40;
     private static final int EVENT_CANDIDATES = 5;
     private static final int NOTE_MAX = 100;
+    private static final int MAX_DAYS = 3;
     private static final Duration CACHE_TTL = Duration.ofHours(1);
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
@@ -94,12 +95,12 @@ public class AiRouteService {
         if (!ai.enabled()) {
             throw new BadRequestException("AI_DISABLED", "AI 루트 만들기를 지금은 쓸 수 없어요.");
         }
-        Condition c = validate(req);
+        Plan plan = validate(req);
         // 앞서 만든 코스를 고쳐 달라는 요청이면 캐시를 쓰지도, 남기지도 않는다(요청마다 결과가 다르다)
         Kept keep = previousCandidates(req.previous());
         boolean refining = !keep.isEmpty();
 
-        String cacheKey = c.cacheKey();
+        String cacheKey = plan.cacheKey();
         if (!refining && !Boolean.TRUE.equals(req.regenerate())) {
             Cached hit = cache.get(cacheKey);
             if (hit != null && hit.expiresAt().isAfter(Instant.now(clock))) {
@@ -107,12 +108,33 @@ public class AiRouteService {
             }
         }
 
+        // 날짜마다 그 날 지역에서 후보를 뽑고 하루 틀을 만든다. 칸 번호는 날짜를 넘어 이어진다.
+        List<DayFrame> frames = new ArrayList<>();
+        int slotNo = 0;
+        int candidateCount = 0;
+        for (Day day : plan.days()) {
+            List<Candidate> dayCandidates = new ArrayList<>(candidates(day, plan.categories()));
+            // 숙소는 마지막 날에 넣지 않는다(집으로 돌아가는 날)
+            List<Slot> daySlots = new ArrayList<>();
+            for (Slot sl : slots(plan.categories(), dayCandidates, day.no() < plan.days().size())) {
+                daySlots.add(new Slot(++slotNo, sl.time(), sl.label(), sl.kinds()));
+            }
+            // 다듬기: 그 날 칸에 들어 있던 곳은 그 날 후보에 넣어야 "그대로 두기"를 고를 수 있다
+            Set<String> keys = new HashSet<>();
+            for (Candidate k : dayCandidates) keys.add(k.key());
+            for (Slot sl : daySlots) {
+                Candidate now = keep.at(sl.no());
+                if (now != null && keys.add(now.key())) dayCandidates.add(now);
+            }
+            candidateCount += dayCandidates.size();
+            frames.add(new DayFrame(day, daySlots, dayCandidates));
+        }
+        int slotCount = frames.stream().mapToInt(f -> f.slots().size()).sum();
+
         // 후보가 모자라면 AI를 부르지 않는다(비용도, 한도도 쓰지 않는다)
-        List<Candidate> candidates = candidates(c, List.copyOf(keep.stops().values()));
-        List<Slot> slots = slots(c.categories(), candidates);
-        if (candidates.size() < MIN_STOPS || slots.size() < MIN_STOPS) {
+        if (candidateCount < MIN_STOPS || slotCount < MIN_STOPS) {
             throw new BadRequestException("AI_NOT_ENOUGH_PLACES",
-                    "이 지역에는 고른 테마의 장소가 부족해요. 테마를 더 고르거나 다른 지역을 선택해 주세요.");
+                    "고른 지역에 테마에 맞는 장소가 부족해요. 테마를 더 고르거나 다른 지역을 선택해 주세요.");
         }
 
         if (!quota.tryAcquire(userId)) {
@@ -121,9 +143,18 @@ public class AiRouteService {
                     : "오늘 만들 수 있는 AI 루트를 모두 사용했어요. 내일 다시 이용해 주세요.");
         }
 
-        JsonNode answer = ai.completeJson(systemPrompt(refining), userPrompt(c, slots, candidates, keep),
-                "day_route", schema());
-        Preview preview = answer == null ? null : toPreview(answer, slots, candidates, c.date(), keep);
+        String prompt = userPrompt(plan, frames, keep);
+        JsonNode answer = ai.completeJson(systemPrompt(refining), prompt, "day_route", schema());
+        Preview preview = answer == null ? null : toPreview(answer, frames, keep);
+        // 다듬기인데 한 곳도 안 바뀌면 한 번만 더 부른다. "바꿨다"고 말하면서 같은 곳을 다시 고르는
+        // 경우가 있었다(응답은 칸 하나뿐인데 id 가 지금과 같았다).
+        if (refining && preview != null && unchanged(preview, keep)) {
+            JsonNode retry = ai.completeJson(systemPrompt(true),
+                    prompt + "\n중요: 바꾸기로 한 칸의 id 는 \"지금 고른 곳\"과 반드시 달라야 한다.\n",
+                    "day_route", schema());
+            Preview second = retry == null ? null : toPreview(retry, frames, keep);
+            if (second != null && !unchanged(second, keep)) preview = second;
+        }
         if (preview == null) {
             quota.refund(userId);
             throw new BadRequestException("AI_FAILED", "루트를 만들지 못했어요. 잠시 후 다시 시도해 주세요.");
@@ -138,38 +169,69 @@ public class AiRouteService {
 
     // ── 조건 검증 ─────────────────────────────────────────
 
-    record Condition(double lat, double lng, String areaName, List<String> categories, LocalDate date,
-                     String note) {
-        /** 좌표는 약 100m 단위로 묶는다. 같은 지역 칩이면 같은 키가 된다. */
+    /** 하루치 조건. no 는 1부터. */
+    record Day(int no, LocalDate date, double lat, double lng, String areaName) {}
+
+    /** 전체 조건. 날짜마다 지역이 다를 수 있다. */
+    record Plan(List<Day> days, List<String> categories, String note) {
         String cacheKey() {
-            return String.format("%.3f,%.3f|%s|%s|%s", lat, lng, String.join(",", categories), date, note);
+            StringBuilder sb = new StringBuilder();
+            // 좌표는 약 100m 단위로 묶는다. 같은 지역 칩이면 같은 키가 된다.
+            for (Day d : days) sb.append(String.format("%s@%.3f,%.3f|", d.date(), d.lat(), d.lng()));
+            return sb.append(String.join(",", categories)).append('|').append(note).toString();
         }
     }
 
-    Condition validate(GenerateRequest req) {
-        if (req == null || req.lat() == null || req.lng() == null) {
-            throw new BadRequestException("AI_INVALID", "지역을 선택해 주세요.");
-        }
-        // 대한민국 범위 밖 좌표는 후보가 없을 뿐 아니라 잘못된 요청이다
-        if (req.lat() < 33 || req.lat() > 39 || req.lng() < 124 || req.lng() > 132) {
-            throw new BadRequestException("AI_INVALID", "국내 지역만 선택할 수 있어요.");
-        }
+    /**
+     * 하루의 틀과 그 날 후보. 칸 번호는 날짜를 넘어 이어진다(1일차 1~5, 2일차 6~10).
+     * 후보를 날짜별로 나눠 두지 않으면 부산 2일차 칸에 경주 식당이 들어간다(실제로 나왔다).
+     */
+    record DayFrame(Day day, List<Slot> slots, List<Candidate> candidates) {}
+
+    Plan validate(GenerateRequest req) {
+        if (req == null) throw new BadRequestException("AI_INVALID", "지역을 선택해 주세요.");
         List<String> cats = req.categories() == null ? List.of()
                 : new ArrayList<>(new TreeSet<>(req.categories().stream().filter(CATEGORIES::contains).toList()));
         if (cats.isEmpty()) {
             throw new BadRequestException("AI_INVALID", "테마를 하나 이상 골라 주세요.");
         }
-        LocalDate today = LocalDate.now(clock);
-        LocalDate date = req.date() == null ? today : req.date();
-        if (date.isBefore(today) || date.isAfter(today.plusDays(90))) {
-            throw new BadRequestException("AI_INVALID", "날짜는 오늘부터 90일 안에서 골라 주세요.");
+
+        // 예전 앱은 하루치(lat/lng/date)만 보낸다
+        List<AiRouteDtos.DayRequest> raw = req.days() != null && !req.days().isEmpty()
+                ? req.days()
+                : List.of(new AiRouteDtos.DayRequest(req.date(), req.lat(), req.lng(), req.areaName()));
+        if (raw.size() > MAX_DAYS) {
+            throw new BadRequestException("AI_TOO_MANY_DAYS", "코스는 최대 " + MAX_DAYS + "일까지 만들 수 있어요.");
         }
-        String area = req.areaName() == null || req.areaName().isBlank() ? "선택한 지역" : req.areaName().strip();
-        if (area.length() > 30) area = area.substring(0, 30);
+
+        LocalDate today = LocalDate.now(clock);
+        List<Day> days = new ArrayList<>();
+        LocalDate prev = null;
+        for (AiRouteDtos.DayRequest d : raw) {
+            if (d == null || d.lat() == null || d.lng() == null) {
+                throw new BadRequestException("AI_INVALID", "지역을 선택해 주세요.");
+            }
+            // 대한민국 범위 밖 좌표는 후보가 없을 뿐 아니라 잘못된 요청이다
+            if (d.lat() < 33 || d.lat() > 39 || d.lng() < 124 || d.lng() > 132) {
+                throw new BadRequestException("AI_INVALID", "국내 지역만 선택할 수 있어요.");
+            }
+            LocalDate date = d.date() == null ? today : d.date();
+            if (date.isBefore(today) || date.isAfter(today.plusDays(90))) {
+                throw new BadRequestException("AI_INVALID", "날짜는 오늘부터 90일 안에서 골라 주세요.");
+            }
+            if (prev != null && !date.isAfter(prev)) {
+                throw new BadRequestException("AI_INVALID", "날짜가 순서대로여야 해요.");
+            }
+            prev = date;
+            String area = d.areaName() == null || d.areaName().isBlank() ? "선택한 지역" : d.areaName().strip();
+            if (area.length() > 30) area = area.substring(0, 30);
+            days.add(new Day(days.size() + 1, date, d.lat(), d.lng(), area));
+        }
+
         // 요청 한 줄. 줄바꿈을 지워 프롬프트의 다른 항목처럼 보이게 만드는 입력을 막는다.
         String note = req.note() == null ? "" : req.note().replaceAll("\\s+", " ").strip();
         if (note.length() > NOTE_MAX) note = note.substring(0, NOTE_MAX);
-        return new Condition(req.lat(), req.lng(), area, cats, date, note);
+        return new Plan(days, cats, note);
     }
 
     // ── 후보 ─────────────────────────────────────────────
@@ -217,25 +279,22 @@ public class AiRouteService {
         return new Kept(stops, reasons);
     }
 
-    List<Candidate> candidates(Condition c, List<Candidate> keep) {
+    /** 그 날 지역 반경 안의 후보. 날짜마다 따로 뽑는다(1일차 경주, 2일차 부산). */
+    List<Candidate> candidates(Day day, List<String> categories) {
         double dLat = RADIUS_M / 111_000.0;
-        double dLng = RADIUS_M / (111_000.0 * Math.cos(Math.toRadians(c.lat())));
-        BigDecimal minLat = BigDecimal.valueOf(c.lat() - dLat), maxLat = BigDecimal.valueOf(c.lat() + dLat);
-        BigDecimal minLng = BigDecimal.valueOf(c.lng() - dLng), maxLng = BigDecimal.valueOf(c.lng() + dLng);
+        double dLng = RADIUS_M / (111_000.0 * Math.cos(Math.toRadians(day.lat())));
+        BigDecimal minLat = BigDecimal.valueOf(day.lat() - dLat), maxLat = BigDecimal.valueOf(day.lat() + dLat);
+        BigDecimal minLng = BigDecimal.valueOf(day.lng() - dLng), maxLng = BigDecimal.valueOf(day.lng() + dLng);
 
-        List<Candidate> out = new ArrayList<>(keep);
-        Set<String> seen = new HashSet<>();
-        for (Candidate k : keep) seen.add(k.key());
+        List<Candidate> out = new ArrayList<>();
         // 테마별로 나눠 뽑는다. 한꺼번에 뽑으면 수가 많은 문화·맛집이 공예·전통시장을 밀어낸다.
-        int per = (int) Math.ceil((double) VENUE_CANDIDATES / c.categories().size());
-        for (String cat : c.categories()) {
-            for (Venue v : venueRepo.sampleForRoute(minLat, maxLat, minLng, maxLng, cat, per)) {
-                if (seen.add("v" + v.getId())) out.add(of(v));
-            }
+        int per = (int) Math.ceil((double) VENUE_CANDIDATES / categories.size());
+        for (String cat : categories) {
+            for (Venue v : venueRepo.sampleForRoute(minLat, maxLat, minLng, maxLng, cat, per)) out.add(of(v));
         }
-        for (Performance p : performanceRepo.findOnDateInBounds(c.date(), minLat, maxLat, minLng, maxLng,
+        for (Performance p : performanceRepo.findOnDateInBounds(day.date(), minLat, maxLat, minLng, maxLng,
                 PageRequest.of(0, EVENT_CANDIDATES))) {
-            if (seen.add("p" + p.getId())) out.add(of(p));
+            out.add(of(p));
         }
         return out;
     }
@@ -270,7 +329,7 @@ public class AiRouteService {
      * 모델이 매번 어겼다(맛집 연달아, 카페 두 곳, 카페에 '식당에서 식사' 이유). 규칙을 구조로
      * 옮겨, AI는 칸마다 허용된 분류 안에서 한 곳만 고르게 한다. 후보가 없는 칸은 만들지 않는다.
      */
-    static List<Slot> slots(List<String> categories, List<Candidate> candidates) {
+    static List<Slot> slots(List<String> categories, List<Candidate> candidates, boolean allowStay) {
         Set<String> present = new HashSet<>();
         for (Candidate k : candidates) present.add(k.category());
 
@@ -283,7 +342,7 @@ public class AiRouteService {
         if (!sights.isEmpty()) for (String e : EVENTS) if (present.contains(e)) sightsOrEvent.add(e);
         boolean food = categories.contains("맛집") && present.contains("맛집");
         boolean cafe = categories.contains("카페") && present.contains("카페");
-        boolean stay = categories.contains("한옥스테이") && present.contains("한옥스테이");
+        boolean stay = allowStay && categories.contains("한옥스테이") && present.contains("한옥스테이");
         boolean sight = !sights.isEmpty();
 
         List<String[]> plan = new ArrayList<>(); // {시각, 이름, 분류 구분}
@@ -310,7 +369,7 @@ public class AiRouteService {
             };
             slots.add(new Slot(slots.size() + 1, p[0], p[1], kinds));
         }
-        return slots.size() > MAX_STOPS ? slots.subList(0, MAX_STOPS) : slots;
+        return slots.size() > MAX_STOPS_PER_DAY ? slots.subList(0, MAX_STOPS_PER_DAY) : slots;
     }
 
     // ── 프롬프트 ─────────────────────────────────────────
@@ -319,9 +378,10 @@ public class AiRouteService {
         if (refining) {
             return """
                     너는 한국 전통문화 여행 서비스 '벼리'의 하루 여행 코스 설계자다.
-                    하루 틀의 각 칸에 "지금 고른 곳"이 붙어 있고, 이용자의 수정 요청이 함께 주어진다.
+                    일정 틀의 각 칸에 "지금 고른 곳"이 붙어 있고, 이용자의 수정 요청이 함께 주어진다.
                     picks 에는 **바꿀 칸만** 담는다. 요청과 무관한 칸은 담지 않는다(서버가 지금 곳을 그대로 둔다).
                     예: "점심을 바꿔줘" → 점심 칸 하나만 담고, 그 칸의 id 는 지금과 다른 후보여야 한다.
+                    요청에 날짜가 있으면("2일차 점심") 그 날짜의 칸만 담는다. 칸 줄의 "며칠째"를 보고 고른다.
                     비어 있는 칸("(빈 칸)")을 채워 달라는 요청이면 그 칸을 담는다.
                     고를 수 있는 것은 후보 목록뿐이다. 같은 장소를 두 곳에 쓰지 않는다. 칸마다 그 칸의 허용 분류에 속한 후보를
                     정확히 1곳씩 고른다. 목록에 없는 장소를 만들지 않고, 같은 장소를 두 번 쓰지 않는다.
@@ -364,31 +424,39 @@ public class AiRouteService {
                 """;
     }
 
-    private static String userPrompt(Condition c, List<Slot> slots, List<Candidate> candidates, Kept keep) {
-        StringBuilder sb = new StringBuilder()
-                .append("지역: ").append(c.areaName()).append('\n')
-                .append("날짜: ").append(c.date()).append('\n');
-        if (!c.note().isBlank()) {
+    private static String userPrompt(Plan plan, List<DayFrame> frames, Kept keep) {
+        StringBuilder sb = new StringBuilder();
+        if (!plan.note().isBlank()) {
             // 이용자 입력. 따옴표로 묶어 지시문과 섞이지 않게 한다.
-            sb.append(keep.isEmpty() ? "이용자 요청: \"" : "수정 요청: \"").append(c.note()).append("\"\n");
+            sb.append(keep.isEmpty() ? "이용자 요청: \"" : "수정 요청: \"").append(plan.note()).append("\"\n");
         }
+        sb.append(plan.days().size() == 1 ? "하루 코스\n" : plan.days().size() + "일 코스\n");
         // 다듬기일 때는 지금 코스를 칸에 붙여 보여준다. 따로 나열하면 어느 칸을 바꿔야 하는지 모른다.
         sb.append(keep.isEmpty()
-                ? "하루 틀 (칸 번호 | 시각 | 이름 | 허용 분류):\n"
-                : "하루 틀 (칸 번호 | 시각 | 이름 | 허용 분류 | 지금 고른 곳):\n");
-        for (Slot sl : slots) {
-            sb.append(sl.no()).append(" | ").append(sl.time()).append(" | ").append(sl.label()).append(" | ")
-                    .append(String.join("/", new TreeSet<>(sl.kinds())));
-            if (!keep.isEmpty()) {
-                Candidate now = keep.at(sl.no());
-                sb.append(" | ").append(now == null ? "(빈 칸)" : now.key() + "(" + now.name() + ")");
+                ? "일정 틀 (칸 번호 | 며칠째 | 시각 | 이름 | 허용 분류):\n"
+                : "일정 틀 (칸 번호 | 며칠째 | 시각 | 이름 | 허용 분류 | 지금 고른 곳):\n");
+        for (DayFrame f : frames) {
+            sb.append("[").append(f.day().no()).append("일차 ").append(f.day().date())
+                    .append(" · ").append(f.day().areaName()).append("]\n");
+            for (Slot sl : f.slots()) {
+                // 칸마다 며칠째인지 붙인다. 머리글만으로는 "2일차 점심"을 1일차 점심 칸으로 잘못 짚었다.
+                sb.append(sl.no()).append(" | ").append(f.day().no()).append("일차 | ")
+                        .append(sl.time()).append(" | ").append(sl.label()).append(" | ")
+                        .append(String.join("/", new TreeSet<>(sl.kinds())));
+                if (!keep.isEmpty()) {
+                    Candidate now = keep.at(sl.no());
+                    sb.append(" | ").append(now == null ? "(빈 칸)" : now.key() + "(" + now.name() + ")");
+                }
+                sb.append('\n');
             }
-            sb.append('\n');
         }
-        sb.append("후보 (ID | 이름 | 분류 | 위도,경도):\n");
-        for (Candidate k : candidates) {
-            sb.append(k.key()).append(" | ").append(k.name()).append(" | ").append(k.category()).append(" | ")
-                    .append(k.lat() == null ? "-" : String.format("%.4f,%.4f", k.lat(), k.lng())).append('\n');
+        sb.append("후보 (ID | 이름 | 분류 | 위도,경도) — 그 날 칸에는 그 날 후보만 쓴다:\n");
+        for (DayFrame f : frames) {
+            sb.append("[").append(f.day().no()).append("일차 후보 · ").append(f.day().areaName()).append("]\n");
+            for (Candidate k : f.candidates()) {
+                sb.append(k.key()).append(" | ").append(k.name()).append(" | ").append(k.category()).append(" | ")
+                        .append(k.lat() == null ? "-" : String.format("%.4f,%.4f", k.lat(), k.lng())).append('\n');
+            }
         }
         return sb.toString();
     }
@@ -420,36 +488,39 @@ public class AiRouteService {
      * AI 응답을 틀·후보와 대조한다. 칸의 허용 분류가 아니거나, 후보에 없거나, 이미 쓴 장소면 그 칸은
      * 비운다. 시각은 AI가 아니라 틀에서 가져온다. 채운 칸이 MIN_STOPS 미만이면 null.
      */
-    static Preview toPreview(JsonNode answer, List<Slot> slots, List<Candidate> candidates, LocalDate date,
-                             Kept keep) {
-        Map<String, Candidate> byKey = new LinkedHashMap<>();
-        for (Candidate k : candidates) byKey.put(k.key(), k);
+    static Preview toPreview(JsonNode answer, List<DayFrame> frames, Kept keep) {
         Map<Integer, JsonNode> bySlot = new LinkedHashMap<>();
         for (JsonNode p : answer.path("picks")) bySlot.putIfAbsent(p.path("slot").asInt(-1), p);
 
         List<Stop> stops = new ArrayList<>();
-        Set<String> used = new HashSet<>();
-        for (Slot sl : slots) {
-            JsonNode p = bySlot.get(sl.no());
-            String reason = p == null ? null : clip(p.path("reason").asText(""), 60);
-            Candidate k = p == null ? null : byKey.get(p.path("id").asText("").strip());
-            if (k != null && !sl.kinds().contains(k.category())) k = null; // 칸의 분류와 다르면 버린다
-            // 다듬기: AI가 담지 않은 칸은 지금 고른 곳을 이유까지 그대로 둔다(요청과 무관한 칸은 안 바뀐다)
-            if (k == null) {
-                k = keep.at(sl.no());
-                // 칸의 분류와 다른 장소가 넘어오면(요청이 조작됐거나 틀이 바뀐 경우) 그 칸은 비운다
-                if (k != null && !sl.kinds().contains(k.category())) k = null;
-                reason = keep.reasonAt(sl.no());
+        Set<String> used = new HashSet<>();   // 같은 장소가 다른 날에 또 나오지 않게
+        for (DayFrame f : frames) {
+            // 그 날 후보만 고를 수 있다. 다른 날 지역의 장소가 이 날 칸에 들어오지 않는다.
+            Map<String, Candidate> byKey = new LinkedHashMap<>();
+            for (Candidate k : f.candidates()) byKey.put(k.key(), k);
+            for (Slot sl : f.slots()) {
+                JsonNode p = bySlot.get(sl.no());
+                String reason = p == null ? null : clip(p.path("reason").asText(""), 60);
+                Candidate k = p == null ? null : byKey.get(p.path("id").asText("").strip());
+                if (k != null && !sl.kinds().contains(k.category())) k = null; // 칸의 분류와 다르면 버린다
+                // 다듬기: AI가 담지 않은 칸은 지금 고른 곳을 이유까지 그대로 둔다
+                if (k == null) {
+                    k = keep.at(sl.no());
+                    if (k != null && !sl.kinds().contains(k.category())) k = null;
+                    reason = keep.reasonAt(sl.no());
+                }
+                if (k == null || !used.add(k.key())) continue;
+                stops.add(new Stop(f.day().no(), f.day().date(), sl.no(), k.targetType(), k.targetId(), k.name(),
+                        k.category(), k.imageUrl(), k.lat(), k.lng(), sl.time(), reason == null ? "" : reason));
             }
-            if (k == null || !used.add(k.key())) continue;
-            stops.add(new Stop(sl.no(), k.targetType(), k.targetId(), k.name(), k.category(), k.imageUrl(),
-                    k.lat(), k.lng(), sl.time(), reason == null ? "" : reason));
         }
         if (stops.size() < MIN_STOPS) return null;
 
         String title = clip(answer.path("title").asText(""), 30);
-        return new Preview(title.isEmpty() ? "AI 추천 하루 코스" : title,
-                clip(answer.path("summary").asText(""), 120), date, stops, 0);
+        LocalDate start = frames.get(0).day().date();
+        LocalDate end = frames.get(frames.size() - 1).day().date();
+        return new Preview(title.isEmpty() ? "AI 추천 코스" : title,
+                clip(answer.path("summary").asText(""), 120), start, end, stops, 0);
     }
 
     static String clip(String s, int max) {
@@ -457,8 +528,17 @@ public class AiRouteService {
         return t.length() > max ? t.substring(0, max) : t;
     }
 
+    /** 다듬기 결과가 지금 코스와 같은지. 같으면 요청이 반영되지 않은 것이다. */
+    private static boolean unchanged(Preview p, Kept keep) {
+        for (Stop s : p.stops()) {
+            Candidate now = keep.at(s.slot());
+            if (now == null || !now.targetId().equals(s.targetId())) return false;
+        }
+        return true;
+    }
+
     private static Preview withRemaining(Preview p, int remaining) {
-        return new Preview(p.title(), p.summary(), p.date(), p.stops(), remaining);
+        return new Preview(p.title(), p.summary(), p.startDate(), p.endDate(), p.stops(), remaining);
     }
 
     private void evictExpired() {

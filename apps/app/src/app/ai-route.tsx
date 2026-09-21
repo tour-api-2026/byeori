@@ -30,6 +30,8 @@ const AREAS = [
 
 const MY_LOCATION = '내 위치 주변';
 const DEFAULT_THEMES = ['문화', '맛집'];
+/** 서버와 같은 상한. 반경 안에서 채울 수 있는 방문지가 이 정도가 한계다. */
+const MAX_DAYS = 3;
 
 /** YYYY-MM-DD, 기기 시간대 기준. */
 function isoDate(offsetDays: number) {
@@ -58,6 +60,22 @@ function dateLabel(iso: string) {
 /** 고른 지역. 칩·내 위치·검색으로 찾은 곳을 한 가지로 다룬다. */
 type Area = { name: string; lat?: number; lng?: number; my?: boolean };
 
+/** 시작일부터 종료일까지의 날짜들(최대 MAX_DAYS). */
+function datesBetween(start: string, end: string) {
+  const out: string[] = [];
+  const d = new Date(start);
+  const last = new Date(end);
+  while (d <= last && out.length < MAX_DAYS) {
+    const p = (n: number) => String(n).padStart(2, '0');
+    out.push(`${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`);
+    d.setDate(d.getDate() + 1);
+  }
+  return out.length ? out : [start];
+}
+
+/** 'YYYY-MM-DD' → '9/24' */
+const shortDate = (iso: string) => iso.slice(5).replace('-', '/');
+
 /**
  * AI 루트 만들기.
  *
@@ -70,11 +88,25 @@ export default function AiRouteScreen() {
   const qc = useQueryClient();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
 
-  const [area, setArea] = useState<Area>({ ...AREAS[0] });
+  const [range, setRange] = useState({ start: DATES[0].value, end: DATES[0].value });
+  const dates = datesBetween(range.start, range.end);
+  // 날짜마다 지역을 따로 고른다. 늘어난 날은 앞날과 같은 지역으로 채운다.
+  const [areas, setAreas] = useState<Area[]>([{ ...AREAS[0] }]);
+  const [editingDay, setEditingDay] = useState(0);
   const [areaSearchOpen, setAreaSearchOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [picking, setPicking] = useState<'start' | 'end'>('start');
   const [themes, setThemes] = useState<string[]>(DEFAULT_THEMES);
-  const [date, setDate] = useState(DATES[0].value);
+
+  useEffect(() => {
+    setAreas((cur) => {
+      if (cur.length === dates.length) return cur;
+      const next = cur.slice(0, dates.length);
+      while (next.length < dates.length) next.push({ ...next[next.length - 1] });
+      return next;
+    });
+    setEditingDay((d) => Math.min(d, dates.length - 1));
+  }, [dates.length]);
   const [note, setNote] = useState('');          // 칩으로 못 고르는 요청
   const [tweak, setTweak] = useState('');        // 결과를 보고 고쳐 달라는 요청
   const [preview, setPreview] = useState<AiRoutePreview | null>(null);
@@ -90,11 +122,17 @@ export default function AiRouteScreen() {
     );
   }
 
+  const dayArea = areas[editingDay] ?? areas[0] ?? { ...AREAS[0] };
+  const customArea = dayArea.lat != null && !AREAS.some((a) => a.name === dayArea.name);
+
   const toggleTheme = (t: string) =>
     setThemes((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
 
-  const resolveCenter = async (): Promise<{ lat: number; lng: number; name: string }> => {
-    if (area.lat != null && area.lng != null) return { lat: area.lat, lng: area.lng, name: area.name };
+  const setDayArea = (a: Area) => setAreas((cur) => cur.map((x, i) => (i === editingDay ? a : x)));
+
+  /** 내 위치는 고를 때가 아니라 만들 때 실제 좌표를 읽는다(권한 요청을 한 번만 하려고). */
+  const resolveArea = async (a: Area): Promise<{ lat: number; lng: number; name: string }> => {
+    if (a.lat != null && a.lng != null) return { lat: a.lat, lng: a.lng, name: a.name };
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') throw new Error('내 위치를 쓰려면 위치 권한을 허용해 주세요.');
     const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -111,9 +149,13 @@ export default function AiRouteScreen() {
     setBusy(tweakWith ? 'tweak' : 'generate');
     setError(null);
     try {
-      const c = await resolveCenter();
+      const days = [];
+      for (let i = 0; i < dates.length; i += 1) {
+        const c = await resolveArea(areas[i] ?? areas[0]);
+        days.push({ date: dates[i], lat: c.lat, lng: c.lng, areaName: c.name });
+      }
       const p = await generateAiRoute({
-        lat: c.lat, lng: c.lng, areaName: c.name, categories: themes, date, regenerate,
+        days, categories: themes, regenerate,
         note: tweakWith ?? (note.trim() || undefined),
         previous: tweakWith
           ? preview?.stops.map((s) => ({ slot: s.slot, targetType: s.targetType, targetId: s.targetId, reason: s.reason }))
@@ -148,24 +190,40 @@ export default function AiRouteScreen() {
       <Stack.Screen options={{ title: 'AI 루트 만들기' }} />
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 48 }}>
         <Text style={styles.lead}>
-          고른 조건에 맞춰 AI가 벼리의 장소·행사 중에서{'\n'}하루 코스를 짜 드려요.
+          고른 조건에 맞춰 AI가 벼리의 장소·행사 중에서{'\n'}여행 코스를 짜 드려요. 최대 {MAX_DAYS}일까지 됩니다.
         </Text>
 
-        <Text style={styles.label}>어디로 갈까요?</Text>
+        <Text style={styles.label}>
+          어디로 갈까요?
+          {dates.length > 1 ? <Text style={styles.sub}> (날짜마다 따로 고를 수 있어요)</Text> : null}
+        </Text>
+        {dates.length > 1 ? (
+          <View style={[styles.chips, { marginBottom: 10 }]}>
+            {dates.map((d, i) => (
+              <Chip key={d} label={`${i + 1}일차 ${shortDate(d)}`} on={editingDay === i}
+                onPress={() => setEditingDay(i)} />
+            ))}
+          </View>
+        ) : null}
         <View style={styles.chips}>
           {AREAS.map((a) => (
-            <Chip key={a.name} label={a.name} on={area.name === a.name} onPress={() => setArea({ ...a })} />
+            <Chip key={a.name} label={a.name} on={dayArea.name === a.name} onPress={() => setDayArea({ ...a })} />
           ))}
-          <Chip label={MY_LOCATION} icon="navigate" on={!!area.my}
-            onPress={() => setArea({ name: MY_LOCATION, my: true })} />
+          <Chip label={MY_LOCATION} icon="navigate" on={!!dayArea.my}
+            onPress={() => setDayArea({ name: MY_LOCATION, my: true })} />
           {/* 칩에 없는 곳은 검색해서 그 좌표를 중심으로 쓴다 */}
           <Chip
-            label={area.lat != null && !AREAS.some((a) => a.name === area.name) ? area.name : '다른 지역 찾기'}
+            label={customArea ? dayArea.name : '다른 지역 찾기'}
             icon="search"
-            on={area.lat != null && !AREAS.some((a) => a.name === area.name)}
+            on={customArea}
             onPress={() => setAreaSearchOpen(true)}
           />
         </View>
+        {dates.length > 1 ? (
+          <Text style={styles.areaSummary}>
+            {areas.map((a, i) => `${i + 1}일차 ${a.name}`).join(' · ')}
+          </Text>
+        ) : null}
 
         <Text style={styles.label}>무엇을 하고 싶나요? <Text style={styles.sub}>(여러 개 선택)</Text></Text>
         <View style={styles.chips}>
@@ -177,14 +235,18 @@ export default function AiRouteScreen() {
         <Text style={styles.label}>언제 가나요?</Text>
         <View style={styles.chips}>
           {DATES.map((d) => (
-            <Chip key={d.value} label={`${d.label} ${d.value.slice(5).replace('-', '/')}`}
-              on={date === d.value} onPress={() => setDate(d.value)} />
+            <Chip key={d.value} label={`${d.label} ${shortDate(d.value)}`}
+              on={range.start === d.value && range.end === d.value}
+              onPress={() => setRange({ start: d.value, end: d.value })} />
           ))}
           <Chip
-            label={DATES.some((d) => d.value === date) ? '날짜 선택' : dateLabel(date)}
+            label={dates.length > 1 ? `${shortDate(range.start)} ~ ${shortDate(range.end)} · ${dates.length}일` : '기간 선택'}
             icon="calendar-outline"
-            on={!DATES.some((d) => d.value === date)}
-            onPress={() => setCalendarOpen(true)}
+            on={dates.length > 1}
+            onPress={() => {
+              setPicking('start');
+              setCalendarOpen(true);
+            }}
           />
         </View>
 
@@ -223,35 +285,49 @@ export default function AiRouteScreen() {
           <View style={styles.result}>
             <View style={styles.aiBadge}>
               <Ionicons name="sparkles" size={12} color={colors.accent} />
-              <Text style={styles.aiBadgeText}>AI 추천 · {preview.date}</Text>
+              <Text style={styles.aiBadgeText}>
+                AI 추천 · {preview.startDate}
+                {preview.endDate !== preview.startDate ? ` ~ ${shortDate(preview.endDate)}` : ''}
+              </Text>
             </View>
             <Text style={styles.title}>{preview.title}</Text>
             {preview.summary ? <Text style={styles.summary}>{preview.summary}</Text> : null}
 
-            {preview.stops.map((s, i) => (
-              <Pressable
-                key={`${s.targetType}-${s.targetId}`}
-                style={styles.stop}
-                onPress={() => router.push(s.targetType === 'VENUE' ? `/venue/${s.targetId}` : `/performances/${s.targetId}`)}
-              >
-                <View style={styles.stepCol}>
-                  <View style={styles.step}><Text style={styles.stepText}>{i + 1}</Text></View>
-                  {i < preview.stops.length - 1 ? <View style={styles.stepLine} /> : null}
+            {Array.from(new Set(preview.stops.map((s) => s.day))).map((day) => {
+              const dayStops = preview.stops.filter((s) => s.day === day);
+              return (
+                <View key={day}>
+                  {/* 하루짜리면 날짜 머리글이 군더더기라 여러 날일 때만 보여준다 */}
+                  {preview.endDate !== preview.startDate ? (
+                    <Text style={styles.dayHead}>{day}일차 · {dateLabel(dayStops[0].date)}</Text>
+                  ) : null}
+                  {dayStops.map((s, i) => (
+                    <Pressable
+                      key={`${s.targetType}-${s.targetId}`}
+                      style={styles.stop}
+                      onPress={() => router.push(s.targetType === 'VENUE' ? `/venue/${s.targetId}` : `/performances/${s.targetId}`)}
+                    >
+                      <View style={styles.stepCol}>
+                        <View style={styles.step}><Text style={styles.stepText}>{i + 1}</Text></View>
+                        {i < dayStops.length - 1 ? <View style={styles.stepLine} /> : null}
+                      </View>
+                      {s.imageUrl ? (
+                        <Image source={sized(s.imageUrl, 160, 160)} style={styles.thumb} contentFit="cover" />
+                      ) : (
+                        <View style={[styles.thumb, styles.thumbEmpty]}>
+                          <Ionicons name="image-outline" size={18} color={colors.textFaint} />
+                        </View>
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.meta}>{[s.time, s.category].filter(Boolean).join(' · ')}</Text>
+                        <Text style={styles.name} numberOfLines={1}>{s.name}</Text>
+                        {s.reason ? <Text style={styles.reason} numberOfLines={2}>{s.reason}</Text> : null}
+                      </View>
+                    </Pressable>
+                  ))}
                 </View>
-                {s.imageUrl ? (
-                  <Image source={sized(s.imageUrl, 160, 160)} style={styles.thumb} contentFit="cover" />
-                ) : (
-                  <View style={[styles.thumb, styles.thumbEmpty]}>
-                    <Ionicons name="image-outline" size={18} color={colors.textFaint} />
-                  </View>
-                )}
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.meta}>{[s.time, s.category].filter(Boolean).join(' · ')}</Text>
-                  <Text style={styles.name} numberOfLines={1}>{s.name}</Text>
-                  {s.reason ? <Text style={styles.reason} numberOfLines={2}>{s.reason}</Text> : null}
-                </View>
-              </Pressable>
-            ))}
+              );
+            })}
 
             <View style={styles.tweakBox}>
               <TextInput
@@ -259,7 +335,7 @@ export default function AiRouteScreen() {
                 value={tweak}
                 onChangeText={setTweak}
                 maxLength={100}
-                placeholder="이렇게 바꿔 주세요 (예: 3번을 실내로)"
+                placeholder="이렇게 바꿔 주세요 (예: 2일차 점심을 바꿔줘)"
                 placeholderTextColor={colors.textFaint}
                 returnKeyType="send"
                 onSubmitEditing={() => tweak.trim() && generate(true, tweak.trim())}
@@ -289,7 +365,7 @@ export default function AiRouteScreen() {
         visible={areaSearchOpen}
         onClose={() => setAreaSearchOpen(false)}
         onPick={(p) => {
-          setArea({ name: p.name, lat: p.lat, lng: p.lng });
+          setDayArea({ name: p.name, lat: p.lat, lng: p.lng });
           setAreaSearchOpen(false);
         }}
       />
@@ -298,22 +374,37 @@ export default function AiRouteScreen() {
         <View style={styles.modalBg}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHead}>
-              <Text style={styles.modalTitle}>언제 가나요?</Text>
+              <Text style={styles.modalTitle}>
+                {picking === 'start' ? '출발일을 고르세요' : '마지막 날을 고르세요'}
+              </Text>
               <Pressable onPress={() => setCalendarOpen(false)} hitSlop={8}>
                 <Ionicons name="close" size={22} color={colors.text} />
               </Pressable>
             </View>
             <Calendar
-              rangeStart={date}
+              rangeStart={range.start}
+              rangeEnd={picking === 'start' ? range.start : range.end}
               min={DATE_MIN}
               max={DATE_MAX}
-              initialMonth={date.slice(0, 7)}
+              initialMonth={range.start.slice(0, 7)}
               onSelectDate={(d) => {
-                setDate(d);
+                if (picking === 'start' || d < range.start) {
+                  // 첫 번째 탭은 출발일. 하루만 갈 수도 있어 종료일도 같이 잡아 둔다.
+                  setRange({ start: d, end: d });
+                  setPicking('end');
+                  return;
+                }
+                const capped = datesBetween(range.start, d);
+                setRange({ start: range.start, end: capped[capped.length - 1] });
+                setPicking('start');
                 setCalendarOpen(false);
               }}
             />
-            <Text style={styles.modalNote}>오늘부터 90일 안에서 고를 수 있어요.</Text>
+            <Text style={styles.modalNote}>
+              {picking === 'start'
+                ? '출발일을 고르세요. 오늘부터 90일 안에서 고를 수 있어요.'
+                : `마지막 날을 고르세요. 최대 ${MAX_DAYS}일까지 만들 수 있어요.`}
+            </Text>
           </View>
         </View>
       </Modal>
@@ -470,6 +561,11 @@ const styles = StyleSheet.create({
   },
   aiBadgeText: { fontSize: 11, fontFamily: fonts.bold, fontWeight: '700', color: colors.accent },
   title: { fontSize: 19, fontFamily: fonts.bold, fontWeight: '800', color: colors.text, marginTop: 10 },
+  areaSummary: { fontSize: 12, color: colors.textFaint, marginTop: 8, lineHeight: 18 },
+  dayHead: {
+    fontSize: 13, fontFamily: fonts.bold, fontWeight: '800', color: colors.primary,
+    marginTop: 18, marginBottom: 2,
+  },
   summary: { fontSize: 13, color: colors.textSub, lineHeight: 20, marginTop: 6, marginBottom: 6 },
   stop: { flexDirection: 'row', gap: 10, paddingTop: 14 },
   stepCol: { alignItems: 'center', width: 22 },
