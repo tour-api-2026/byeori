@@ -1,0 +1,127 @@
+name: Store Release (Play · internal)
+
+# git tag v* 를 밀면 production 빌드 → Play 내부 테스트 트랙 제출까지 한 번에 간다.
+# 평소 커밋은 ota-update.yml이 OTA로 내보내고(branches: [main]), 이 워크플로는 태그에만
+# 걸리므로 서로 겹치지 않는다.
+#
+# 프로덕션 트랙 승격은 일부러 자동화하지 않는다 — 되돌릴 수 없는 공개 출시가 태그 하나로
+# 나가지 않도록, 내부 테스트까지만 올리고 승격은 Play Console에서 사람이 누른다.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      submit:
+        description: 'Play 제출까지 수행 (false면 빌드까지만 — 파이프라인 점검용)'
+        type: boolean
+        default: false
+
+# versionCode는 되돌릴 수 없다. 두 릴리스가 동시에 돌지 않게 직렬화하고,
+# 진행 중인 빌드를 취소하지도 않는다(취소해도 올라간 versionCode는 돌아오지 않음).
+concurrency:
+  group: store-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/app/package-lock.json
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      # 시크릿 미등록 시 뒤 스텝들이 알 수 없는 에러로 죽지 않도록 인증을 먼저 검사
+      - name: Verify EAS auth
+        run: |
+          if ! eas whoami > /dev/null 2>&1; then
+            echo "::error::EAS 인증 실패 — GitHub 시크릿 EXPO_TOKEN이 등록되어 있는지 확인하세요 (expo.dev → Access Tokens)."
+            exit 1
+          fi
+
+      # 태그 push면 제출까지, 수동 실행이면 입력값에 따른다.
+      - name: Decide mode
+        id: mode
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            echo "submit=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "submit=${{ inputs.submit }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 태그와 app.json version이 어긋나면 스토어에 엉뚱한 버전명으로 올라가고,
+      # 그때 쓰인 versionCode는 되돌릴 수 없다. 빌드 전에 막는 편이 싸다.
+      - name: Tag ↔ version check
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          RAW="${GITHUB_REF_NAME#v}"
+          RAW="${RAW%%+*}"                  # v1.3.0+7  → 1.3.0 (versionCode 병기 제거)
+          TAG_VERSION="${RAW%%-*}"          # v1.3.0-rc1 → 1.3.0 (프리릴리스 꼬리 제거)
+          APP_VERSION=$(node -p "require('./app.json').expo.version")
+          echo "tag=$TAG_VERSION app.json=$APP_VERSION"
+          if [ "$TAG_VERSION" != "$APP_VERSION" ]; then
+            echo "::error::태그($TAG_VERSION)와 app.json version($APP_VERSION)이 다릅니다. app.json을 먼저 올리고 그 커밋에 태그를 다세요."
+            exit 1
+          fi
+
+      # eas.json submit 프로필이 ./play-service-account.json 을 가리킨다.
+      # 시크릿에서 받아 파일로 떨어뜨리고, 잡이 끝나면 지운다.
+      - name: Write Play service account key
+        if: steps.mode.outputs.submit == 'true'
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
+            echo "::error::GitHub 시크릿 PLAY_SERVICE_ACCOUNT_JSON이 없습니다 (Google Cloud 서비스 계정 JSON 전문)."
+            exit 1
+          fi
+          printf '%s' "$PLAY_SERVICE_ACCOUNT_JSON" > play-service-account.json
+          # 키가 깨져 있으면 빌드를 20분 태운 뒤 제출 단계에서 죽는다. 여기서 먼저 검사한다.
+          node -e "const k=require('./play-service-account.json'); if (!k.client_email || !k.private_key) throw new Error('client_email / private_key 가 없습니다');" \
+            || { echo "::error::서비스 계정 JSON 형식이 올바르지 않습니다 — 시크릿에 JSON 전문이 그대로 들어갔는지 확인하세요."; exit 1; }
+
+      - name: Build (+ submit)
+        run: |
+          if [ "${{ steps.mode.outputs.submit }}" = "true" ]; then
+            eas build --platform android --profile production --auto-submit --non-interactive --wait
+          else
+            echo "::notice::submit=false — 빌드까지만 수행합니다(파이프라인 점검)."
+            eas build --platform android --profile production --non-interactive --wait
+          fi
+
+      - name: Remove service account key
+        if: always()
+        run: rm -f play-service-account.json
+
+      - name: Summary
+        if: success()
+        run: |
+          VC=$(eas build:version:get --platform android --non-interactive 2>/dev/null | sed -n 's/.*versionCode - //p')
+          {
+            echo "## 스토어 릴리스"
+            echo
+            echo "- 트리거: \`$GITHUB_EVENT_NAME\` (\`$GITHUB_REF_NAME\`)"
+            echo "- version: \`$(node -p "require('./app.json').expo.version")\`"
+            echo "- versionCode: \`${VC:-확인 실패}\`"
+            echo "- Play 제출: \`${{ steps.mode.outputs.submit }}\` (트랙: internal)"
+            echo
+            echo "프로덕션 트랙 승격은 Play Console에서 수동으로 진행합니다."
+          } >> "$GITHUB_STEP_SUMMARY"
