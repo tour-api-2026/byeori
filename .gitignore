@@ -36,3 +36,7 @@ infra/.env
 build/
 *.aab
 *.apk
+
+# Play Store 서비스 계정 키 — CI가 시크릿에서 임시로 만들고 지운다. 어떤 경로에도 커밋 금지
+play-service-account.json
+**/play-service-account.json
