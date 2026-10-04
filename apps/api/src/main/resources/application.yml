@@ -30,7 +30,8 @@ byeori:
     kakao-rest-key: ${KAKAO_REST_KEY:}
     kakao-redirect-uri: ${KAKAO_REDIRECT_URI:}
     kakao-client-secret: ${KAKAO_CLIENT_SECRET:}   # 콘솔에서 Client Secret 사용 시 필수(없으면 KOE010)
-    google-client-id: ${GOOGLE_CLIENT_ID:}
+    # 웹·Android 클라이언트를 쉼표로 나열. 기존 단일 설정(GOOGLE_CLIENT_ID)도 그대로 동작한다.
+    google-client-ids: ${GOOGLE_CLIENT_IDS:${GOOGLE_CLIENT_ID:}}
     # 아이디/비밀번호 로그인용 관리자 계정(운영은 ADMIN_* 환경변수로 덮어쓸 것)
     admin-id: ${ADMIN_ID:admin}
     admin-password: ${ADMIN_PASSWORD:byeori1234}

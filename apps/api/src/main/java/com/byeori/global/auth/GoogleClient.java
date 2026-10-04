@@ -29,7 +29,7 @@ public class GoogleClient {
     }
 
     public SocialProfile verify(String idToken) {
-        if (props.getGoogleClientId() == null || props.getGoogleClientId().isBlank()) {
+        if (props.getGoogleClientIds().isEmpty()) {
             throw new BadRequestException("GOOGLE_NOT_CONFIGURED", "구글 클라이언트 ID가 설정되지 않았습니다.");
         }
         if (idToken == null || idToken.isBlank()) {
@@ -44,7 +44,7 @@ public class GoogleClient {
             JsonNode node = om.readTree(body);
 
             String aud = text(node, "aud");
-            if (aud == null || !aud.equals(props.getGoogleClientId())) {
+            if (!props.isGoogleAudienceAllowed(aud)) {
                 throw new BadRequestException("GOOGLE_AUD_MISMATCH", "구글 토큰 대상(aud)이 일치하지 않습니다.");
             }
             String providerUserId = text(node, "sub");
