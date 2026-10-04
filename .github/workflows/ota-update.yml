@@ -15,7 +15,8 @@ jobs:
       # eas.json production 프로필과 동일한 공개 env — update 번들에도 박혀야 함
       EXPO_PUBLIC_API_URL: https://byeori.seoulride.site/api/v1
       EXPO_PUBLIC_KAKAO_JS_KEY: c67499ab00bd0367a2de44ba3990169d
-      EXPO_PUBLIC_KAKAO_NATIVE_KEY: 7f769acfbde8a4f7d9dedba42e0580a4
+      EXPO_PUBLIC_KAKAO_NATIVE_KEY: 4995d42b2c559e8f276d012b5a4ae463
+      EXPO_PUBLIC_KAKAO_REST_KEY: e77127e8068024a7edacca9f5ea8d364
     steps:
       - uses: actions/checkout@v4
 
