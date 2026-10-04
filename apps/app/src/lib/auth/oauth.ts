@@ -103,6 +103,14 @@ async function loginKakaoWeb() {
  * 네이티브는 SDK로 accessToken을 받아 백엔드에 검증시키고(lazy require — Expo Go 브라우징 영향 없음),
  * 웹은 네이티브 모듈을 쓸 수 없으므로 인가 코드 플로우로 우회한다.
  */
+/** 오류 화면에 붙일 원인 단서. 코드와 메시지만 쓰고 토큰 같은 값은 담지 않는다. */
+function detail(e: any): string {
+  const code = e?.code ? String(e.code) : '';
+  const msg = e?.message ? String(e.message) : '';
+  const parts = [code, msg].filter(Boolean);
+  return parts.length ? ` (${parts.join(': ')})` : '';
+}
+
 export async function loginKakao() {
   if (Platform.OS === 'web') return loginKakaoWeb();
 
@@ -121,7 +129,9 @@ export async function loginKakao() {
     const msg = String(e?.message ?? e?.code ?? '');
     if (/cancel/i.test(msg) || e?.code === 'E_CANCELLED_OPERATION') throw new AuthCancelledError();
     if (e instanceof AuthCancelledError) throw e;
-    throw new Error('카카오 로그인에 실패했습니다. (앱에서만 동작)');
+    // SDK가 주는 코드를 남긴다. 이걸 삼키면 키 해시 불일치(KOE006)인지 네트워크인지
+    // 사용자도 우리도 구분할 수 없다 — 실제로 원인을 찾는 데 한참 걸렸다.
+    throw new Error(`카카오 로그인에 실패했습니다.${detail(e)}`);
   }
 }
 

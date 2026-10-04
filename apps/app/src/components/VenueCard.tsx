@@ -1,4 +1,4 @@
-import { Image } from 'expo-image';
+import { Image } from '@/components/Image';
 import { useRouter } from 'expo-router';
 import { DimensionValue, Pressable, StyleSheet, Text, View } from 'react-native';
 import { VenueCardItem } from '@/lib/api/types';
