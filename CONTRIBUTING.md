@@ -102,7 +102,10 @@ fingerprint가 바뀌는 조건:
 - `package.json`에 네이티브 코드를 가진 패키지 추가·버전 변경
 - `app.json`의 `plugins` · `android` · `ios` · `permissions` 변경
 - `app.config.js` 로직 변경
+- **`eas.json` 변경** — `submit` 섹션만 고쳐도 해시가 바뀐다(2026-10-03 실측)
 - Expo SDK 업그레이드
+
+따라서 `eas.json`을 손대면 그 뒤로는 새 스토어 빌드가 나오기 전까지 OTA가 막힙니다. 설정만 바꾸는 커밋이라도 마찬가지입니다.
 
 ### 버전 축 4개
 
