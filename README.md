@@ -109,7 +109,25 @@ docker compose logs -f api
 cd apps/app
 npm install
 npx expo start            # 앱(QR) · 웹은 w 키
-npx expo export --platform web   # 정적 웹 산출물 → dist/
+
+# 운영 웹 빌드 — API 주소를 반드시 덮어쓴다
+EXPO_PUBLIC_API_URL=https://byeori.ernebi.org/api/v1 \
+  npx expo export --platform web --clear
+```
+
+> ⚠️ **웹과 앱은 API 주소가 다릅니다.**
+> `apps/app/.env` 의 `EXPO_PUBLIC_API_URL` 은 **네이티브 앱용**(`byeori.seoulride.site`)입니다.
+> 웹은 nginx 가 `/api` 를 백엔드로 프록시해 **같은 오리진**(`byeori.ernebi.org`)을 쓰도록 돼
+> 있습니다 — CORS 를 아예 만들지 않으려는 구성입니다. `.env` 값 그대로 웹을 빌드하면
+> 브라우저가 교차 오리진 요청을 막아 **화면이 로딩 스피너에서 멈춥니다.**
+>
+> `--clear` 도 필수입니다. 빼면 이전 env 가 캐시에서 그대로 번들에 들어갑니다.
+
+배포는 정적 파일을 `byeori-web` 볼륨에 덮어쓰는 방식입니다.
+
+```bash
+docker run --rm -v byeori-web:/dst -v "$PWD/dist":/src:ro alpine \
+  sh -c 'rm -rf /dst/* && cp -a /src/. /dst/'
 ```
 
 ### 환경변수
