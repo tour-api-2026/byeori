@@ -580,10 +580,7 @@ export default function MapScreen() {
               onPress={() => focusVenue(v)}>
               <Image source={v.imageUrl} style={styles.sheetThumb} contentFit="cover" />
               <View style={{ flex: 1 }}>
-                <View style={styles.sheetNameRow}>
-                  <Text style={styles.sheetName} numberOfLines={1}>{v.name}</Text>
-                  <Text style={styles.sheetBadge}>벼리</Text>
-                </View>
+                <Text style={styles.sheetName} numberOfLines={1}>{v.name}</Text>
                 <Text style={styles.sheetAddr} numberOfLines={1}>
                   {distanceOf(v) ? `${distanceOf(v)} · ` : ''}{v.address}
                 </Text>
@@ -791,9 +788,7 @@ const styles = StyleSheet.create({
   sheetRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: space.lg, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.border },
   sheetThumb: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.bgSoft },
   sheetThumbAlt: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.bgSoft, alignItems: "center", justifyContent: "center" },
-  sheetNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   sheetName: { fontSize: 14, fontFamily: fonts.semibold, fontWeight: "600", color: colors.text, flexShrink: 1 },
-  sheetBadge: { fontSize: 10, fontFamily: fonts.bold, fontWeight: "800", color: colors.primary, backgroundColor: colors.primarySoft, borderRadius: radius.sm, paddingHorizontal: 5, paddingVertical: 1 },
   sheetAddr: { fontSize: 12, color: colors.textFaint, marginTop: 2 },
   sheetCat: { fontSize: 12, color: colors.accent, marginTop: 2 },
   sheetEmpty: { fontSize: 13, color: colors.textFaint, textAlign: "center", paddingVertical: 28 },
