@@ -50,9 +50,17 @@ public class PerformanceService {
         return u.startsWith("http") ? u : "https://" + u;
     }
 
-    /** 장소 상세용. 끝난 행사는 빼고 진행 중·예정만 준다(저장은 그대로 둔다). */
+    /**
+     * 장소 상세용. 끝난 행사는 빼고 진행 중·예정만, 임박한 순으로 몇 건만 준다.
+     *
+     * 공연시설명 매칭이 붙으면서 예술의전당처럼 145건이 달리는 장소가 생겼다.
+     * 상세 화면의 곁다리 섹션이라 다 내려봐야 화면도 응답도 무거워지기만 한다.
+     */
+    private static final int VENUE_PERFORMANCE_LIMIT = 10;
+
     public List<PerformanceResponse> byVenue(Long venueId) {
-        return repo.findVisibleByVenue(venueId, java.time.LocalDate.now())
+        return repo.findVisibleByVenue(venueId, java.time.LocalDate.now(),
+                        org.springframework.data.domain.PageRequest.of(0, VENUE_PERFORMANCE_LIMIT))
                 .stream().map(PerformanceResponse::from).toList();
     }
 }

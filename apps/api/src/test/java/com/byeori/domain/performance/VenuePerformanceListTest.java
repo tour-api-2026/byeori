@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -66,7 +67,7 @@ class VenuePerformanceListTest {
     @Test
     @DisplayName("끝난 행사는 빠지고 진행 중·예정만 남는다")
     void 끝난_행사_제외() {
-        List<String> titles = repo.findVisibleByVenue(venueId, TODAY).stream()
+        List<String> titles = repo.findVisibleByVenue(venueId, TODAY, PageRequest.of(0, 50)).stream()
                 .map(Performance::getTitle).toList();
         assertThat(titles).containsExactly("TEST_오늘 끝남", "TEST_진행 중", "TEST_예정");
         assertThat(titles).doesNotContain("TEST_작년에 끝남", "TEST_어제 끝남");
@@ -75,7 +76,7 @@ class VenuePerformanceListTest {
     @Test
     @DisplayName("오늘 끝나는 행사는 아직 보여준다 — 종료일 당일은 진행 중")
     void 종료일_당일은_포함() {
-        assertThat(repo.findVisibleByVenue(venueId, TODAY).stream().map(Performance::getTitle))
+        assertThat(repo.findVisibleByVenue(venueId, TODAY, PageRequest.of(0, 50)).stream().map(Performance::getTitle))
                 .contains("TEST_오늘 끝남");
     }
 
