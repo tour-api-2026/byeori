@@ -33,8 +33,18 @@ public class VenueService {
         this.tourClient = tourClient;
     }
 
-    public Page<VenueResponse> list(String category, Boolean hanbokDiscount, String keyword, Pageable pageable) {
-        return repo.search(category, hanbokDiscount, keyword, pageable).map(VenueResponse::from);
+    /**
+     * 장소 목록. 좌표를 주면 그 지점에서 가까운 순으로 고른다.
+     *
+     * 정렬을 클라이언트에 맡기지 않는 이유는 응답이 잘리기 때문이다 — '카페'는 766건인데
+     * 50건만 내려가므로, 받은 뒤 정렬해 봐야 진짜 가까운 곳은 이미 빠져 있다.
+     */
+    public Page<VenueResponse> list(String category, Boolean hanbokDiscount, String keyword,
+                                    java.math.BigDecimal lat, java.math.BigDecimal lng, Pageable pageable) {
+        Page<Venue> page = (lat != null && lng != null)
+                ? repo.searchNear(category, hanbokDiscount, keyword, lat, lng, pageable)
+                : repo.search(category, hanbokDiscount, keyword, pageable);
+        return page.map(VenueResponse::from);
     }
 
     /**

@@ -132,7 +132,8 @@ export function mapScript(segColors: string[]): string {
         var ov=new kakao.maps.CustomOverlay({position:pos, content:html, yAnchor:1, clickable:true});
         ov.setMap(map); kakaoOv.push(ov);
       });
-      post({type:'kakaoResults', count:data.length});
+      // 목록(바텀시트)에서도 쓰므로 결과를 함께 보낸다. 개수만 보내면 RN 쪽이 다시 못 만든다.
+      post({type:'kakaoResults', count:data.length, places:kakaoData});
       fitAll();
     });
   };

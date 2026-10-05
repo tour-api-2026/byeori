@@ -16,11 +16,13 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import KakaoMapView, { type KakaoMapHandle } from "@/components/KakaoMapView";
+import { BottomSheet, type SheetSnap } from "@/components/BottomSheet";
 import { Chip } from "@/components/Chip";
 import { useTabBarHeight } from "@/components/TabBar";
 import { Rating } from "@/components/Rating";
 import { Venue } from "@/lib/api/types";
 import { CATEGORIES, inKorea } from "@/lib/categories";
+import { distanceMeters, formatDistance } from "@/lib/geo";
 import { useItineraryRouteQuery, useNearbyVenuesQuery, useVenuesQuery } from "@/lib/hooks/queries";
 import { colors, fonts, radius, shadow, space } from "@/lib/theme";
 import { ROUTE_SEGMENT_COLORS } from "@/lib/routeColors";
@@ -80,6 +82,11 @@ export default function MapScreen() {
   const [query, setQuery] = useState("");
   const [keyword, setKeyword] = useState(""); // 확정된 검색어(우리 장소 필터)
   const [kakaoCount, setKakaoCount] = useState<number | null>(null);
+  const [kakaoPlaces, setKakaoPlaces] = useState<KakaoPlace[]>([]);
+  // 검색 결과 목록 시트. 검색할 때마다 접힌 상태로 되돌린다.
+  const [sheetSnap, setSheetSnap] = useState<SheetSnap>("peek");
+  // 검색 결과를 가까운 순으로 주기 위한 기준점. 권한이 없으면 지도 중심으로 대신한다.
+  const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
   const webRef = useRef<KakaoMapHandle>(null);
   const [ready, setReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -95,12 +102,17 @@ export default function MapScreen() {
       : null,
   );
 
+  // 정렬 기준: 실제 현재 위치 → 없으면 보고 있는 지도 중심.
+  const origin = myPos ?? (view ? { lat: view.lat, lng: view.lng } : null);
+
   // 공사 API가 실패하면 화면이 비지 않도록 저장된 목록으로 대체한다.
   const fallback = useVenuesQuery({
     keyword: keyword || undefined,
     category: cat === "전체" ? undefined : cat,
     hanbokDiscount: hanbokOnly || undefined,
     size: 50,
+    lat: origin?.lat,
+    lng: origin?.lng,
   });
 
   const live = nearby.data ?? [];
@@ -109,6 +121,35 @@ export default function MapScreen() {
     // 한복 혜택은 공공데이터에 없는 자체 정보라 API 단계에서 거를 수 없다 — 여기서 건다.
     return hanbokOnly ? base.filter((v) => v.hanbokDiscount) : base;
   }, [live, fallback.data, hanbokOnly]);
+
+  /**
+   * 검색 결과 목록에 띄울 우리 장소.
+   *
+   * 마커용 venues 와 다르다 — 그쪽은 '지도에 보이는 영역의 주변 장소'라 검색어와 무관하다.
+   * 목록에는 키워드로 거른 것(fallback 쿼리)을 써야 '검색 결과'라는 제목과 맞는다.
+   */
+  const searchVenues = useMemo(() => {
+    if (!keyword) return [];
+    const base = fallback.data?.content ?? [];
+    return hanbokOnly ? base.filter((v) => v.hanbokDiscount) : base;
+  }, [keyword, fallback.data, hanbokOnly]);
+
+  /**
+   * 카카오 결과는 15건(SDK 페이지 상한)이라 화면에서 정렬해도 빠지는 게 없다.
+   * 우리 장소는 잘려 내려오므로 서버가 거리로 고른다 — searchNear 참고.
+   */
+  const sortedKakao = useMemo(() => {
+    if (!origin) return kakaoPlaces;
+    return [...kakaoPlaces].sort(
+      (a, b) => distanceMeters(origin, a) - distanceMeters(origin, b),
+    );
+  }, [kakaoPlaces, origin]);
+
+  /** 목록 행에 붙일 거리. 기준점이 없으면 표시하지 않는다. */
+  const distanceOf = (p: { lat?: number | null; lng?: number | null }) =>
+    origin && p.lat != null && p.lng != null
+      ? formatDistance(distanceMeters(origin, { lat: Number(p.lat), lng: Number(p.lng) }))
+      : '';
 
   // 검색 실행: 우리 장소는 쿼리 키워드로, 카카오 장소는 WebView keywordSearch로.
   const runSearch = () => {
@@ -121,12 +162,31 @@ export default function MapScreen() {
         ? `window.searchKakao(${JSON.stringify(q)}); true;`
         : "window.clearKakao(); true;",
     );
-    if (!q) setKakaoCount(null);
+    if (!q) { setKakaoCount(null); setKakaoPlaces([]); }
   };
+  /** 목록에서 고르면 지도를 그 자리로 옮기고 시트를 접는다 — 핀을 봐야 하니까. */
+  const focusVenue = (v: Venue) => {
+    setSelectedKakao(null);
+    setSelected(v);
+    setSheetSnap("peek");
+    if (v.lat != null && v.lng != null) {
+      webRef.current?.injectJavaScript(`window.moveTo(${v.lat}, ${v.lng}, 3); true;`);
+    }
+  };
+
+  const focusKakao = (k: KakaoPlace) => {
+    setSelected(null);
+    setSelectedKakao(k);
+    setSheetSnap("peek");
+    webRef.current?.injectJavaScript(`window.moveTo(${k.lat}, ${k.lng}, 3); true;`);
+  };
+
   const clearSearch = () => {
     setQuery("");
     setKeyword("");
     setKakaoCount(null);
+    setKakaoPlaces([]);
+    setSheetSnap("peek");
     setSelected(null);
     setSelectedKakao(null);
     webRef.current?.injectJavaScript("window.clearKakao(); true;");
@@ -188,8 +248,12 @@ export default function MapScreen() {
         webRef.current?.injectJavaScript(`window.moveTo(${lat}, ${lng}, 4); true;`);
       };
       const last = await Location.getLastKnownPositionAsync(); // 즉시 반응
-      if (last) moveTo(last.coords.latitude, last.coords.longitude);
+      if (last) {
+        setMyPos({ lat: last.coords.latitude, lng: last.coords.longitude });
+        moveTo(last.coords.latitude, last.coords.longitude);
+      }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setMyPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       moveTo(pos.coords.latitude, pos.coords.longitude);
     } catch {
       // 위치 실패/권한 거부 시 기본 중심(서울) 유지
@@ -244,7 +308,10 @@ export default function MapScreen() {
           setSelected(v);
         }
       }
-      if (msg.type === "kakaoResults") setKakaoCount(Number(msg.count));
+      if (msg.type === "kakaoResults") {
+        setKakaoCount(Number(msg.count));
+        setKakaoPlaces(Array.isArray(msg.places) ? (msg.places as KakaoPlace[]) : []);
+      }
       if (msg.type === "selectKakao" && msg.place) {
         setSelected(null);
         setSelectedKakao(msg.place as KakaoPlace);
@@ -399,7 +466,7 @@ export default function MapScreen() {
             <Text style={styles.resultHint}>
               '{keyword}' 검색 · 카카오{" "}
               <Text style={styles.resultNum}>{kakaoCount ?? 0}</Text>곳 · 우리
-              장소 <Text style={styles.resultNum}>{venues.length}</Text>곳
+              장소 <Text style={styles.resultNum}>{searchVenues.length}</Text>곳
             </Text>
           )}
         </>
@@ -489,6 +556,65 @@ export default function MapScreen() {
           <Pressable hitSlop={8} onPress={() => setSelectedKakao(null)}>
             <Ionicons name="close" size={20} color={colors.textFaint} />
           </Pressable>
+        </Pressable>
+      )}
+
+      {/* 검색 결과 목록 — 아래에서 올라오는 시트. 지도를 가리지 않고 훑어볼 수 있게 한다. */}
+      <BottomSheet
+        visible={keyword.length > 0 && !routeMode}
+        snap={sheetSnap}
+        onSnapChange={setSheetSnap}
+        peekHeight={168 + tabH}
+        topInset={insets.top + 56}>
+        <View style={styles.sheetHead}>
+          <Text style={styles.sheetTitle}>'{keyword}' 검색 결과</Text>
+          <Text style={styles.sheetCount}>{searchVenues.length + sortedKakao.length}곳</Text>
+        </View>
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: tabH + 24 }}
+          showsVerticalScrollIndicator={false}>
+          {searchVenues.map((v) => (
+            <Pressable
+              key={`v-${v.id ?? v.tourContentId}`}
+              style={styles.sheetRow}
+              onPress={() => focusVenue(v)}>
+              <Image source={v.imageUrl} style={styles.sheetThumb} contentFit="cover" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetName} numberOfLines={1}>{v.name}</Text>
+                <Text style={styles.sheetAddr} numberOfLines={1}>
+                  {distanceOf(v) ? `${distanceOf(v)} · ` : ''}{v.address}
+                </Text>
+                <Rating value={v.avgRating} count={v.reviewCount} />
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
+            </Pressable>
+          ))}
+          {sortedKakao.map((k, i) => (
+            <Pressable key={`k-${i}`} style={styles.sheetRow} onPress={() => focusKakao(k)}>
+              <View style={styles.sheetThumbAlt}>
+                <Ionicons name="location" size={20} color={colors.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetName} numberOfLines={1}>{k.name}</Text>
+                <Text style={styles.sheetAddr} numberOfLines={1}>
+                  {distanceOf(k) ? `${distanceOf(k)} · ` : ''}{k.address}
+                </Text>
+                {!!k.category && <Text style={styles.sheetCat}>{k.category}</Text>}
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
+            </Pressable>
+          ))}
+          {searchVenues.length + sortedKakao.length === 0 && (
+            <Text style={styles.sheetEmpty}>검색 결과가 없어요</Text>
+          )}
+        </ScrollView>
+      </BottomSheet>
+
+      {/* 펼친 상태에서 지도로 돌아가는 버튼 */}
+      {keyword.length > 0 && !routeMode && sheetSnap === 'full' && (
+        <Pressable style={[styles.mapBtn, { bottom: tabH + 20 }]} onPress={() => setSheetSnap('peek')}>
+          <Ionicons name="location" size={16} color={colors.white} />
+          <Text style={styles.mapBtnText}>지도보기</Text>
         </Pressable>
       )}
     </View>
@@ -656,6 +782,19 @@ const styles = StyleSheet.create({
     transform: [{ translateX: -17 }, { translateY: -12 }, { scale: 1.15 }],
   },
   pinText: { color: colors.white, fontSize: 11, fontWeight: "800" },
+  sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.lg, paddingBottom: 10 },
+  sheetTitle: { fontSize: 15, fontFamily: fonts.bold, fontWeight: "800", color: colors.text },
+  sheetCount: { fontSize: 13, color: colors.textFaint },
+  sheetRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: space.lg, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.border },
+  sheetThumb: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.bgSoft },
+  sheetThumbAlt: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.bgSoft, alignItems: "center", justifyContent: "center" },
+  sheetName: { fontSize: 14, fontFamily: fonts.semibold, fontWeight: "600", color: colors.text, flexShrink: 1 },
+  sheetAddr: { fontSize: 12, color: colors.textFaint, marginTop: 2 },
+  sheetCat: { fontSize: 12, color: colors.accent, marginTop: 2 },
+  sheetEmpty: { fontSize: 13, color: colors.textFaint, textAlign: "center", paddingVertical: 28 },
+  mapBtn: { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.text, borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 11, ...shadow.card },
+  mapBtnText: { color: colors.white, fontSize: 13, fontFamily: fonts.bold, fontWeight: "800" },
+
   miniCard: {
     flexDirection: "row",
     alignItems: "center",
