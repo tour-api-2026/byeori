@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
@@ -18,8 +19,30 @@ function LinkRow({ icon, label, onPress }: { icon: string; label: string; onPres
   );
 }
 
+/**
+ * 어느 번들로 돌고 있는지 알려주는 줄.
+ *
+ * 전에는 버전이 '1.0.0' 하나뿐이라, 7월 빌드든 최신 OTA든 화면이 똑같았다. 그래서
+ * "앱이 웹과 다르다"를 푸는 데 한참 걸렸다 — 설치본을 특정할 방법이 없었다.
+ *
+ * versionCode 대신 runtimeVersion 을 쓴다. expo-application 은 직접 의존성이 아니라
+ * 끌어 쓰면 지문이 흔들릴 수 있고, 무엇보다 runtimeVersion 이 더 쓸모 있다 —
+ * OTA 가 그 설치본에 닿는지를 결정하는 값이 바로 이것이다.
+ */
+function buildLine(): string | null {
+  if (!Updates.isEnabled) return null;        // 개발 중에는 의미 없는 값이라 숨긴다
+  const rt = Updates.runtimeVersion?.slice(0, 8);
+  const src = Updates.isEmbeddedLaunch ? '내장' : 'OTA';
+  const id = Updates.updateId?.slice(0, 8);
+  const at = Updates.createdAt
+    ? `${Updates.createdAt.getMonth() + 1}월 ${Updates.createdAt.getDate()}일`
+    : null;
+  return [rt && `빌드 ${rt}`, `${src}${id ? ` ${id}` : ''}`, at].filter(Boolean).join(' · ');
+}
+
 export default function ServiceInfoScreen() {
   const version = Constants.expoConfig?.version ?? '1.0.0';
+  const build = buildLine();
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -27,6 +50,7 @@ export default function ServiceInfoScreen() {
         <View style={styles.hero}>
           <Text style={styles.appName}>벼리</Text>
           <Text style={styles.version}>버전 {version}</Text>
+          {!!build && <Text style={styles.build}>{build}</Text>}
           <Text style={styles.tagline}>전통이 살아있는 여행을 잇다</Text>
         </View>
 
@@ -68,6 +92,7 @@ const styles = StyleSheet.create({
   hero: { alignItems: 'center', paddingVertical: 24 },
   appName: { fontSize: 26, fontFamily: fonts.bold, fontWeight: '800', color: colors.text, letterSpacing: 2 },
   version: { fontSize: 13, color: colors.textSub, marginTop: 6 },
+  build: { fontSize: 11, color: colors.textFaint, marginTop: 3 },
   tagline: { fontSize: 13, color: colors.textFaint, marginTop: 10 },
   sectionLabel: { fontSize: 15, fontFamily: fonts.bold, fontWeight: '800', color: colors.text, marginTop: 22, marginBottom: 10 },
   card: { backgroundColor: colors.bgCard, borderRadius: radius.lg, ...shadow.card, overflow: 'hidden' },
