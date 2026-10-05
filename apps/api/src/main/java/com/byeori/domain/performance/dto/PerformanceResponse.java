@@ -17,7 +17,7 @@ public record PerformanceResponse(
     public static PerformanceResponse from(Performance p) {
         return new PerformanceResponse(
                 p.getId(), p.getVenueId(), p.getTitle(), p.getGenre(), p.getPosterImageUrl(),
-                p.getStartDate(), p.getEndDate(), p.getState(), p.getExternalBookingUrl(),
+                p.getStartDate(), p.getEndDate(), p.currentState(), p.getExternalBookingUrl(),
                 p.getAvgRating(), p.getReviewCount() == null ? 0 : p.getReviewCount(), p.getSource(),
                 p.getLat(), p.getLng(), p.isTraditional(), null, infoUrl(p));
     }

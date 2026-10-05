@@ -35,6 +35,25 @@ public class Performance {
     private LocalDateTime syncedAt;
     private boolean traditional;
 
+    /**
+     * 기준일로 본 행사 상태.
+     *
+     * state 컬럼은 동기화 시점에 계산해 넣은 값이라, 저장된 뒤 기간이 지나도 그대로 남는다.
+     * 2026-10-05 기준 '진행 중' 목록 200건 중 192건이 이미 끝난 행사였다(최대 59일 경과).
+     * 시간에 따라 변하는 값이므로 읽을 때마다 계산한다 — 판정 규칙은 기존과 같다.
+     */
+    public static String stateOn(LocalDate start, LocalDate end, LocalDate today) {
+        if (end != null && end.isBefore(today)) return "ENDED";
+        if (start != null && start.isAfter(today)) return "UPCOMING";
+        if (start != null && end != null) return "ONGOING"; // start <= today <= end
+        return "UPCOMING";                                  // 기간 정보가 비면 예정으로 본다
+    }
+
+    /** 오늘 기준 상태. 저장된 state 컬럼 대신 이 값을 응답에 쓴다. */
+    public String currentState() {
+        return stateOn(startDate, endDate, LocalDate.now());
+    }
+
     /** KOPIS 공연으로 신규 생성 */
     public static Performance fromKopis(String kopisId, String title, String genre, String posterImageUrl,
                                         LocalDate startDate, LocalDate endDate, String state, String externalBookingUrl) {
