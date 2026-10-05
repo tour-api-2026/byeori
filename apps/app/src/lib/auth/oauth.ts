@@ -197,23 +197,28 @@ export async function loginGoogle() {
   }
 }
 
-/** 웹 구글 로그인: 브라우저 인가 플로우로 id_token 을 받는다. */
+/**
+ * 웹 구글 로그인: 인가 코드 플로우.
+ *
+ * 브라우저가 id_token 을 직접 받는 implicit 방식은 쓰지 않는다 — 인증을 마쳐도 토큰이
+ * 페이지로 돌아오지 않아 로그인이 멈췄다(백엔드에 요청 자체가 들어오지 않았다).
+ * 원인을 바깥에서 특정하지 못해, 같은 앱에서 멀쩡히 도는 카카오 웹과 같은 구조로 맞춘다.
+ * 코드 교환은 백엔드가 한다(클라이언트 보안 비밀이 브라우저로 내려가면 안 된다).
+ */
 async function loginGoogleWeb() {
   const clientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
   if (!clientId) {
     throw new Error('구글 로그인 설정이 필요해요. (EXPO_PUBLIC_GOOGLE_CLIENT_ID 미설정)');
   }
+  const webRedirectUri = activeRedirectUri();
 
   const request = new AuthSession.AuthRequest({
     clientId,
-    redirectUri: activeRedirectUri(),
-    responseType: AuthSession.ResponseType.IdToken,
+    redirectUri: webRedirectUri,
+    responseType: AuthSession.ResponseType.Code,
     scopes: ['openid', 'profile', 'email'],
-    // PKCE는 인가 코드 플로우 전용이다. 기본값(true)대로 code_challenge 를 붙이면
-    // 구글이 id_token 요청을 400 invalid_request 로 거부한다.
+    // 백엔드가 code 를 그대로 교환하므로 PKCE verifier 를 넘길 수단이 없다(카카오 웹과 같다).
     usePKCE: false,
-    // id_token implicit 플로우는 nonce 필수
-    extraParams: { nonce: Math.random().toString(36).slice(2) + Date.now().toString(36) },
   });
 
   const result = await request.promptAsync(GOOGLE_DISCOVERY);
@@ -222,8 +227,8 @@ async function loginGoogleWeb() {
     throw new Error(result.type === 'error' ? (result.error?.message ?? '구글 인증 오류') : '구글 인증에 실패했습니다.');
   }
 
-  const idToken = result.params.id_token;
-  if (!idToken) throw new Error('구글 id_token을 받지 못했습니다.');
+  const code = result.params.code;
+  if (!code) throw new Error('구글 인가 코드를 받지 못했습니다.');
 
-  return exchangeWithBackend({ provider: 'google', idToken });
+  return exchangeWithBackend({ provider: 'google', code, redirectUri: webRedirectUri });
 }

@@ -15,7 +15,7 @@ class AuthPropertiesGoogleAudienceTest {
     private static final String ANDROID = "566537373981-android.apps.googleusercontent.com";
 
     private AuthProperties props(String googleClientIds) {
-        return new AuthProperties("", "", "", "", googleClientIds);
+        return new AuthProperties("", "", "", "", googleClientIds, "", "");
     }
 
     @Test

@@ -27,17 +27,24 @@ public class AuthProperties {
      * GOOGLE_CLIENT_IDS 에 쉼표로 나열하고, 없으면 기존 GOOGLE_CLIENT_ID 를 쓴다.
      */
     private final List<String> googleClientIds;
+    /** 웹 인가 코드를 토큰으로 교환할 때 쓰는 '웹' 클라이언트. 아래 시크릿과 짝이어야 한다. */
+    private final String googleWebClientId;
+    private final String googleClientSecret;
 
     public AuthProperties(@Value("${byeori.auth.jwt-secret:}") String jwtSecret,
                           @Value("${byeori.auth.kakao-rest-key:}") String kakaoRestKey,
                           @Value("${byeori.auth.kakao-redirect-uri:}") String kakaoRedirectUri,
                           @Value("${byeori.auth.kakao-client-secret:}") String kakaoClientSecret,
-                          @Value("${byeori.auth.google-client-ids:}") String googleClientIds) {
+                          @Value("${byeori.auth.google-client-ids:}") String googleClientIds,
+                          @Value("${byeori.auth.google-web-client-id:}") String googleWebClientId,
+                          @Value("${byeori.auth.google-client-secret:}") String googleClientSecret) {
         this.jwtSecret = jwtSecret;
         this.kakaoRestKey = kakaoRestKey;
         this.kakaoRedirectUri = kakaoRedirectUri;
         this.kakaoClientSecret = kakaoClientSecret;
         this.googleClientIds = parseIds(googleClientIds);
+        this.googleWebClientId = googleWebClientId;
+        this.googleClientSecret = googleClientSecret;
     }
 
     /** 이 aud 를 가진 구글 id_token 을 받아들일지. */
