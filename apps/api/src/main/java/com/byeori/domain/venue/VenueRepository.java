@@ -104,6 +104,34 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
                        Pageable pageable);
 
     /**
+     * 같은 검색을 '현재 위치에서 가까운 순'으로.
+     *
+     * 정렬을 클라이언트에 맡기면 안 된다 — '카페'는 766건인데 응답은 잘려 나가므로,
+     * 받은 뒤 정렬해 봐야 진짜 가까운 곳은 이미 빠져 있다. 고르는 단계에서 거리를 써야 한다.
+     *
+     * 거리는 제곱거리로 비교한다. 정렬에는 순서만 맞으면 되고 실제 미터는 화면에서 계산한다.
+     * 경도 1도는 위도 1도보다 짧으므로(위도 36도에서 약 0.81배) 그만큼 눌러서 비교한다.
+     * 이 보정 없이 비교하면 동서로 떨어진 곳이 실제보다 가깝게 잡힌다.
+     */
+    @Query("""
+            select v from Venue v
+            where v.status = 'ACTIVE' and v.visibility = 'PUBLIC'
+              and v.lat is not null and v.lng is not null
+              and (:category is null or v.category = :category)
+              and (:hanbokDiscount is null or v.hanbokDiscount = :hanbokDiscount)
+              and (:keyword is null or v.name like %:keyword%)
+            order by (v.lat - :lat) * (v.lat - :lat)
+                   + (v.lng - :lng) * (v.lng - :lng) * 0.656,
+                     v.id asc
+            """)
+    Page<Venue> searchNear(@Param("category") String category,
+                           @Param("hanbokDiscount") Boolean hanbokDiscount,
+                           @Param("keyword") String keyword,
+                           @Param("lat") BigDecimal lat,
+                           @Param("lng") BigDecimal lng,
+                           Pageable pageable);
+
+    /**
      * AI 루트 후보. 사진 있는 장소만, 매번 순서를 섞어 뽑는다.
      * 같은 조건으로 "다시 만들기"를 눌렀을 때 AI에게 다른 후보가 가야 결과가 달라진다.
      */

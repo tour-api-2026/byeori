@@ -1,7 +1,8 @@
 import { api, Page, unwrap, ApiEnvelope } from './client';
 import { Performance, Venue, VenueDetail } from './types';
 
-export type VenueFilter = { category?: string; hanbokDiscount?: boolean; keyword?: string; size?: number };
+/** lat·lng 를 주면 서버가 그 지점에서 가까운 순으로 골라 준다(잘린 뒤 정렬하면 틀린다). */
+export type VenueFilter = { category?: string; hanbokDiscount?: boolean; keyword?: string; size?: number; lat?: number; lng?: number };
 
 export function fetchVenues(filter: VenueFilter = {}): Promise<Page<Venue>> {
   return unwrap<Page<Venue>>(api.get<ApiEnvelope<Page<Venue>>>('/venues', {

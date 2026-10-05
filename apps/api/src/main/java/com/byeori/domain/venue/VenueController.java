@@ -33,9 +33,14 @@ public class VenueController {
             @RequestParam(name = "hanbokDiscount", required = false) Boolean hanbokDiscount,
             @RequestParam(name = "keyword", required = false) String keyword,
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size) {
-        Page<VenueResponse> result = service.list(category, hanbokDiscount, keyword,
-                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "reviewCount")));
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            // 주면 이 지점에서 가까운 순으로 고른다(지도 검색 결과 목록용).
+            @RequestParam(name = "lat", required = false) java.math.BigDecimal lat,
+            @RequestParam(name = "lng", required = false) java.math.BigDecimal lng) {
+        boolean near = lat != null && lng != null;
+        Page<VenueResponse> result = service.list(category, hanbokDiscount, keyword, lat, lng,
+                near ? PageRequest.of(page, size)
+                     : PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "reviewCount")));
         return ApiResponse.ok(PageResponse.of(result));
     }
 
