@@ -206,11 +206,13 @@ public class SyncService {
         LocalDate to = from.plusMonths(KOPIS_MONTHS);
         // 공연시설(mt10id) 좌표 캐시 — 여러 공연이 같은 공연장을 공유하므로 중복 호출 방지.
         Map<String, BigDecimal[]> facilityCoords = new HashMap<>();
+        // 공연시설명 → 장소 색인. 한 번만 만들어 돌려 쓴다(장소 3만여 곳).
+        Map<String, Long> venueIndex = buildVenueNameIndex();
         int count = 0;
         for (int page = 1; page <= KOPIS_MAX_PAGES; page++) {
             List<KopisItem> items = kopisClient.performances(from, to, page, ROWS);
             if (items.isEmpty()) break;
-            for (KopisItem it : items) count += upsertPerformance(it, facilityCoords);
+            for (KopisItem it : items) count += upsertPerformance(it, facilityCoords, venueIndex);
             throttle();
             if (items.size() < ROWS) break; // 마지막 페이지
         }
@@ -332,7 +334,17 @@ public class SyncService {
         catch (Exception e) { return null; }
     }
 
-    private int upsertPerformance(KopisItem it, Map<String, BigDecimal[]> facilityCoords) {
+    /** 공연시설명 → 장소 id 색인. 정규화 규칙과 중복 처리는 VenueNameMatcher 참고. */
+    private Map<String, Long> buildVenueNameIndex() {
+        Map<Long, String> names = new HashMap<>();
+        for (Object[] row : venueRepo.findIdAndName()) names.put((Long) row[0], (String) row[1]);
+        Map<String, Long> index = VenueNameMatcher.buildIndex(names);
+        log.info("장소 이름 색인 {}개 (장소 {}곳)", index.size(), names.size());
+        return index;
+    }
+
+    private int upsertPerformance(KopisItem it, Map<String, BigDecimal[]> facilityCoords,
+                                  Map<String, Long> venueIndex) {
         if (it.mt20id() == null || it.prfnm() == null) return 0;
         LocalDate start = date(it.prfpdfrom());
         LocalDate end = date(it.prfpdto());
@@ -342,6 +354,9 @@ public class SyncService {
                     .map(existing -> { existing.updateFromKopis(it.prfnm(), it.genrenm(), it.poster(), start, end, state); return existing; })
                     .orElseGet(() -> Performance.fromKopis(it.mt20id(), it.prfnm(), it.genrenm(), it.poster(), start, end, state, null));
             p.applyTraditional(TraditionalTagger.isTraditional(p.getTitle(), p.getGenre()));
+            // 공연시설명으로 우리 장소를 찾는다. 못 찾으면 venueId 는 그대로 둔다 —
+            // 이름이 정확히 같을 때만 잇고, 추측으로 채우지 않는다.
+            p.applyFacility(it.fcltynm(), VenueNameMatcher.find(venueIndex, it.fcltynm()));
             // 좌표 미보유 시에만 공연시설상세에서 위경도 보강(재동기화 비용 최소화).
             if (!p.hasCoordinates()) {
                 BigDecimal[] coords = resolvePerformanceCoords(it.mt20id(), facilityCoords);

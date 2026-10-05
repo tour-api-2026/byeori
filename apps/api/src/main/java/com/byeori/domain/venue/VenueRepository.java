@@ -15,6 +15,10 @@ import org.springframework.data.repository.query.Param;
 public interface VenueRepository extends JpaRepository<Venue, Long> {
 
     @Modifying(clearAutomatically = true)
+    /** 이름 매칭용 id·이름만. 엔티티로 3만 행을 올리지 않으려고 따로 둔다. */
+    @Query("select v.id, v.name from Venue v where v.name is not null")
+    List<Object[]> findIdAndName();
+
     @Query("update Venue v set v.avgRating = :avg, v.reviewCount = :cnt where v.id = :id")
     void updateRating(@Param("id") Long id, @Param("avg") BigDecimal avg, @Param("cnt") int cnt);
 

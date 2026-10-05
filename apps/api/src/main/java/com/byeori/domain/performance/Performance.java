@@ -34,6 +34,8 @@ public class Performance {
     private String seoulId;
     private LocalDateTime syncedAt;
     private boolean traditional;
+    /** KOPIS 공연시설명. 장소 매칭의 근거이자, 못 맞췄을 때 왜인지 보기 위해 남긴다. */
+    private String facilityName;
 
     /**
      * 기준일로 본 행사 상태.
@@ -75,6 +77,12 @@ public class Performance {
     }
 
     /** KOPIS 재동기화 갱신 */
+    /** 공연시설명과 그로부터 찾은 장소. 못 찾았으면 venueId 는 건드리지 않는다. */
+    public void applyFacility(String facilityName, Long matchedVenueId) {
+        if (facilityName != null && !facilityName.isBlank()) this.facilityName = facilityName;
+        if (matchedVenueId != null) this.venueId = matchedVenueId;
+    }
+
     public void updateFromKopis(String title, String genre, String posterImageUrl,
                                 LocalDate startDate, LocalDate endDate, String state) {
         if (title != null) this.title = title;

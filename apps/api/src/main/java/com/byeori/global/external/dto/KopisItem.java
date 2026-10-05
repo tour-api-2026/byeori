@@ -8,5 +8,6 @@ public record KopisItem(
         String prfpdfrom,     // 시작일 yyyy.MM.dd
         String prfpdto,       // 종료일 yyyy.MM.dd
         String genrenm,       // 장르
-        String prfstate       // 공연상태(공연예정/공연중/공연완료)
+        String prfstate,      // 공연상태(공연예정/공연중/공연완료)
+        String fcltynm        // 공연시설명 — 장소 매칭에 쓴다
 ) {}
