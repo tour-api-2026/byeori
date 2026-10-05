@@ -50,7 +50,9 @@ public class PerformanceService {
         return u.startsWith("http") ? u : "https://" + u;
     }
 
+    /** 장소 상세용. 끝난 행사는 빼고 진행 중·예정만 준다(저장은 그대로 둔다). */
     public List<PerformanceResponse> byVenue(Long venueId) {
-        return repo.findByVenueIdOrderByStartDateAsc(venueId).stream().map(PerformanceResponse::from).toList();
+        return repo.findVisibleByVenue(venueId, java.time.LocalDate.now())
+                .stream().map(PerformanceResponse::from).toList();
     }
 }

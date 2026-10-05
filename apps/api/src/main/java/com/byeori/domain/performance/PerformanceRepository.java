@@ -54,7 +54,20 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
                              @Param("traditional") Boolean traditional,
                              Pageable pageable);
 
-    List<Performance> findByVenueIdOrderByStartDateAsc(Long venueId);
+    /**
+     * 장소 상세에 띄울 행사 — 진행 중·예정만.
+     *
+     * 끝난 행사는 DB 에 그대로 두되 여기서 거른다. 한 장소에 과거 공연이 수백 건 쌓일 수
+     * 있어 보여주지 않을 행을 응답에 담지 않는다. endDate >= today 가 곧 '끝나지 않았다'로,
+     * Performance.stateOn 의 ENDED 조건과 같은 경계다(종료일 당일은 아직 진행 중).
+     */
+    @Query("""
+            select p from Performance p
+            where p.venueId = :venueId
+              and (p.endDate is null or p.endDate >= :today)
+            order by p.startDate asc, p.id asc
+            """)
+    List<Performance> findVisibleByVenue(@Param("venueId") Long venueId, @Param("today") LocalDate today);
 
     /** AI 루트 후보: 그날 열리는, 좌표가 있는 행사. */
     @Query("""

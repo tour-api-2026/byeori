@@ -183,10 +183,10 @@ export default function VenueDetailScreen() {
             </Text>
           )}
 
-          {/* 진행 중인 행사 */}
+          {/* 이 장소의 행사 — 서버가 끝난 건 빼고 준다(진행 중·예정만). */}
           {!!perfs.data?.length && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>진행 중인 행사</Text>
+              <Text style={styles.sectionTitle}>진행 중·예정 행사</Text>
               {perfs.data.map((p) => (
                 <View key={p.id} style={styles.perfRow}>
                   <Image source={p.posterImageUrl} style={styles.perfImg} contentFit="cover" />
