@@ -48,7 +48,9 @@ public class AuthService {
             case "kakao" -> (req.accessToken() != null && !req.accessToken().isBlank())
                     ? kakaoClient.verifyToken(req.accessToken())        // 네이티브 SDK 경로
                     : kakaoClient.verify(req.code(), req.redirectUri()); // 웹 OAuth 경로
-            case "google" -> googleClient.verify(req.idToken());
+            case "google" -> (req.code() != null && !req.code().isBlank())
+                    ? googleClient.verifyCode(req.code(), req.redirectUri())   // 웹 인가 코드 경로
+                    : googleClient.verify(req.idToken());                      // 네이티브 SDK 경로
             default -> throw new BadRequestException("UNSUPPORTED_PROVIDER",
                     "지원하지 않는 제공자입니다: " + req.provider());
         };
