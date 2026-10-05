@@ -23,7 +23,8 @@ public class PerformanceService {
 
     public Page<PerformanceResponse> list(String state, String genre, Long venueId, String keyword,
                                           Boolean traditional, Pageable pageable) {
-        return repo.search(state, genre, venueId, keyword, traditional, pageable).map(PerformanceResponse::from);
+        return repo.search(state, java.time.LocalDate.now(), genre, venueId, keyword, traditional, pageable)
+                .map(PerformanceResponse::from);
     }
 
     /**

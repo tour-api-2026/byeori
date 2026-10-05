@@ -108,8 +108,22 @@ docker compose logs -f api
 ```bash
 cd apps/app
 npm install
-npx expo start            # 앱(QR) · 웹은 w 키
-npx expo export --platform web   # 정적 웹 산출물 → dist/
+npx expo start                          # 앱(QR) · 웹은 w 키
+npx expo export --platform web --clear  # 정적 웹 산출물 → dist/
+```
+
+웹과 앱은 **같은 API 주소**(`https://byeori.ernebi.org/api/v1`)를 씁니다. nginx 가 그 도메인의
+`/api` 를 백엔드로 프록시하므로 웹에서는 같은 오리진이 되어 CORS 가 생기지 않고, 앱은
+호스트를 가리지 않습니다.
+
+> ⚠️ **`--clear` 는 필수입니다.** 빼면 이전 env 가 캐시에서 그대로 번들에 들어갑니다.
+> 배포 전 `dist/_expo/static/js/web/*.js` 를 grep 해 주소와 키가 맞는지 확인하세요.
+
+배포는 정적 파일을 `byeori-web` 볼륨에 덮어쓰는 방식입니다.
+
+```bash
+docker run --rm -v byeori-web:/dst -v "$PWD/dist":/src:ro alpine \
+  sh -c 'rm -rf /dst/* && cp -a /src/. /dst/'
 ```
 
 ### 환경변수

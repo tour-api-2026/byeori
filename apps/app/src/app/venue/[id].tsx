@@ -4,13 +4,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ContentComments } from '@/components/ContentComments';
 import { Rating } from '@/components/Rating';
 import { ReportDialog } from '@/components/ReportDialog';
 import {
-  useBlockUserMutation, useContentTagsQuery, useDeleteVenueMutation,
-  useReportReviewMutation, useReportVenueMutation,
-  useReviewsQuery, useToggleWishlistMutation, useVenueDetailQuery, useVenuePerformancesQuery,
-  useVoteTagMutation,
+  useDeleteVenueMutation, useReportVenueMutation, useToggleWishlistMutation,
+  useVenueDetailQuery, useVenuePerformancesQuery,
 } from '@/lib/hooks/queries';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useBookmarkStore } from '@/lib/store/bookmarkStore';
@@ -56,9 +55,6 @@ export default function VenueDetailScreen() {
     ]);
   };
   const perfs = useVenuePerformancesQuery(vid);
-  const tags = useContentTagsQuery('VENUE', vid);
-  const reviews = useReviewsQuery('VENUE', vid);
-  const { vote, unvote } = useVoteTagMutation('VENUE', vid);
   const has = useBookmarkStore((s) => s.venueIds.includes(vid));
   const toggleLocal = useBookmarkStore((s) => s.toggle);
   const wishlist = useToggleWishlistMutation();
@@ -71,15 +67,12 @@ export default function VenueDetailScreen() {
 
   // 신고 — 구글 UGC 정책상 사용자 생성 콘텐츠(장소·리뷰)에는 신고 수단이 필요
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
-  const myId = useAuthStore((s) => s.user?.id);
   const reportVenue = useReportVenueMutation();
-  const reportReview = useReportReviewMutation();
-  const blockUser = useBlockUserMutation();
-  const [report, setReport] = useState<{ kind: 'VENUE' | 'REVIEW'; id: number } | null>(null);
+  const [reporting, setReporting] = useState(false);
   // 공사 API 소개글은 수십 줄인 경우가 있어, 접어두지 않으면 운영시간·문의가 화면 밖으로 밀린다.
   const [overviewOpen, setOverviewOpen] = useState(false);
 
-  const openReport = (kind: 'VENUE' | 'REVIEW', targetId: number) => {
+  const openReport = () => {
     if (!isLoggedIn) {
       Alert.alert('로그인 필요', '신고하려면 로그인이 필요해요.', [
         { text: '취소', style: 'cancel' },
@@ -87,47 +80,23 @@ export default function VenueDetailScreen() {
       ]);
       return;
     }
-    setReport({ kind, id: targetId });
+    setReporting(true);
   };
 
   const submitReport = (reason: string) => {
-    if (!report) return;
-    const m = report.kind === 'VENUE' ? reportVenue : reportReview;
-    m.mutate(
-      { id: report.id, reason },
+    reportVenue.mutate(
+      { id: vid, reason },
       {
         onSuccess: () => {
-          setReport(null);
+          setReporting(false);
           Alert.alert('신고 접수', '신고가 접수되었어요. 운영진이 확인 후 조치합니다.');
         },
         onError: (e: any) => {
-          setReport(null);
+          setReporting(false);
           Alert.alert('신고 실패', e?.message ?? '잠시 후 다시 시도해주세요.');
         },
       },
     );
-  };
-
-  const confirmBlock = (targetUserId: number) => {
-    if (!isLoggedIn) {
-      Alert.alert('로그인 필요', '차단하려면 로그인이 필요해요.', [
-        { text: '취소', style: 'cancel' },
-        { text: '로그인', onPress: () => router.push('/login') },
-      ]);
-      return;
-    }
-    Alert.alert('사용자 차단', '이 사용자의 리뷰가 더 이상 보이지 않아요. 차단은 마이 > 차단한 사용자에서 해제할 수 있어요.', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '차단',
-        style: 'destructive',
-        onPress: () =>
-          blockUser.mutate(targetUserId, {
-            onSuccess: () => Alert.alert('차단 완료', '이 사용자의 리뷰를 더 이상 표시하지 않아요.'),
-            onError: (e: any) => Alert.alert('차단 실패', e?.message ?? '잠시 후 다시 시도해주세요.'),
-          }),
-      },
-    ]);
   };
 
   if (isLoading || !v) {
@@ -151,7 +120,7 @@ export default function VenueDetailScreen() {
             </>
           )}
           {!isMine && (
-            <Pressable hitSlop={8} onPress={() => openReport('VENUE', vid)}>
+            <Pressable hitSlop={8} onPress={openReport}>
               <Ionicons name="flag-outline" size={21} color={colors.textFaint} />
             </Pressable>
           )}
@@ -233,64 +202,16 @@ export default function VenueDetailScreen() {
             </View>
           )}
 
-          {/* 방문자 코멘트 (태그 투표) */}
-          <View style={styles.section}>
-            <View style={styles.commentHead}>
-              <Text style={styles.sectionTitle}>방문자 코멘트</Text>
-              <Pressable hitSlop={8} onPress={() => router.push(`/review/write?targetType=VENUE&targetId=${vid}&targetName=${encodeURIComponent(v.name)}`)}>
-                <Text style={styles.writeLink}>코멘트 작성 +</Text>
-              </Pressable>
-            </View>
-            <View style={styles.tagWrap}>
-              {tags.data?.map((t) => (
-                <Pressable
-                  key={t.commentTagId}
-                  style={[styles.tag, t.voted && styles.tagOn]}
-                  onPress={() => (t.voted ? unvote.mutate(t.commentTagId) : vote.mutate(t.commentTagId))}>
-                  <Text style={[styles.tagText, t.voted && styles.tagTextOn]}>
-                    {t.name}{t.count > 0 ? ` ${t.count}` : ''}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {/* 리뷰 */}
-            <View style={{ marginTop: 14, gap: 10 }}>
-              {reviews.data?.length ? reviews.data.map((r) => (
-                <View key={r.id} style={styles.reviewCard}>
-                  <View style={styles.reviewTop}>
-                    <View style={styles.reviewAvatar} />
-                    <Text style={styles.reviewUser}>사용자{r.userId}</Text>
-                    {String(r.userId) !== String(myId ?? '') && (
-                      <View style={styles.reviewActions}>
-                        <Pressable hitSlop={8} onPress={() => openReport('REVIEW', r.id)}>
-                          <Ionicons name="flag-outline" size={15} color={colors.textFaint} />
-                        </Pressable>
-                        <Pressable hitSlop={8} onPress={() => confirmBlock(r.userId)}>
-                          <Ionicons name="person-remove-outline" size={15} color={colors.textFaint} />
-                        </Pressable>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.reviewStars}>
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <Ionicons key={n} name={n <= r.rating ? 'star' : 'star-outline'} size={12} color={colors.star} />
-                    ))}
-                  </View>
-                  {!!r.content && <Text style={styles.reviewContent}>{r.content}</Text>}
-                </View>
-              )) : <Text style={styles.noReview}>첫 코멘트를 남겨보세요</Text>}
-            </View>
-          </View>
+          <ContentComments targetType="VENUE" targetId={vid} targetName={v.name} />
         </View>
       </ScrollView>
 
       <ReportDialog
-        visible={!!report}
-        title={report?.kind === 'REVIEW' ? '리뷰 신고' : '장소 신고'}
-        pending={reportVenue.isPending || reportReview.isPending}
+        visible={reporting}
+        title="장소 신고"
+        pending={reportVenue.isPending}
         onSelect={submitReport}
-        onClose={() => setReport(null)}
+        onClose={() => setReporting(false)}
       />
     </SafeAreaView>
   );
@@ -337,19 +258,4 @@ const styles = StyleSheet.create({
   stateOn: { backgroundColor: colors.primarySoft },
   stateText: { fontSize: 11, fontFamily: fonts.semibold, fontWeight: '600', color: colors.textFaint },
   stateTextOn: { color: colors.primary },
-  commentHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  writeLink: { fontSize: 13, color: colors.accent, fontFamily: fonts.semibold, fontWeight: '600' },
-  tagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tag: { backgroundColor: colors.white, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: colors.accent },
-  tagOn: { backgroundColor: colors.accent },
-  tagText: { fontSize: 13, color: colors.accent, fontFamily: fonts.medium, fontWeight: '500' },
-  tagTextOn: { color: colors.white },
-  reviewCard: { backgroundColor: colors.bgSoft, borderRadius: radius.md, padding: 14 },
-  reviewTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  reviewAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.border },
-  reviewUser: { fontSize: 13, fontFamily: fonts.semibold, fontWeight: '600', color: colors.text },
-  reviewActions: { flexDirection: 'row', alignItems: 'center', gap: 14, marginLeft: 'auto' },
-  reviewStars: { flexDirection: 'row', alignItems: 'center', gap: 1, marginTop: 8 },
-  reviewContent: { fontSize: 13, color: colors.textSub, marginTop: 8, lineHeight: 19 },
-  noReview: { fontSize: 13, color: colors.textFaint },
 });

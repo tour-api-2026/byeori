@@ -148,8 +148,57 @@ export async function loginAdmin(id: string, password: string) {
   return res.data.data.user;
 }
 
-/** 구글 로그인: id_token 획득 → 백엔드 교환 */
+/**
+ * 구글 로그인.
+ *
+ * 네이티브는 SDK, 웹은 인가 플로우 — 카카오와 같은 갈래다.
+ * 네이티브에서 AuthSession 을 쓸 수 없는 이유는 구글이 안드로이드 앱의 커스텀 URI 스킴
+ * (app:// 같은 것)을 더 이상 받지 않기 때문이다. 네이티브 SDK 가 유일한 경로다.
+ *
+ * SDK 에 넘기는 건 '웹' 클라이언트 ID 다. 앱 자체는 패키지명 + 서명 지문으로 식별되므로
+ * Android 클라이언트 ID 를 코드에서 쓸 일은 없다(콘솔에 등록만 돼 있으면 된다).
+ * 다만 id_token 의 aud 가 어느 쪽으로 오는지 문서에 명시가 없어, 백엔드는 웹·Android
+ * 둘 다 허용한다(GOOGLE_CLIENT_IDS).
+ *
+ * Expo config plugin 은 넣지 않는다 — 그 플러그인이 하는 일은 iOS Info.plist 에 URL 스킴을
+ * 더하는 것뿐이고(firebase 미사용 경로), 안드로이드는 autolinking 으로 충분하다.
+ * iOS 를 시작할 때 실제 iOS 클라이언트 ID 로 플러그인을 추가하면 된다.
+ */
 export async function loginGoogle() {
+  if (Platform.OS === 'web') return loginGoogleWeb();
+
+  const clientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    throw new Error('구글 로그인 설정이 필요해요. (EXPO_PUBLIC_GOOGLE_CLIENT_ID 미설정)');
+  }
+
+  let mod: typeof import('@react-native-google-signin/google-signin');
+  try {
+    mod = require('@react-native-google-signin/google-signin');
+  } catch {
+    throw new Error('구글 로그인은 설치형 앱에서만 가능해요.');
+  }
+  const { GoogleSignin } = mod;
+
+  try {
+    GoogleSignin.configure({ webClientId: clientId });
+    await GoogleSignin.hasPlayServices();
+    const res = await GoogleSignin.signIn();
+    if (res.type === 'cancelled') throw new AuthCancelledError();
+
+    const idToken = res.data.idToken;
+    if (!idToken) throw new Error('구글 id_token을 받지 못했습니다.');
+    return exchangeWithBackend({ provider: 'google', idToken });
+  } catch (e: any) {
+    if (e instanceof AuthCancelledError) throw e;
+    // 구버전 SDK 는 취소를 예외로 던진다
+    if (/cancel/i.test(String(e?.code ?? e?.message ?? ''))) throw new AuthCancelledError();
+    throw new Error(`구글 로그인에 실패했습니다.${detail(e)}`);
+  }
+}
+
+/** 웹 구글 로그인: 브라우저 인가 플로우로 id_token 을 받는다. */
+async function loginGoogleWeb() {
   const clientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
   if (!clientId) {
     throw new Error('구글 로그인 설정이 필요해요. (EXPO_PUBLIC_GOOGLE_CLIENT_ID 미설정)');

@@ -4,6 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ContentComments } from '@/components/ContentComments';
+import { Rating } from '@/components/Rating';
 import { usePerformanceQuery } from '@/lib/hooks/queries';
 import { sized } from '@/lib/img';
 import { colors, fonts, radius, space } from '@/lib/theme';
@@ -81,7 +83,16 @@ export default function PerformanceDetailScreen() {
             ) : null}
           </View>
 
-          <Text style={styles.title}>{p.title}</Text>
+          <View style={styles.titleRow}>
+            <Text style={[styles.title, { flex: 1 }]}>{p.title}</Text>
+            <Pressable style={styles.addBtn} onPress={() => router.push('/itinerary')}>
+              <Text style={styles.addBtnText}>내 여행에 추가</Text>
+            </Pressable>
+          </View>
+
+          <View style={{ marginTop: 10 }}>
+            <Rating value={p.avgRating} count={p.reviewCount} size={14} />
+          </View>
 
           <View style={styles.rows}>
             <Row icon="calendar-outline" label="기간" value={period} />
@@ -126,6 +137,8 @@ export default function PerformanceDetailScreen() {
               </Text>
             </Pressable>
           ) : null}
+
+          <ContentComments targetType="PERFORMANCE" targetId={p.id} targetName={p.title} />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -165,6 +178,9 @@ const styles = StyleSheet.create({
   rowLink: { color: colors.accent, fontWeight: '700' },
   section: { marginTop: 22 },
   sectionTitle: { fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 8 },
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  addBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 11 },
+  addBtnText: { color: colors.white, fontSize: 13, fontFamily: fonts.bold, fontWeight: '800' },
   overview: { fontSize: 14, color: colors.text, lineHeight: 22 },
   source: { fontSize: 11, color: colors.textFaint, marginTop: 10 },
   linkBtn: {
