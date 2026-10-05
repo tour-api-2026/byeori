@@ -67,7 +67,8 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
               and (p.endDate is null or p.endDate >= :today)
             order by p.startDate asc, p.id asc
             """)
-    List<Performance> findVisibleByVenue(@Param("venueId") Long venueId, @Param("today") LocalDate today);
+    List<Performance> findVisibleByVenue(@Param("venueId") Long venueId, @Param("today") LocalDate today,
+                                         Pageable pageable);
 
     /** AI 루트 후보: 그날 열리는, 좌표가 있는 행사. */
     @Query("""

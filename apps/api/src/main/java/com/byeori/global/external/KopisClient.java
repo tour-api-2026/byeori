@@ -111,7 +111,8 @@ public class KopisClient {
             Element e = (Element) node;
             out.add(new KopisItem(
                     tag(e, "mt20id"), tag(e, "prfnm"), tag(e, "poster"),
-                    tag(e, "prfpdfrom"), tag(e, "prfpdto"), tag(e, "genrenm"), tag(e, "prfstate")));
+                    tag(e, "prfpdfrom"), tag(e, "prfpdto"), tag(e, "genrenm"), tag(e, "prfstate"),
+                    tag(e, "fcltynm")));
         }
         return out;
     }
