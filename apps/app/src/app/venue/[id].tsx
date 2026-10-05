@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ContentComments } from '@/components/ContentComments';
+import { PerformanceCarousel, stateCaption } from '@/components/PerformanceCarousel';
 import { Rating } from '@/components/Rating';
 import { ReportDialog } from '@/components/ReportDialog';
 import {
@@ -187,18 +188,7 @@ export default function VenueDetailScreen() {
           {!!perfs.data?.length && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>진행 중·예정 행사</Text>
-              {perfs.data.map((p) => (
-                <View key={p.id} style={styles.perfRow}>
-                  <Image source={p.posterImageUrl} style={styles.perfImg} contentFit="cover" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.perfTitle}>{p.title}</Text>
-                    <Text style={styles.perfDate}>{p.startDate} ~ {p.endDate}</Text>
-                  </View>
-                  <View style={[styles.stateBadge, p.state === 'ONGOING' && styles.stateOn]}>
-                    <Text style={[styles.stateText, p.state === 'ONGOING' && styles.stateTextOn]}>{p.state === 'ONGOING' ? '진행중' : p.state === 'UPCOMING' ? '예정' : '종료'}</Text>
-                  </View>
-                </View>
-              ))}
+              <PerformanceCarousel items={perfs.data} caption={stateCaption} />
             </View>
           )}
 
@@ -250,12 +240,4 @@ const styles = StyleSheet.create({
   source: { fontSize: 11, color: colors.textFaint, marginTop: 8 },
   section: { marginTop: 26 },
   sectionTitle: { fontSize: 16, fontFamily: fonts.bold, fontWeight: '800', color: colors.text, marginBottom: 12 },
-  perfRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
-  perfImg: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.bgSoft },
-  perfTitle: { fontSize: 14, fontFamily: fonts.semibold, fontWeight: '600', color: colors.text },
-  perfDate: { fontSize: 12, color: colors.textFaint, marginTop: 2 },
-  stateBadge: { backgroundColor: colors.bgSoft, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 4 },
-  stateOn: { backgroundColor: colors.primarySoft },
-  stateText: { fontSize: 11, fontFamily: fonts.semibold, fontWeight: '600', color: colors.textFaint },
-  stateTextOn: { color: colors.primary },
 });
