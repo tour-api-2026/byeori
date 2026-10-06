@@ -177,7 +177,13 @@ function Editor({ id }: { id: number }) {
                 <Text style={styles.editBtnText}>편집</Text>
               </Pressable>
             )}
-            <Pressable style={styles.saveBtn} onPress={() => router.back()}>
+            {/*
+              '저장'은 사실 '다 했다'는 뜻이다 — 고친 것은 누를 때마다 이미 서버로 간다.
+              back() 은 어디서 들어왔느냐에 따라 엉뚱한 데로 돌아간다(AI 루트에서 왔다면
+              그 단계 화면, 새로 만들었다면 만들기 폼). 끝나면 내 루트를 보는 게 맞다.
+              dismissTo 는 AI 루트 저장·추천 코스 담기가 쓰는 것과 같다.
+            */}
+            <Pressable style={styles.saveBtn} onPress={() => router.dismissTo('/routes')}>
               <Text style={styles.saveText}>저장</Text>
             </Pressable>
           </HeaderRight>
