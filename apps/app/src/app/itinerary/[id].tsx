@@ -5,6 +5,7 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, Text
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Calendar } from '@/components/Calendar';
 import { DraggableStops } from '@/components/DraggableStops';
+import { HeaderRight } from '@/components/HeaderRight';
 import { StopEditSheet } from '@/components/StopEditSheet';
 import PlacePicker from '@/components/PlacePicker';
 import {
@@ -168,7 +169,7 @@ function Editor({ id }: { id: number }) {
       <Stack.Screen options={{
         title: '루트 만들기',
         headerRight: () => (
-          <View style={styles.headerBtns}>
+          <HeaderRight>
             {/* 편집은 저장 왼쪽에 둔다. 이름 줄의 연필은 이쪽으로 옮겼다. */}
             {!editing && (
               <Pressable style={styles.editBtn} hitSlop={8} onPress={openEdit}>
@@ -179,7 +180,7 @@ function Editor({ id }: { id: number }) {
             <Pressable style={styles.saveBtn} onPress={() => router.back()}>
               <Text style={styles.saveText}>저장</Text>
             </Pressable>
-          </View>
+          </HeaderRight>
         ),
       }} />
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 + insets.bottom }}>
@@ -368,7 +369,6 @@ const styles = StyleSheet.create({
   range: { fontSize: 13, color: colors.textFaint, marginTop: 4 },
   empty: { fontSize: 14, color: colors.textFaint, paddingVertical: 20, textAlign: 'center' },
   // 저장 버튼 (헤더)
-  headerBtns: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 6 },
   editBtnText: { color: colors.text, fontSize: 13, fontWeight: '700' },
   saveBtn: { backgroundColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 7 },

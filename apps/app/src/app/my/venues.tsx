@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { HeaderRight } from '@/components/HeaderRight';
 import { Image } from '@/components/Image';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -42,9 +43,11 @@ export default function MyVenuesScreen() {
       <Stack.Screen options={{
         title: '내가 등록한 장소',
         headerRight: () => (
-          <Pressable hitSlop={8} onPress={() => router.push('/venue/register')}>
-            <Ionicons name="add" size={26} color={colors.primary} />
-          </Pressable>
+          <HeaderRight>
+            <Pressable hitSlop={8} onPress={() => router.push('/venue/register')}>
+              <Ionicons name="add" size={26} color={colors.primary} />
+            </Pressable>
+          </HeaderRight>
         ),
       }} />
 
