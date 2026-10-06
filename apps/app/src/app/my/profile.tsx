@@ -8,6 +8,7 @@ import LoginRequired from '@/components/LoginRequired';
 import { updateProfile } from '@/lib/api/account';
 import { uploadImage, type PickedImage } from '@/lib/api/uploads';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 const NAME_MIN = 2;
@@ -20,6 +21,7 @@ const NAME_MAX = 20;
  * 오류는 화면 안에 적는다. 웹에서는 Alert 가 아무것도 띄우지 않는다.
  */
 export default function ProfileEditScreen() {
+  const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
@@ -91,7 +93,7 @@ export default function ProfileEditScreen() {
   return (
     <View style={styles.safe}>
       <Stack.Screen options={{ title: '프로필 수정' }} />
-      <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 40 + insets.bottom }} keyboardShouldPersistTaps="handled">
         <View style={styles.photoWrap}>
           <Pressable onPress={pickPhoto} accessibilityLabel="프로필 사진 바꾸기">
             {preview ? (

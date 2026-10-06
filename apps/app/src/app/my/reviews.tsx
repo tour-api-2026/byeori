@@ -7,9 +7,11 @@ import LoginRequired from '@/components/LoginRequired';
 import { Review } from '@/lib/api/reviews';
 import { useDeleteReviewMutation, useMyReviewsQuery, useVenueDetailQuery } from '@/lib/hooks/queries';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 export default function MyReviewsScreen() {
+  const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const { data, isLoading } = useMyReviewsQuery();
   const [tab, setTab] = useState<'place' | 'route'>('place');
@@ -39,7 +41,7 @@ export default function MyReviewsScreen() {
       {isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
       ) : shown.length ? (
-        <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 }}>
+        <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 + insets.bottom }}>
           <Text style={styles.count}>총 <Text style={styles.countNum}>{shown.length}</Text>개의 리뷰를 작성했어요</Text>
           {shown.map((r) => <ReviewCard key={r.id} review={r} />)}
         </ScrollView>

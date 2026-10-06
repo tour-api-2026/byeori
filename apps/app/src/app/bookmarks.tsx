@@ -7,9 +7,11 @@ import { Rating } from '@/components/Rating';
 import { Wishlist } from '@/lib/api/wishlists';
 import { useMyWishlistsQuery, useVenueDetailQuery } from '@/lib/hooks/queries';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 export default function BookmarksScreen() {
+  const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const router = useRouter();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const { data, isLoading } = useMyWishlistsQuery();
@@ -38,7 +40,7 @@ export default function BookmarksScreen() {
           </Pressable>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 + insets.bottom }} showsVerticalScrollIndicator={false}>
           <Text style={styles.count}>총 <Text style={styles.countNum}>{data.length}</Text>개를 표시했어요</Text>
           <View style={styles.grid}>
             {data.map((w) => <BookmarkCard key={w.id} item={w} />)}

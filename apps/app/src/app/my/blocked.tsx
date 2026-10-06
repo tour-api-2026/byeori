@@ -4,10 +4,12 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import LoginRequired from '@/components/LoginRequired';
 import { useBlockedUsersQuery, useUnblockUserMutation } from '@/lib/hooks/queries';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 /** 차단한 사용자 관리 — 차단만 되고 해제할 수 없으면 안 되므로 반드시 필요한 화면. */
 export default function BlockedUsersScreen() {
+  const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const { data, isLoading } = useBlockedUsersQuery();
   const unblock = useUnblockUserMutation();
@@ -43,7 +45,7 @@ export default function BlockedUsersScreen() {
       {isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
       ) : blocked.length ? (
-        <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 }}>
+        <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 + insets.bottom }}>
           <Text style={styles.count}>총 <Text style={styles.countNum}>{blocked.length}</Text>명을 차단했어요</Text>
           {blocked.map((userId) => (
             <View key={userId} style={styles.row}>
