@@ -210,16 +210,6 @@ export default function AiRouteScreen() {
           <>
             {/* 진행 표시 — 지금 몇 번째인지, 뒤로 갈 수 있는지 */}
             <View style={styles.wizardHead}>
-              <Pressable
-                hitSlop={8}
-                disabled={step === 0}
-                onPress={() => setStep((n) => Math.max(0, n - 1))}>
-                <Ionicons
-                  name="chevron-back"
-                  size={22}
-                  color={step === 0 ? colors.border : colors.text}
-                />
-              </Pressable>
               <View style={styles.progressTrack}>
                 <View style={[styles.progressFill, { width: `${((step + 1) / STEPS.length) * 100}%` }]} />
               </View>
@@ -320,6 +310,12 @@ export default function AiRouteScreen() {
             {/* 단계 이동 — 마지막에서만 만들기 버튼이 나온다 */}
             {step < STEPS.length - 1 ? (
               <View style={styles.navRow}>
+                {step > 0 && (
+                  <Pressable style={styles.backBtn} onPress={() => setStep(step - 1)}>
+                    <Ionicons name="chevron-back" size={16} color={colors.textSub} />
+                    <Text style={styles.backText}>이전</Text>
+                  </Pressable>
+                )}
                 {step === 3 && (
                   <Pressable style={styles.skipBtn} onPress={() => setStep(step + 1)}>
                     <Text style={styles.skipText}>건너뛰기</Text>
@@ -333,11 +329,16 @@ export default function AiRouteScreen() {
                 </Pressable>
               </View>
             ) : (
-              <Pressable
-                style={[styles.primary, (!themes.length || !!busy) && styles.disabled]}
-                disabled={!themes.length || !!busy}
-                onPress={() => generate(false)}
-              >
+              <View style={styles.navRow}>
+                <Pressable style={styles.backBtn} onPress={() => setStep(step - 1)}>
+                  <Ionicons name="chevron-back" size={16} color={colors.textSub} />
+                  <Text style={styles.backText}>이전</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.primary, { flex: 1 }, (!themes.length || !!busy) && styles.disabled]}
+                  disabled={!themes.length || !!busy}
+                  onPress={() => generate(false)}
+                >
                 {busy === 'generate' ? (
                   <View style={styles.row}>
                     <ActivityIndicator color={colors.white} />
@@ -348,8 +349,9 @@ export default function AiRouteScreen() {
                     <Ionicons name="sparkles" size={16} color={colors.white} />
                     <Text style={styles.primaryText}>AI로 루트 만들기</Text>
                   </View>
-                )}
-              </Pressable>
+                  )}
+                </Pressable>
+              </View>
             )}
           </>
         ) : (
@@ -607,6 +609,8 @@ const styles = StyleSheet.create({
   stepTitle: { fontSize: 20, fontFamily: fonts.bold, fontWeight: '800', color: colors.text },
   stepHint: { fontSize: 13, color: colors.textFaint, marginTop: 6, marginBottom: 18, lineHeight: 19 },
   navRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 28 },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingRight: 14, paddingVertical: 15 },
+  backText: { fontSize: 14, color: colors.textSub, fontFamily: fonts.semibold, fontWeight: '600' },
   skipBtn: { paddingHorizontal: 18, paddingVertical: 15 },
   skipText: { fontSize: 14, color: colors.textFaint, fontFamily: fonts.semibold, fontWeight: '600' },
   reviewCard: { backgroundColor: colors.bgSoft, borderRadius: radius.md, paddingHorizontal: 16 },
