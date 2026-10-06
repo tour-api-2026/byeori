@@ -57,6 +57,18 @@ function dateLabel(iso: string) {
   return `${m}/${d} (${w})`;
 }
 
+/**
+ * 묻는 순서. 날짜가 맨 앞인 이유는 여러 날 코스에서 날짜마다 지역을 따로 고르기 때문이다 —
+ * 날짜를 모르면 지역을 물을 수 없다. (한 화면에 다 띄우던 때는 지역이 먼저라 순서가 거꾸로였다.)
+ */
+const STEPS = [
+  { title: '언제 가나요?', hint: `최대 ${MAX_DAYS}일까지 됩니다.` },
+  { title: '어디로 갈까요?', hint: '그 근처에서 걸어 다닐 수 있는 코스를 짜 드려요.' },
+  { title: '무엇을 하고 싶나요?', hint: '여러 개 고를 수 있어요.' },
+  { title: '더 알려주실 게 있나요?', hint: '없으면 건너뛰어도 돼요.' },
+  { title: '이렇게 만들까요?', hint: '누르면 그 항목으로 돌아가 고칠 수 있어요.' },
+] as const;
+
 /** 고른 지역. 칩·내 위치·검색으로 찾은 곳을 한 가지로 다룬다. */
 type Area = { name: string; lat?: number; lng?: number; my?: boolean };
 
@@ -112,6 +124,9 @@ export default function AiRouteScreen() {
   const [preview, setPreview] = useState<AiRoutePreview | null>(null);
   const [busy, setBusy] = useState<'generate' | 'tweak' | 'save' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 한 화면에 다 띄우지 않고 한 가지씩 묻는다. 라우트를 쪼개지 않는 이유는 상태가
+  // 서로 묶여 있어서다 — 날짜를 바꾸면 날짜별 지역 배열이 따라 조정돼야 한다.
+  const [step, setStep] = useState(0);
 
   if (!isLoggedIn) {
     return (
@@ -189,95 +204,159 @@ export default function AiRouteScreen() {
     <View style={styles.safe}>
       <Stack.Screen options={{ title: 'AI 루트 만들기' }} />
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 48 }}>
-        <Text style={styles.lead}>
-          고른 조건에 맞춰 AI가 벼리의 장소·행사 중에서{'\n'}여행 코스를 짜 드려요. 최대 {MAX_DAYS}일까지 됩니다.
-        </Text>
-
-        <Text style={styles.label}>
-          어디로 갈까요?
-          {dates.length > 1 ? <Text style={styles.sub}> (날짜마다 따로 고를 수 있어요)</Text> : null}
-        </Text>
-        {dates.length > 1 ? (
-          <View style={[styles.chips, { marginBottom: 10 }]}>
-            {dates.map((d, i) => (
-              <Chip key={d} label={`${i + 1}일차 ${shortDate(d)}`} on={editingDay === i}
-                onPress={() => setEditingDay(i)} />
-            ))}
-          </View>
-        ) : null}
-        <View style={styles.chips}>
-          {AREAS.map((a) => (
-            <Chip key={a.name} label={a.name} on={dayArea.name === a.name} onPress={() => setDayArea({ ...a })} />
-          ))}
-          <Chip label={MY_LOCATION} icon="navigate" on={!!dayArea.my}
-            onPress={() => setDayArea({ name: MY_LOCATION, my: true })} />
-          {/* 칩에 없는 곳은 검색해서 그 좌표를 중심으로 쓴다 */}
-          <Chip
-            label={customArea ? dayArea.name : '다른 지역 찾기'}
-            icon="search"
-            on={customArea}
-            onPress={() => setAreaSearchOpen(true)}
-          />
-        </View>
-        {dates.length > 1 ? (
-          <Text style={styles.areaSummary}>
-            {areas.map((a, i) => `${i + 1}일차 ${a.name}`).join(' · ')}
-          </Text>
-        ) : null}
-
-        <Text style={styles.label}>무엇을 하고 싶나요? <Text style={styles.sub}>(여러 개 선택)</Text></Text>
-        <View style={styles.chips}>
-          {AI_THEMES.map((t) => (
-            <Chip key={t} label={t} on={themes.includes(t)} onPress={() => toggleTheme(t)} />
-          ))}
-        </View>
-
-        <Text style={styles.label}>언제 가나요?</Text>
-        <View style={styles.chips}>
-          {DATES.map((d) => (
-            <Chip key={d.value} label={`${d.label} ${shortDate(d.value)}`}
-              on={range.start === d.value && range.end === d.value}
-              onPress={() => setRange({ start: d.value, end: d.value })} />
-          ))}
-          <Chip
-            label={dates.length > 1 ? `${shortDate(range.start)} ~ ${shortDate(range.end)} · ${dates.length}일` : '기간 선택'}
-            icon="calendar-outline"
-            on={dates.length > 1}
-            onPress={() => {
-              setPicking('start');
-              setCalendarOpen(true);
-            }}
-          />
-        </View>
-
-        <Text style={styles.label}>더 알려주실 게 있나요? <Text style={styles.sub}>(선택)</Text></Text>
-        <TextInput
-          style={styles.noteInput}
-          value={note}
-          onChangeText={setNote}
-          maxLength={100}
-          placeholder="예: 아이와 함께, 많이 걷지 않게"
-          placeholderTextColor={colors.textFaint}
-          returnKeyType="done"
-        />
-
-        <Pressable
-          style={[styles.primary, (!themes.length || !!busy) && styles.disabled]}
-          disabled={!themes.length || !!busy}
-          onPress={() => generate(!!preview)}
-        >
-          {busy === 'generate' ? (
-            <View style={styles.row}>
-              <ActivityIndicator color={colors.white} />
-              <Text style={styles.primaryText}>AI가 코스를 짜는 중…</Text>
+        {!preview ? (
+          <>
+            {/* 진행 표시 — 지금 몇 번째인지, 뒤로 갈 수 있는지 */}
+            <View style={styles.wizardHead}>
+              <Pressable
+                hitSlop={8}
+                disabled={step === 0}
+                onPress={() => setStep((n) => Math.max(0, n - 1))}>
+                <Ionicons
+                  name="chevron-back"
+                  size={22}
+                  color={step === 0 ? colors.border : colors.text}
+                />
+              </Pressable>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${((step + 1) / STEPS.length) * 100}%` }]} />
+              </View>
+              <Text style={styles.progressText}>{step + 1}/{STEPS.length}</Text>
             </View>
-          ) : (
-            <View style={styles.row}>
-              <Ionicons name="sparkles" size={16} color={colors.white} />
-              <Text style={styles.primaryText}>{preview ? '다시 만들기' : 'AI로 루트 만들기'}</Text>
-            </View>
-          )}
-        </Pressable>
+
+            <Text style={styles.stepTitle}>{STEPS[step].title}</Text>
+            {!!STEPS[step].hint && <Text style={styles.stepHint}>{STEPS[step].hint}</Text>}
+
+            {/* 1. 언제 — 날짜를 먼저 묻는다. 여러 날이면 날짜마다 지역을 따로 고르므로
+                날짜가 정해져야 다음 단계를 물을 수 있다. */}
+            {step === 0 && (
+              <View style={styles.chips}>
+                {DATES.map((d) => (
+                  <Chip key={d.value} label={`${d.label} ${shortDate(d.value)}`}
+                    on={range.start === d.value && range.end === d.value}
+                    onPress={() => setRange({ start: d.value, end: d.value })} />
+                ))}
+                <Chip
+                  label={dates.length > 1 ? `${shortDate(range.start)} ~ ${shortDate(range.end)} · ${dates.length}일` : '기간 선택'}
+                  icon="calendar-outline"
+                  on={dates.length > 1}
+                  onPress={() => { setPicking('start'); setCalendarOpen(true); }}
+                />
+              </View>
+            )}
+
+            {/* 2. 어디로 */}
+            {step === 1 && (
+              <>
+                {dates.length > 1 ? (
+                  <View style={[styles.chips, { marginBottom: 10 }]}>
+                    {dates.map((d, i) => (
+                      <Chip key={d} label={`${i + 1}일차 ${shortDate(d)}`} on={editingDay === i}
+                        onPress={() => setEditingDay(i)} />
+                    ))}
+                  </View>
+                ) : null}
+                <View style={styles.chips}>
+                  {AREAS.map((a) => (
+                    <Chip key={a.name} label={a.name} on={dayArea.name === a.name} onPress={() => setDayArea({ ...a })} />
+                  ))}
+                  <Chip label={MY_LOCATION} icon="navigate" on={!!dayArea.my}
+                    onPress={() => setDayArea({ name: MY_LOCATION, my: true })} />
+                  {/* 칩에 없는 곳은 검색해서 그 좌표를 중심으로 쓴다 */}
+                  <Chip
+                    label={customArea ? dayArea.name : '다른 지역 찾기'}
+                    icon="search"
+                    on={customArea}
+                    onPress={() => setAreaSearchOpen(true)}
+                  />
+                </View>
+                {dates.length > 1 ? (
+                  <Text style={styles.areaSummary}>
+                    {areas.map((a, i) => `${i + 1}일차 ${a.name}`).join(' · ')}
+                  </Text>
+                ) : null}
+              </>
+            )}
+
+            {/* 3. 무엇을 */}
+            {step === 2 && (
+              <View style={styles.chips}>
+                {AI_THEMES.map((t) => (
+                  <Chip key={t} label={t} on={themes.includes(t)} onPress={() => toggleTheme(t)} />
+                ))}
+              </View>
+            )}
+
+            {/* 4. 메모 */}
+            {step === 3 && (
+              <TextInput
+                style={styles.noteInput}
+                value={note}
+                onChangeText={setNote}
+                maxLength={100}
+                placeholder="예: 아이와 함께, 많이 걷지 않게"
+                placeholderTextColor={colors.textFaint}
+                returnKeyType="done"
+              />
+            )}
+
+            {/* 5. 확인 — 고른 걸 전부 보여주고, 누르면 그 단계로 돌아간다.
+                단계형의 약점이 "앞에서 뭘 골랐는지 잊는다"는 것이라 이 화면이 필요하다. */}
+            {step === 4 && (
+              <View style={styles.reviewCard}>
+                <ReviewRow label="언제" value={dates.length > 1
+                  ? `${shortDate(range.start)} ~ ${shortDate(range.end)} · ${dates.length}일`
+                  : dateLabel(range.start)} onPress={() => setStep(0)} />
+                <ReviewRow label="어디로" value={areas.map((a, i) =>
+                  dates.length > 1 ? `${i + 1}일차 ${a.name}` : a.name).join(' · ')} onPress={() => setStep(1)} />
+                <ReviewRow label="무엇을" value={themes.length ? themes.join(' · ') : '아직 안 골랐어요'}
+                  onPress={() => setStep(2)} />
+                <ReviewRow label="메모" value={note.trim() || '없음'} onPress={() => setStep(3)} last />
+              </View>
+            )}
+
+            {/* 단계 이동 — 마지막에서만 만들기 버튼이 나온다 */}
+            {step < STEPS.length - 1 ? (
+              <View style={styles.navRow}>
+                {step === 3 && (
+                  <Pressable style={styles.skipBtn} onPress={() => setStep(step + 1)}>
+                    <Text style={styles.skipText}>건너뛰기</Text>
+                  </Pressable>
+                )}
+                <Pressable
+                  style={[styles.primary, { flex: 1 }, step === 2 && !themes.length && styles.disabled]}
+                  disabled={step === 2 && !themes.length}
+                  onPress={() => setStep(step + 1)}>
+                  <Text style={styles.primaryText}>다음</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                style={[styles.primary, (!themes.length || !!busy) && styles.disabled]}
+                disabled={!themes.length || !!busy}
+                onPress={() => generate(false)}
+              >
+                {busy === 'generate' ? (
+                  <View style={styles.row}>
+                    <ActivityIndicator color={colors.white} />
+                    <Text style={styles.primaryText}>AI가 코스를 짜는 중…</Text>
+                  </View>
+                ) : (
+                  <View style={styles.row}>
+                    <Ionicons name="sparkles" size={16} color={colors.white} />
+                    <Text style={styles.primaryText}>AI로 루트 만들기</Text>
+                  </View>
+                )}
+              </Pressable>
+            )}
+          </>
+        ) : (
+          /* 결과를 본 뒤 조건을 고치고 싶을 때. 요약 단계로 돌아간다. */
+          <Pressable style={styles.secondary} onPress={() => { setPreview(null); setStep(4); }}>
+            <Ionicons name="options-outline" size={16} color={colors.primary} />
+            <Text style={styles.secondaryText}>조건 바꾸기</Text>
+          </Pressable>
+        )}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -493,6 +572,19 @@ function AreaSearchModal({ visible, onClose, onPick }: {
   );
 }
 
+/** 요약 한 줄. 누르면 그 단계로 돌아간다. */
+function ReviewRow({ label, value, onPress, last }: {
+  label: string; value: string; onPress: () => void; last?: boolean;
+}) {
+  return (
+    <Pressable style={[styles.reviewRow, last && { borderBottomWidth: 0 }]} onPress={onPress}>
+      <Text style={styles.reviewLabel}>{label}</Text>
+      <Text style={styles.reviewValue} numberOfLines={2}>{value}</Text>
+      <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
+    </Pressable>
+  );
+}
+
 function Chip({ label, on, onPress, icon }: {
   label: string; on: boolean; onPress: () => void; icon?: keyof typeof Ionicons.glyphMap;
 }) {
@@ -506,9 +598,21 @@ function Chip({ label, on, onPress, icon }: {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  lead: { fontSize: 14, fontFamily: fonts.medium, fontWeight: '500', color: colors.textSub, lineHeight: 21 },
-  label: { fontSize: 14, fontFamily: fonts.bold, fontWeight: '800', color: colors.text, marginTop: 22, marginBottom: 10 },
-  sub: { fontSize: 12, fontWeight: '500', color: colors.textFaint },
+  wizardHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  progressTrack: { flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.border, overflow: 'hidden' },
+  progressFill: { height: 4, borderRadius: 2, backgroundColor: colors.primary },
+  progressText: { fontSize: 12, color: colors.textFaint, fontFamily: fonts.semibold, fontWeight: '600' },
+  stepTitle: { fontSize: 20, fontFamily: fonts.bold, fontWeight: '800', color: colors.text },
+  stepHint: { fontSize: 13, color: colors.textFaint, marginTop: 6, marginBottom: 18, lineHeight: 19 },
+  navRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 28 },
+  skipBtn: { paddingHorizontal: 18, paddingVertical: 15 },
+  skipText: { fontSize: 14, color: colors.textFaint, fontFamily: fonts.semibold, fontWeight: '600' },
+  reviewCard: { backgroundColor: colors.bgSoft, borderRadius: radius.md, paddingHorizontal: 16 },
+  reviewRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
+  reviewLabel: { fontSize: 13, color: colors.textFaint, width: 52 },
+  reviewValue: { flex: 1, fontSize: 14, color: colors.text, fontFamily: fonts.medium, fontWeight: '500' },
+  secondary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderColor: colors.primary, borderRadius: radius.md, paddingVertical: 13, marginBottom: 20 },
+  secondaryText: { fontSize: 14, color: colors.primary, fontFamily: fonts.bold, fontWeight: '800' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 13, paddingVertical: 8,
