@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Chip } from '@/components/Chip';
+import { useTabBarHeight } from '@/components/TabBar';
 import { VenueCard } from '@/components/VenueCard';
 import { useLiveSearchQuery, useNearbyVenuesQuery, useVenuesQuery } from '@/lib/hooks/queries';
 import { CATEGORIES } from '@/lib/categories';
@@ -12,6 +13,8 @@ import { colors, fonts, radius, space } from '@/lib/theme';
 const PER_PAGE = 6;
 
 export default function SearchScreen() {
+  // 떠 있는 탭바가 목록 끝을 가린다. 다른 탭 화면들과 같은 방식으로 그만큼 비운다.
+  const tabH = useTabBarHeight();
   const [keyword, setKeyword] = useState('');
   const [cat, setCat] = useState('전체');
   const [region, setRegion] = useState('전체');
@@ -83,7 +86,7 @@ export default function SearchScreen() {
       {isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
       ) : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: 24, paddingTop: 6 }}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: tabH + 24, paddingTop: 6 }}>
           {pageItems.length ? (
             <>
               <View style={styles.grid}>
