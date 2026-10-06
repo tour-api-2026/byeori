@@ -2,14 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TimeWheel } from '@/components/TimeWheel';
 import type { ItineraryItem } from '@/lib/api/itineraries';
 import { colors, fonts, radius, space } from '@/lib/theme';
-
-/** 09:00 ~ 22:30, 30분 간격. 네이티브 시간 피커를 쓰려면 의존성이 늘어 목록으로 고른다. */
-const TIMES = Array.from({ length: 28 }, (_, i) => {
-  const m = 9 * 60 + i * 30;
-  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-});
 
 /**
  * 사람이 친 글자를 'HH:MM' 으로 만든다. 못 만들면 null.
@@ -48,6 +43,7 @@ export function StopEditSheet({
   sameDayIds: number[];
   pending: boolean;
   onClose: () => void;
+  /** plannedTime 에 빈 문자열을 보내면 '미정'으로 지운다(서버가 그렇게 읽는다). */
   onChange: (patch: { visitDate?: string; plannedTime?: string | null }) => void;
   /** 이 자리의 장소를 다른 곳으로 바꾼다. 장소 고르는 창은 부모가 연다. */
   onReplacePlace: () => void;
@@ -110,26 +106,22 @@ export function StopEditSheet({
             onPress={() => onChange({ plannedTime: typed })}>
             <Text style={styles.timeApplyText}>적용</Text>
           </Pressable>
+          {/* 시간을 정하지 않은 상태로 되돌리기. 휠에는 '없음'을 둘 자리가 없다. */}
+          <Pressable
+            style={[styles.undecided, !item.plannedTime && styles.undecidedOn]}
+            disabled={pending}
+            onPress={() => { setTimeText(''); onChange({ plannedTime: '' }); }}>
+            <Text style={[styles.undecidedText, !item.plannedTime && styles.undecidedTextOn]}>미정</Text>
+          </Pressable>
         </View>
         <Text style={[styles.hint, timeBad && styles.hintBad]}>
           {timeBad ? '0930 · 9:30 처럼 적어 주세요 (00:00~23:59)' : '숫자만 쳐도 됩니다. 예) 930 → 09:30'}
         </Text>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.row, { marginTop: 8 }]}>
-          <Pressable
-            style={[styles.chip, !item.plannedTime && styles.chipOn]}
-            onPress={() => { setTimeText(''); onChange({ plannedTime: null }); }}>
-            <Text style={[styles.chipText, !item.plannedTime && styles.chipTextOn]}>미정</Text>
-          </Pressable>
-          {TIMES.map((t) => (
-            <Pressable
-              key={t}
-              style={[styles.chip, item.plannedTime === t && styles.chipOn]}
-              onPress={() => { setTimeText(t); onChange({ plannedTime: t }); }}>
-              <Text style={[styles.chipText, item.plannedTime === t && styles.chipTextOn]}>{t}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+        <TimeWheel
+          value={item.plannedTime}
+          onChange={(next) => { setTimeText(next); onChange({ plannedTime: next }); }}
+        />
 
         {/* 일차 — 하루짜리 루트에서는 옮길 곳이 없다 */}
         {dayList.length > 1 && (
@@ -203,6 +195,10 @@ const styles = StyleSheet.create({
   timeApplyText: { color: colors.white, fontSize: 14, fontFamily: fonts.bold, fontWeight: '800' },
   hint: { fontSize: 12, color: colors.textFaint, marginTop: 6, marginBottom: 2 },
   hintBad: { color: colors.danger },
+  undecided: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 12 },
+  undecidedOn: { backgroundColor: colors.text, borderColor: colors.text },
+  undecidedText: { fontSize: 13, color: colors.textSub, fontFamily: fonts.semibold, fontWeight: '600' },
+  undecidedTextOn: { color: colors.white, fontFamily: fonts.bold, fontWeight: '800' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   chip: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8 },
   chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
