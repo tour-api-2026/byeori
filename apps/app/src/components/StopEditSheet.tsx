@@ -22,23 +22,28 @@ function dayNo(start: string, date: string) {
  * 서버는 처음부터 PATCH 로 방문일·시간·순서·메모를 받고 있었고 화면만 없었다.
  */
 export function StopEditSheet({
-  item, dayList, startDate, sameDayCount, pending, onClose, onChange, onRemove,
+  item, dayList, startDate, sameDayIds, pending, onClose, onChange, onMove, onRemove,
 }: {
   item: ItineraryItem | null;
   /** 이 루트의 전체 날짜. 하루짜리면 '일차 옮기기'를 숨긴다. */
   dayList: string[];
   startDate: string;
-  /** 같은 날 스톱 수 — 순서를 끝에서 더 못 내리게 막는 데 쓴다. */
-  sameDayCount: number;
+  /** 같은 날 장소의 id, 보이는 차례대로. 끝에서 더 못 움직이게 막는 데 쓴다. */
+  sameDayIds: number[];
   pending: boolean;
   onClose: () => void;
-  onChange: (patch: { visitDate?: string; sortOrder?: number; plannedTime?: string | null }) => void;
+  onChange: (patch: { visitDate?: string; plannedTime?: string | null }) => void;
+  /** 한 칸 위/아래. 드래그와 같은 경로(그날 순서 전체 다시 매기기)로 나간다. */
+  onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
 }) {
   const insets = useSafeAreaInsets();
   if (!item) return null;
 
-  const order = item.sortOrder ?? 0;
+  // sortOrder 값을 믿지 않는다 — 보이는 차례가 기준이다.
+  const at = sameDayIds.indexOf(item.id);
+  const first = at <= 0;
+  const last = at < 0 || at >= sameDayIds.length - 1;
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -90,22 +95,22 @@ export function StopEditSheet({
           </>
         )}
 
-        {/* 순서 */}
+        {/* 순서 — 목록에서 손잡이를 끌어도 되고, 여기서 한 칸씩 움직여도 된다 */}
         <Text style={styles.label}>순서</Text>
         <View style={styles.row}>
           <Pressable
-            style={[styles.moveBtn, order <= 0 && styles.moveOff]}
-            disabled={order <= 0 || pending}
-            onPress={() => onChange({ sortOrder: order - 1 })}>
-            <Ionicons name="arrow-up" size={16} color={order <= 0 ? colors.border : colors.text} />
-            <Text style={[styles.moveText, order <= 0 && { color: colors.border }]}>위로</Text>
+            style={[styles.moveBtn, first && styles.moveOff]}
+            disabled={first || pending}
+            onPress={() => onMove(-1)}>
+            <Ionicons name="arrow-up" size={16} color={first ? colors.border : colors.text} />
+            <Text style={[styles.moveText, first && { color: colors.border }]}>위로</Text>
           </Pressable>
           <Pressable
-            style={[styles.moveBtn, order >= sameDayCount - 1 && styles.moveOff]}
-            disabled={order >= sameDayCount - 1 || pending}
-            onPress={() => onChange({ sortOrder: order + 1 })}>
-            <Ionicons name="arrow-down" size={16} color={order >= sameDayCount - 1 ? colors.border : colors.text} />
-            <Text style={[styles.moveText, order >= sameDayCount - 1 && { color: colors.border }]}>아래로</Text>
+            style={[styles.moveBtn, last && styles.moveOff]}
+            disabled={last || pending}
+            onPress={() => onMove(1)}>
+            <Ionicons name="arrow-down" size={16} color={last ? colors.border : colors.text} />
+            <Text style={[styles.moveText, last && { color: colors.border }]}>아래로</Text>
           </Pressable>
         </View>
 

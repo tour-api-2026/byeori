@@ -100,6 +100,16 @@ export function updateItineraryItem(id: number, itemId: number, body: {
   return unwrap<ItineraryItem>(api.patch<ApiEnvelope<ItineraryItem>>(`/itineraries/${id}/items/${itemId}`, body));
 }
 
+/**
+ * 하루치 순서를 통째로 다시 매긴다.
+ *
+ * updateItineraryItem 으로는 순서를 못 바꾼다 — 서버가 받은 항목 하나만 고치고 나머지를
+ * 다시 매기지 않아, 2번을 1번으로 올리면 1번이 둘이 된다. 그날 전체를 보내야 한다.
+ */
+export function reorderItineraryItems(id: number, visitDate: string, itemIds: number[]): Promise<ItineraryItem[]> {
+  return unwrap<ItineraryItem[]>(api.patch<ApiEnvelope<ItineraryItem[]>>(`/itineraries/${id}/items/order`, { visitDate, itemIds }));
+}
+
 export function deleteItineraryItem(id: number, itemId: number): Promise<void> {
   return unwrap<void>(api.delete<ApiEnvelope<void>>(`/itineraries/${id}/items/${itemId}`));
 }
