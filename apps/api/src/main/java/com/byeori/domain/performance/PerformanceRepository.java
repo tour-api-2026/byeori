@@ -70,6 +70,33 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
     List<Performance> findVisibleByVenue(@Param("venueId") Long venueId, @Param("today") LocalDate today,
                                          Pageable pageable);
 
+    /**
+     * 좌표 주변에서 지금 열리거나 곧 열릴 행사. 가까운 순.
+     *
+     * 공연시설명으로 이은 행사가 1,659건인데, 이름이 우리 DB 에 없어 못 이은 게 1,419건
+     * 남는다(소극장·사설 공연장 등). 그쪽도 좌표는 있으므로 "여기서 열린다" 대신
+     * "이 근처에서 열린다"로는 보여줄 수 있다 — 거리만 맞으면 틀릴 수 없는 말이다.
+     *
+     * 사각 범위로 먼저 추린 뒤 제곱거리로 정렬한다. 정렬에는 순서만 맞으면 되고,
+     * 경도는 위도보다 짧으므로(위도 36도에서 약 0.81배) 눌러서 비교한다.
+     */
+    @Query("""
+            select p from Performance p
+            where p.lat between :minLat and :maxLat
+              and p.lng between :minLng and :maxLng
+              and (p.endDate is null or p.endDate >= current_date)
+            order by (p.lat - :lat) * (p.lat - :lat)
+                   + (p.lng - :lng) * (p.lng - :lng) * 0.656,
+                     p.id asc
+            """)
+    List<Performance> findNearbyOngoing(@Param("lat") BigDecimal lat,
+                                        @Param("lng") BigDecimal lng,
+                                        @Param("minLat") BigDecimal minLat,
+                                        @Param("maxLat") BigDecimal maxLat,
+                                        @Param("minLng") BigDecimal minLng,
+                                        @Param("maxLng") BigDecimal maxLng,
+                                        Pageable pageable);
+
     /** AI 루트 후보: 그날 열리는, 좌표가 있는 행사. */
     @Query("""
             select p from Performance p
@@ -78,6 +105,7 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
               and p.lng between :minLng and :maxLng
             order by p.traditional desc, p.id asc
             """)
+
     List<Performance> findOnDateInBounds(@Param("date") LocalDate date,
                                          @Param("minLat") BigDecimal minLat,
                                          @Param("maxLat") BigDecimal maxLat,

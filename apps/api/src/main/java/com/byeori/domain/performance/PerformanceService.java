@@ -41,6 +41,23 @@ public class PerformanceService {
         return d == null ? res : res.withLive(d.overview(), firstUrl(d.homepage()));
     }
 
+    /**
+     * 좌표 주변에서 지금 열리거나 곧 열릴 행사.
+     *
+     * 장소 상세의 '주변에서 열리는 행사' 용. 공연시설명으로 이은 행사 말고도, 이름이
+     * 우리 DB 에 없어 못 이은 1,400여 건이 좌표는 갖고 있다. "여기서 열린다"고 단정하지
+     * 않고 "이 근처에서 열린다"로 보여주면 틀릴 일이 없다.
+     */
+    public List<PerformanceResponse> nearby(java.math.BigDecimal lat, java.math.BigDecimal lng,
+                                            int radiusMeters, int size) {
+        // 위도 1도 ≈ 111km. 사각 범위로 먼저 줄이고 정렬은 질의가 한다.
+        java.math.BigDecimal d = java.math.BigDecimal.valueOf(radiusMeters / 111_000.0);
+        return repo.findNearbyOngoing(lat, lng,
+                        lat.subtract(d), lat.add(d), lng.subtract(d), lng.add(d),
+                        org.springframework.data.domain.PageRequest.of(0, size))
+                .stream().map(PerformanceResponse::from).toList();
+    }
+
     /** 공사 homepage 는 "www.example.com" 처럼 설명이 섞여 오기도 한다. 주소만 뽑는다. */
     private static String firstUrl(String raw) {
         if (raw == null || raw.isBlank()) return null;
