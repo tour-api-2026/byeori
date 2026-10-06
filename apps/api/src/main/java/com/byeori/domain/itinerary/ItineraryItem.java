@@ -53,10 +53,17 @@ public class ItineraryItem {
         this.memo = null;
     }
 
+    /**
+     * 보낸 값만 바꾼다.
+     *
+     * 빈 문자열은 **지워 달라**는 뜻이다. JSON 의 null 하나로는 '안 건드림'과 '지움'을
+     * 가릴 수 없어서, 그동안 '미정'을 눌러도 시간이 지워지지 않았다 — 넣을 수는 있어도
+     * 되돌릴 수가 없었다.
+     */
     public void update(LocalDate visitDate, Integer sortOrder, String plannedTime, String memo) {
         if (visitDate != null) this.visitDate = visitDate;
         if (sortOrder != null) this.sortOrder = sortOrder;
-        if (plannedTime != null) this.plannedTime = plannedTime;
-        if (memo != null) this.memo = memo;
+        if (plannedTime != null) this.plannedTime = plannedTime.isBlank() ? null : plannedTime;
+        if (memo != null) this.memo = memo.isBlank() ? null : memo;
     }
 }
