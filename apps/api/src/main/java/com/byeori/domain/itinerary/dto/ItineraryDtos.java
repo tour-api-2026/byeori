@@ -44,6 +44,15 @@ public final class ItineraryDtos {
         }
     }
 
+    /**
+     * 하루치 순서를 통째로 다시 매긴다.
+     *
+     * 항목 하나의 sortOrder 만 고치는 길(ItemRequest)로는 순서를 바꿀 수 없다. 2번을 1번으로
+     * 올려도 원래 1번이 그대로 1번이라 같은 값이 둘이 되고, 그때 누가 위에 오는지는 DB가 정한다.
+     * 그래서 그날 전체를 받아 0부터 다시 적는다.
+     */
+    public record ReorderRequest(LocalDate visitDate, List<Long> itemIds) {}
+
     // ── 공유 링크 ─────────────────────────────
 
     /** 공유 토큰 발급 응답. 앱이 이 값으로 링크를 만든다. */

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Calendar } from '@/components/Calendar';
+import { DraggableStops } from '@/components/DraggableStops';
 import { StopEditSheet } from '@/components/StopEditSheet';
 import PlacePicker from '@/components/PlacePicker';
 import {
@@ -93,7 +94,7 @@ function Editor({ id }: { id: number }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data, isLoading } = useItineraryQuery(id);
-  const { add, addPlace, remove, update: updateItem } = useItineraryItemMutation(id);
+  const { add, addPlace, remove, reorder, update: updateItem } = useItineraryItemMutation(id);
   // 스톱을 누르면 여는 편집 시트. 어느 항목인지만 들고 있는다.
   const [editingItem, setEditingItem] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -112,6 +113,9 @@ function Editor({ id }: { id: number }) {
   data.items.forEach((it) => { (byDate[it.visitDate] ||= []).push(it); });
   const dates = Object.keys(byDate).sort();
   const activeDay = selectedDay ?? data.startDate;
+  // 편집 중인 스톱과, 그 스톱이 속한 날의 id 목록(보이는 차례대로).
+  const editingStop = data.items.find((x) => x.id === editingItem) ?? null;
+  const editingDayIds = (byDate[editingStop?.visitDate ?? ''] ?? []).map((x) => x.id);
   // 장소 추가 창의 "이 루트 주변" 기준: 그날 마지막으로 담은 곳(없으면 루트 전체의 마지막)
   const dayItems = byDate[activeDay] ?? [];
   const withCoords = (arr: typeof data.items) => [...arr].reverse().find((it) => it.lat != null && it.lng != null);
@@ -157,9 +161,18 @@ function Editor({ id }: { id: number }) {
       <Stack.Screen options={{
         title: '루트 만들기',
         headerRight: () => (
-          <Pressable style={styles.saveBtn} onPress={() => router.back()}>
-            <Text style={styles.saveText}>저장</Text>
-          </Pressable>
+          <View style={styles.headerBtns}>
+            {/* 편집은 저장 왼쪽에 둔다. 이름 줄의 연필은 이쪽으로 옮겼다. */}
+            {!editing && (
+              <Pressable style={styles.editBtn} hitSlop={8} onPress={openEdit}>
+                <Ionicons name="create-outline" size={18} color={colors.text} />
+                <Text style={styles.editBtnText}>편집</Text>
+              </Pressable>
+            )}
+            <Pressable style={styles.saveBtn} onPress={() => router.back()}>
+              <Text style={styles.saveText}>저장</Text>
+            </Pressable>
+          </View>
         ),
       }} />
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 + insets.bottom }}>
@@ -181,7 +194,6 @@ function Editor({ id }: { id: number }) {
           <Pressable style={styles.nameBox} onPress={openEdit}>
             <Text style={styles.namePrefix}>이름</Text>
             <Text style={styles.nameValue} numberOfLines={1}>{data.title}</Text>
-            <Ionicons name="create-outline" size={18} color={colors.textFaint} />
           </Pressable>
         )}
 
@@ -245,24 +257,18 @@ function Editor({ id }: { id: number }) {
           <Ionicons name="chevron-down" size={18} color={colors.white} />
         </View>
 
-        {/* 선택한 일차의 스톱 (번호 + 제거) */}
+        {/* 선택한 일차의 스톱 — 손잡이(≡)를 끌어 순서를 바꾼다 */}
         <View style={styles.stopsCard}>
-          {(byDate[activeDay] ?? []).length ? (byDate[activeDay] ?? []).map((it, i, arr) => (
-            <Pressable key={it.id} style={styles.stop} onPress={() => setEditingItem(it.id)}>
-              <View style={styles.rail}>
-                {i > 0 && <View style={[styles.rLine, styles.rTop]} />}
-                {i < arr.length - 1 && <View style={[styles.rLine, styles.rBot]} />}
-                <View style={styles.stopNum}><Text style={styles.stopNumText}>{i + 1}</Text></View>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.stopName}>{it.name}</Text>
-                <Text style={styles.stopMeta}>{it.targetType === 'PERFORMANCE' ? '행사' : '장소'}{it.plannedTime ? ` · ${it.plannedTime}` : ''}</Text>
-                {/* AI 루트는 추천 이유를 메모로 저장한다 */}
-                {it.memo ? <Text style={styles.stopMemo}>{it.memo}</Text> : null}
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
-            </Pressable>
-          )) : <Text style={styles.empty}>이 날짜에 담은 장소가 없어요</Text>}
+          {(byDate[activeDay] ?? []).length ? (
+            <DraggableStops
+              items={byDate[activeDay] ?? []}
+              pending={reorder.isPending}
+              onPressItem={setEditingItem}
+              onReorder={(itemIds) => reorder.mutate({ visitDate: activeDay, itemIds }, {
+                onError: (e: any) => Alert.alert('순서를 바꾸지 못했어요', e?.message ?? '잠시 후 다시 시도해 주세요.'),
+              })}
+            />
+          ) : <Text style={styles.empty}>이 날짜에 담은 장소가 없어요</Text>}
         </View>
 
         {/* 추가하기 */}
@@ -273,13 +279,25 @@ function Editor({ id }: { id: number }) {
 
       {/* 스톱 편집: 시간 · 일차 · 순서 · 제거 */}
       <StopEditSheet
-        item={data.items.find((x) => x.id === editingItem) ?? null}
+        item={editingStop}
         dayList={allDays(data.startDate, data.endDate)}
         startDate={data.startDate}
-        sameDayCount={(byDate[data.items.find((x) => x.id === editingItem)?.visitDate ?? ''] ?? []).length}
-        pending={updateItem.isPending || remove.isPending}
+        sameDayIds={editingDayIds}
+        pending={updateItem.isPending || remove.isPending || reorder.isPending}
         onClose={() => setEditingItem(null)}
         onChange={(patch) => updateItem.mutate({ itemId: editingItem as number, ...patch })}
+        onMove={(dir) => {
+          // 한 칸 움직이는 것도 '그날 순서 전체'로 보낸다. 한 항목의 sortOrder 만 고치면
+          // 같은 번호가 둘이 되어 어느 쪽이 위인지 서버가 정하지 못한다.
+          const ids = [...editingDayIds];
+          const at = ids.indexOf(editingItem as number);
+          const to = at + dir;
+          if (at < 0 || to < 0 || to >= ids.length) return;
+          [ids[at], ids[to]] = [ids[to], ids[at]];
+          reorder.mutate({ visitDate: editingStop?.visitDate as string, itemIds: ids }, {
+            onError: (e: any) => Alert.alert('순서를 바꾸지 못했어요', e?.message ?? '잠시 후 다시 시도해 주세요.'),
+          });
+        }}
         onRemove={() => {
           const target = editingItem as number;
           setEditingItem(null);
@@ -320,6 +338,9 @@ const styles = StyleSheet.create({
   range: { fontSize: 13, color: colors.textFaint, marginTop: 4 },
   empty: { fontSize: 14, color: colors.textFaint, paddingVertical: 20, textAlign: 'center' },
   // 저장 버튼 (헤더)
+  headerBtns: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 6 },
+  editBtnText: { color: colors.text, fontSize: 13, fontWeight: '700' },
   saveBtn: { backgroundColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 7 },
   saveText: { color: colors.white, fontSize: 13, fontWeight: '800' },
   // 이름
@@ -339,16 +360,6 @@ const styles = StyleSheet.create({
   dayBarText: { color: colors.white, fontSize: 14, fontWeight: '800' },
   // 스톱 카드
   stopsCard: { backgroundColor: colors.bgCard, borderRadius: radius.md, padding: 14, marginTop: 10, ...shadow.card },
-  stop: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
-  rail: { width: 26, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
-  rLine: { position: 'absolute', width: 2, left: 12, backgroundColor: colors.border },
-  rTop: { top: 0, bottom: '50%' },
-  rBot: { top: '50%', bottom: 0 },
-  stopNum: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  stopNumText: { color: colors.white, fontSize: 12, fontWeight: '800' },
-  stopName: { fontSize: 15, fontWeight: '700', color: colors.text },
-  stopMeta: { fontSize: 12, color: colors.textFaint, marginTop: 2 },
-  stopMemo: { fontSize: 12, color: colors.textSub, marginTop: 4, lineHeight: 17 },
   delBtn: { borderWidth: 1, borderColor: colors.danger, borderRadius: radius.sm, paddingHorizontal: 12, paddingVertical: 6 },
   delText: { fontSize: 12, color: colors.danger, fontWeight: '700' },
   // 추가하기

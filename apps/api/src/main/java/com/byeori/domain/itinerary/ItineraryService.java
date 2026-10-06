@@ -19,7 +19,11 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -207,6 +211,39 @@ public class ItineraryService {
         Itinerary i = own(userId, id);
         i.update(req.title(), req.startDate(), req.endDate());
         return get(userId, id);
+    }
+
+    /**
+     * 하루치 순서를 받은 차례대로 다시 매긴다.
+     *
+     * 보낸 목록이 그날 항목 **전체**와 정확히 같을 때만 받는다. 일부만 받으면 빠진 항목을
+     * 몇 번에 둬야 할지 알 수 없고, 아무 데나 끼우면 사용자가 보던 순서와 어긋난다.
+     * 화면이 낡은 목록을 들고 있을 때(다른 기기에서 장소를 지웠다거나) 여기서 걸린다.
+     */
+    @Transactional
+    public List<ItemResponse> reorderItems(Long userId, Long id, ReorderRequest req) {
+        own(userId, id);
+        if (req == null || req.visitDate() == null || req.itemIds() == null || req.itemIds().isEmpty()) {
+            throw new BadRequestException("ORDER_INVALID", "순서를 바꿀 장소가 없습니다.");
+        }
+        List<ItineraryItem> sameDay = itemRepo.findByItineraryIdOrderByVisitDateAscSortOrderAsc(id).stream()
+                .filter(it -> req.visitDate().equals(it.getVisitDate()))
+                .toList();
+        Set<Long> given = new HashSet<>(req.itemIds());
+        Set<Long> actual = new HashSet<>(sameDay.stream().map(ItineraryItem::getId).toList());
+        if (given.size() != req.itemIds().size() || !given.equals(actual)) {
+            throw new BadRequestException("ORDER_MISMATCH", "그날의 장소 목록과 맞지 않아요. 새로고침 후 다시 시도해주세요.");
+        }
+        Map<Long, ItineraryItem> byId = new HashMap<>();
+        sameDay.forEach(it -> byId.put(it.getId(), it));
+        int order = 0;
+        List<ItemResponse> out = new ArrayList<>();
+        for (Long itemId : req.itemIds()) {
+            ItineraryItem item = byId.get(itemId);
+            item.update(null, order++, null, null);
+            out.add(toItemResponse(item));
+        }
+        return out;
     }
 
     @Transactional

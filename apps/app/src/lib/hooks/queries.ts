@@ -5,7 +5,7 @@ import { fetchCourseDetail, fetchCourses } from '../api/courses';
 import {
   addItineraryItem, addPlaceItem, createItinerary, deleteItinerary, deleteItineraryItem,
   fetchItinerary, fetchItineraryRoute, fetchMyItineraries, fetchSharedItinerary,
-  type KakaoPlace, updateItinerary, updateItineraryItem } from '../api/itineraries';
+  reorderItineraryItems, type KakaoPlace, updateItinerary, updateItineraryItem } from '../api/itineraries';
 import { fetchPerformance, fetchPerformances, PerformanceFilter, fetchNearbyPerformances } from '../api/performances';
 import { createReview, deleteReview, fetchMyReviews, fetchReviews, reportReview } from '../api/reviews';
 import { fetchContentTags, unvoteTag, voteTag } from '../api/tags';
@@ -252,6 +252,11 @@ export function useItineraryItemMutation(itineraryId: number) {
     update: useMutation({
       mutationFn: (p: { itemId: number; visitDate?: string; sortOrder?: number; plannedTime?: string | null; memo?: string | null }) =>
         updateItineraryItem(itineraryId, p.itemId, p),
+      onSuccess: invalidate,
+    }),
+    reorder: useMutation({
+      mutationFn: (p: { visitDate: string; itemIds: number[] }) =>
+        reorderItineraryItems(itineraryId, p.visitDate, p.itemIds),
       onSuccess: invalidate,
     }),
     remove: useMutation({ mutationFn: (itemId: number) => deleteItineraryItem(itineraryId, itemId), onSuccess: invalidate }),

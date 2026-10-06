@@ -94,6 +94,19 @@ public class ItineraryController {
         return ApiResponse.ok(service.updateItem(userId, id, itemId, req));
     }
 
+    /**
+     * 하루치 순서를 통째로 다시 매긴다(드래그로 바꾼 결과).
+     *
+     * 경로를 /items/{itemId} 보다 **구체적인 리터럴**로 둬서 둘이 겹치지 않게 한다 —
+     * Spring 은 변수 자리보다 글자가 그대로 박힌 경로를 먼저 고른다.
+     */
+    @PatchMapping("/itineraries/{id}/items/order")
+    public ApiResponse<List<ItemResponse>> reorderItems(@AuthenticationPrincipal Long userId,
+                                                       @PathVariable("id") Long id,
+                                                       @RequestBody ReorderRequest req) {
+        return ApiResponse.ok(service.reorderItems(userId, id, req));
+    }
+
     @DeleteMapping("/itineraries/{id}/items/{itemId}")
     public ApiResponse<Void> deleteItem(@AuthenticationPrincipal Long userId,
                                         @PathVariable("id") Long id, @PathVariable("itemId") Long itemId) {
