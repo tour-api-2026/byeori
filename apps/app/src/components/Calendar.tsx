@@ -161,8 +161,18 @@ const styles = StyleSheet.create({
   // 구간 표시. 칸을 가로질러 깔리므로 날짜 사이가 끊기지 않는다.
   band: { position: 'absolute', top: '50%', marginTop: -DAY / 2, height: DAY, backgroundColor: colors.primarySoft },
   bandFull: { left: 0, right: 0 },
-  bandFromMid: { left: '50%', right: 0, borderTopLeftRadius: DAY / 2, borderBottomLeftRadius: DAY / 2 },
-  bandToMid: { left: 0, right: '50%', borderTopRightRadius: DAY / 2, borderBottomRightRadius: DAY / 2 },
+  /**
+   * 띠의 안쪽 끝은 **깎지 않는다.**
+   *
+   * 끝을 둥글게(반지름 17) 두면 동그라미 곡선과 어긋나 위아래 모서리에 흰 틈이 생기고,
+   * 선이 동그라미에서 뻗어 나오는 게 아니라 가운데에 꽂힌 것처럼 보인다. 이 끝은 동그라미
+   * 밑에 깔려 보이지 않는 자리라 깎을 이유도 없다. 네모로 두면 띠 높이(34)와 동그라미
+   * 지름(34)이 같아 옆구리에서 딱 맞물린다.
+   *
+   * 구간 양 끝의 둥근 맛은 동그라미가 내는 것이지 띠가 내는 게 아니다.
+   */
+  bandFromMid: { left: '50%', right: 0 },
+  bandToMid: { left: 0, right: '50%' },
 
   day: { width: DAY, height: DAY, borderRadius: DAY / 2, alignItems: 'center', justifyContent: 'center' },
   dayOn: { backgroundColor: colors.primary },
