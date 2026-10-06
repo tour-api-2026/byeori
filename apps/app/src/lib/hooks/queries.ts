@@ -4,8 +4,7 @@ import { fetchAiStatus } from '../api/ai';
 import { fetchCourseDetail, fetchCourses } from '../api/courses';
 import {
   addItineraryItem, addPlaceItem, createItinerary, deleteItinerary, deleteItineraryItem,
-  fetchItinerary, fetchItineraryRoute, fetchMyItineraries, type KakaoPlace,
-} from '../api/itineraries';
+  fetchItinerary, fetchItineraryRoute, fetchMyItineraries, type KakaoPlace, updateItinerary, updateItineraryItem } from '../api/itineraries';
 import { fetchPerformance, fetchPerformances, PerformanceFilter, fetchNearbyPerformances } from '../api/performances';
 import { createReview, deleteReview, fetchMyReviews, fetchReviews, reportReview } from '../api/reviews';
 import { fetchContentTags, unvoteTag, voteTag } from '../api/tags';
@@ -211,6 +210,18 @@ export function useDeleteItineraryMutation() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: deleteItinerary, onSuccess: () => qc.invalidateQueries({ queryKey: ['itineraries'] }) });
 }
+/** 루트 이름·기간 수정. 성공하면 상세와 목록을 모두 새로 받는다(목록 카드에도 제목·기간이 보인다). */
+export function useUpdateItineraryMutation(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { title?: string; startDate?: string; endDate?: string }) => updateItinerary(id, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['itinerary', id] });
+      qc.invalidateQueries({ queryKey: ['itineraries'] });
+    },
+  });
+}
+
 export function useItineraryItemMutation(itineraryId: number) {
   const qc = useQueryClient();
   const invalidate = () => qc.invalidateQueries({ queryKey: ['itinerary', itineraryId] });
@@ -219,6 +230,12 @@ export function useItineraryItemMutation(itineraryId: number) {
     addPlace: useMutation({
       mutationFn: (v: { place: KakaoPlace; visitDate: string; sortOrder?: number }) =>
         addPlaceItem(itineraryId, v.place, v.visitDate, v.sortOrder),
+      onSuccess: invalidate,
+    }),
+    /** 방문일·시간·순서·메모 수정. 보내지 않은 필드는 서버가 건드리지 않는다. */
+    update: useMutation({
+      mutationFn: (p: { itemId: number; visitDate?: string; sortOrder?: number; plannedTime?: string | null; memo?: string | null }) =>
+        updateItineraryItem(itineraryId, p.itemId, p),
       onSuccess: invalidate,
     }),
     remove: useMutation({ mutationFn: (itemId: number) => deleteItineraryItem(itineraryId, itemId), onSuccess: invalidate }),

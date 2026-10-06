@@ -48,12 +48,24 @@ export function createItinerary(body: { title: string; startDate: string; endDat
   return unwrap<ItineraryDetail>(api.post<ApiEnvelope<ItineraryDetail>>('/itineraries', body));
 }
 
+/** 루트의 이름·기간 수정. 서버는 처음부터 PATCH 를 받고 있었는데 화면이 부르지 않았다. */
+export function updateItinerary(id: number, body: { title?: string; startDate?: string; endDate?: string }): Promise<ItineraryDetail> {
+  return unwrap<ItineraryDetail>(api.patch<ApiEnvelope<ItineraryDetail>>(`/itineraries/${id}`, body));
+}
+
 export function deleteItinerary(id: number): Promise<void> {
   return unwrap<void>(api.delete<ApiEnvelope<void>>(`/itineraries/${id}`));
 }
 
 export function addItineraryItem(id: number, body: { targetType: string; targetId: number; visitDate: string; sortOrder?: number; plannedTime?: string; memo?: string }): Promise<ItineraryItem> {
   return unwrap<ItineraryItem>(api.post<ApiEnvelope<ItineraryItem>>(`/itineraries/${id}/items`, body));
+}
+
+/** 항목의 방문일·시간·순서·메모 수정. 서버는 처음부터 PATCH 를 받고 있었다. */
+export function updateItineraryItem(id: number, itemId: number, body: {
+  visitDate?: string; sortOrder?: number; plannedTime?: string | null; memo?: string | null;
+}): Promise<ItineraryItem> {
+  return unwrap<ItineraryItem>(api.patch<ApiEnvelope<ItineraryItem>>(`/itineraries/${id}/items/${itemId}`, body));
 }
 
 export function deleteItineraryItem(id: number, itemId: number): Promise<void> {
