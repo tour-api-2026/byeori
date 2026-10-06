@@ -44,6 +44,28 @@ public final class ItineraryDtos {
         }
     }
 
+    // ── 공유 링크 ─────────────────────────────
+
+    /** 공유 토큰 발급 응답. 앱이 이 값으로 링크를 만든다. */
+    public record ShareResponse(String token) {}
+
+    /**
+     * 토큰 하나당 한 곳. ItemResponse 와 닮았지만 **일부러 따로 둔다**.
+     *
+     * 같은 record 를 돌려쓰면 나중에 ItemResponse 에 개인 필드를 하나 더할 때 그게 조용히
+     * 공개된다. 공유로 나가는 모양은 여기에만 적어 둔다.
+     *
+     * 빠진 것: memo(숙소 비번 같은 걸 적어 둔 사람이 있다), id, userId.
+     * targetType·targetId 는 남긴다 — 받은 사람이 장소를 눌러 상세로 들어갈 수 있어야 한다.
+     */
+    public record SharedStop(
+            String targetType, Long targetId, String name, String imageUrl,
+            LocalDate visitDate, int sortOrder, String plannedTime, Double lat, Double lng) {}
+
+    /** 링크를 연 사람이 보는 루트. 누구 것인지는 담지 않는다. */
+    public record SharedDetail(
+            String title, LocalDate startDate, LocalDate endDate, List<SharedStop> stops) {}
+
     // ── 길찾기(여러 경유지 경로) ─────────────────────────────
 
     /** 경유지(방문지) 한 곳. order는 방문 순서(0부터). */

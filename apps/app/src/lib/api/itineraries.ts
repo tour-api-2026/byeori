@@ -22,6 +22,38 @@ export type ItineraryDetail = {
   id: number; title: string; startDate: string; endDate: string; sourceType: string; items: ItineraryItem[];
 };
 
+// ── 공유 링크 ──
+
+/**
+ * 공유 링크로 보는 루트. ItineraryDetail 과 닮았지만 서버가 **일부러 다른 모양**으로 준다.
+ * memo·id 가 없다 — 개인 메모가 링크를 받은 사람에게 넘어가지 않게 서버에서 뺀다.
+ */
+export type SharedStop = {
+  targetType: 'VENUE' | 'PERFORMANCE';
+  targetId: number;
+  name: string | null;
+  imageUrl: string | null;
+  visitDate: string;
+  sortOrder: number;
+  plannedTime: string | null;
+  lat: number | null;
+  lng: number | null;
+};
+
+export type SharedItinerary = {
+  title: string; startDate: string; endDate: string; stops: SharedStop[];
+};
+
+/** 공유 토큰을 받아온다. 서버가 처음 한 번만 만들고 그 뒤로는 같은 값을 준다. */
+export function shareItinerary(id: number): Promise<{ token: string }> {
+  return unwrap<{ token: string }>(api.post<ApiEnvelope<{ token: string }>>(`/itineraries/${id}/share`, {}));
+}
+
+/** 로그인 없이 부른다. 토큰이 열쇠다. */
+export function fetchSharedItinerary(token: string): Promise<SharedItinerary> {
+  return unwrap<SharedItinerary>(api.get<ApiEnvelope<SharedItinerary>>(`/shared/itineraries/${token}`));
+}
+
 // ── 길찾기(경로) ──
 export type RouteStop = {
   order: number; targetType: 'VENUE' | 'PERFORMANCE'; targetId: number; name: string | null; lat: number; lng: number;

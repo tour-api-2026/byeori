@@ -33,6 +33,25 @@ public class ItineraryController {
         return ApiResponse.ok(service.get(userId, id));
     }
 
+    /** 공유 링크 발급(소유자만). 이미 있으면 같은 토큰을 돌려준다. */
+    @PostMapping("/itineraries/{id}/share")
+    public ApiResponse<ShareResponse> share(@AuthenticationPrincipal Long userId,
+                                            @PathVariable("id") Long id) {
+        return ApiResponse.ok(service.share(userId, id));
+    }
+
+    /**
+     * 공유 링크로 보는 루트. 로그인하지 않은 사람도 연다.
+     *
+     * 경로를 /itineraries 밑에 두지 않은 이유: SecurityConfig 가 /api/v1/itineraries/** 를
+     * 통째로 authenticated 로 막고 있어서, 그 아래에 두면 예외를 하나 뚫어야 한다.
+     * 공개하려는 것만 /shared 아래에 모아 두면 보호 규칙을 건드릴 일이 없다.
+     */
+    @GetMapping("/shared/itineraries/{token}")
+    public ApiResponse<SharedDetail> shared(@PathVariable("token") String token) {
+        return ApiResponse.ok(service.getShared(token));
+    }
+
     /** 방문지들을 순서대로 잇는 도로 경로(polyline·거리·시간). priority=RECOMMEND|TIME|DISTANCE */
     @GetMapping("/itineraries/{id}/route")
     public ApiResponse<RouteResponse> route(@AuthenticationPrincipal Long userId,

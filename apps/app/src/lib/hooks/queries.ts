@@ -4,7 +4,8 @@ import { fetchAiStatus } from '../api/ai';
 import { fetchCourseDetail, fetchCourses } from '../api/courses';
 import {
   addItineraryItem, addPlaceItem, createItinerary, deleteItinerary, deleteItineraryItem,
-  fetchItinerary, fetchItineraryRoute, fetchMyItineraries, type KakaoPlace, updateItinerary, updateItineraryItem } from '../api/itineraries';
+  fetchItinerary, fetchItineraryRoute, fetchMyItineraries, fetchSharedItinerary,
+  type KakaoPlace, updateItinerary, updateItineraryItem } from '../api/itineraries';
 import { fetchPerformance, fetchPerformances, PerformanceFilter, fetchNearbyPerformances } from '../api/performances';
 import { createReview, deleteReview, fetchMyReviews, fetchReviews, reportReview } from '../api/reviews';
 import { fetchContentTags, unvoteTag, voteTag } from '../api/tags';
@@ -199,6 +200,21 @@ export function useMyItinerariesQuery() {
 export function useItineraryQuery(id: number) {
   return useQuery({ queryKey: ['itinerary', id], queryFn: () => fetchItinerary(id), enabled: !!id });
 }
+/**
+ * 공유 링크로 보는 루트. 로그인 상태와 무관하다.
+ *
+ * retry 를 끈 이유: 토큰이 틀리면 404 가 확정이라 다시 물어도 같은 답이다.
+ * 기본값(3회)대로 두면 "루트를 찾을 수 없어요" 가 뜨기까지 몇 초를 기다리게 된다.
+ */
+export function useSharedItineraryQuery(token: string) {
+  return useQuery({
+    queryKey: ['shared-itinerary', token],
+    queryFn: () => fetchSharedItinerary(token),
+    enabled: !!token,
+    retry: false,
+  });
+}
+
 export function useItineraryRouteQuery(id: number, priority = 'RECOMMEND') {
   return useQuery({ queryKey: ['itinerary', id, 'route', priority], queryFn: () => fetchItineraryRoute(id, priority), enabled: !!id });
 }
