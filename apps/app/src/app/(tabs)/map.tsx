@@ -145,6 +145,26 @@ export default function MapScreen() {
     );
   }, [kakaoPlaces, origin]);
 
+  /**
+   * 카카오 결과 중 우리 장소와 같은 곳은 뺀다.
+   *
+   * '예술의전당'을 검색하면 양쪽에 다 나와 같은 곳이 두 번 보였다. 이름만으로 지우면
+   * 전국의 같은 상호(스타벅스 등)까지 날아가므로 거리도 함께 본다.
+   */
+  const dedupedKakao = useMemo(() => {
+    const norm = (t: string) =>
+      t.replace(/[()[\]]/g, '').replace(/[\s·.\-_]/g, '').toLowerCase();
+    const ours = searchVenues
+      .filter((v) => v.lat != null && v.lng != null)
+      .map((v) => ({ name: norm(v.name), lat: Number(v.lat), lng: Number(v.lng) }));
+    return sortedKakao.filter((k) => {
+      const kn = norm(k.name);
+      return !ours.some(
+        (o) => o.name === kn && distanceMeters(o, { lat: k.lat, lng: k.lng }) < 200,
+      );
+    });
+  }, [sortedKakao, searchVenues]);
+
   /** 목록 행에 붙일 거리. 기준점이 없으면 표시하지 않는다. */
   const distanceOf = (p: { lat?: number | null; lng?: number | null }) =>
     origin && p.lat != null && p.lng != null
@@ -568,11 +588,14 @@ export default function MapScreen() {
         topInset={insets.top + 56}>
         <View style={styles.sheetHead}>
           <Text style={styles.sheetTitle}>'{keyword}' 검색 결과</Text>
-          <Text style={styles.sheetCount}>{searchVenues.length + sortedKakao.length}곳</Text>
+          <Text style={styles.sheetCount}>{searchVenues.length + dedupedKakao.length}곳</Text>
         </View>
         <ScrollView
           contentContainerStyle={{ paddingBottom: tabH + 24 }}
           showsVerticalScrollIndicator={false}>
+          {searchVenues.length > 0 && (
+            <Text style={styles.sheetGroup}>벼리 장소 {searchVenues.length}곳</Text>
+          )}
           {searchVenues.map((v) => (
             <Pressable
               key={`v-${v.id ?? v.tourContentId}`}
@@ -589,7 +612,10 @@ export default function MapScreen() {
               <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
             </Pressable>
           ))}
-          {sortedKakao.map((k, i) => (
+          {dedupedKakao.length > 0 && (
+            <Text style={styles.sheetGroup}>카카오 장소 {dedupedKakao.length}곳</Text>
+          )}
+          {dedupedKakao.map((k, i) => (
             <Pressable key={`k-${i}`} style={styles.sheetRow} onPress={() => focusKakao(k)}>
               <View style={styles.sheetThumbAlt}>
                 <Ionicons name="location" size={20} color={colors.accent} />
@@ -604,7 +630,7 @@ export default function MapScreen() {
               <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
             </Pressable>
           ))}
-          {searchVenues.length + sortedKakao.length === 0 && (
+          {searchVenues.length + dedupedKakao.length === 0 && (
             <Text style={styles.sheetEmpty}>검색 결과가 없어요</Text>
           )}
         </ScrollView>
@@ -785,6 +811,7 @@ const styles = StyleSheet.create({
   sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.lg, paddingBottom: 10 },
   sheetTitle: { fontSize: 15, fontFamily: fonts.bold, fontWeight: "800", color: colors.text },
   sheetCount: { fontSize: 13, color: colors.textFaint },
+  sheetGroup: { fontSize: 12, fontFamily: fonts.bold, fontWeight: "800", color: colors.textFaint, paddingHorizontal: space.lg, paddingTop: 16, paddingBottom: 4 },
   sheetRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: space.lg, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.border },
   sheetThumb: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.bgSoft },
   sheetThumbAlt: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.bgSoft, alignItems: "center", justifyContent: "center" },
