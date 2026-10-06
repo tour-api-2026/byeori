@@ -2,9 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useDeleteItineraryMutation, useMyItinerariesQuery } from '@/lib/hooks/queries';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, shadow, space } from '@/lib/theme';
 
 export default function ItinerariesScreen() {
+  const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const router = useRouter();
   const { data, isLoading } = useMyItinerariesQuery();
   const del = useDeleteItineraryMutation();
@@ -34,7 +36,7 @@ export default function ItinerariesScreen() {
       ) : !data?.length ? (
         <View style={styles.empty}><Text style={styles.emptyText}>아직 여행 일지가 없어요</Text></View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: space.lg }}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: 28 + insets.bottom }}>
           {data.map((it) => (
             <Pressable key={it.id} style={styles.card} onPress={() => router.push(`/itinerary/${it.id}`)}>
               <View style={{ flex: 1 }}>

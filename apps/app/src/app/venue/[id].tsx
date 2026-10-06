@@ -3,7 +3,7 @@ import { Image } from '@/components/Image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ContentComments } from '@/components/ContentComments';
 import { PerformanceCarousel, stateCaption } from '@/components/PerformanceCarousel';
 import { Rating } from '@/components/Rating';
@@ -18,6 +18,7 @@ import { useRecentStore } from '@/lib/store/recentStore';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 export default function VenueDetailScreen() {
+  const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const { id, mine } = useLocalSearchParams<{ id: string; mine?: string }>();
   const { data: v, isLoading } = useVenueDetailQuery(id);
   // 콘텐츠 ID도 숫자라 URL만 보고 우리 id로 단정하면 엉뚱한 장소의 리뷰·위시리스트를
@@ -132,7 +133,7 @@ export default function VenueDetailScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 32 + insets.bottom }} showsVerticalScrollIndicator={false}>
         <Image source={v.imageUrl} style={styles.hero} contentFit="cover" transition={200} />
 
         <View style={styles.body}>

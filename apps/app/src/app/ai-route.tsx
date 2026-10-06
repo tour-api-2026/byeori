@@ -11,6 +11,7 @@ import { AI_THEMES, generateAiRoute, saveAiRoute, type AiRoutePreview } from '@/
 import { searchKakaoPlaces, type KakaoPlace } from '@/lib/api/itineraries';
 import { sized } from '@/lib/img';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 /**
@@ -96,6 +97,7 @@ const shortDate = (iso: string) => iso.slice(5).replace('-', '/');
  * (지도·이동 경로)을 그대로 쓴다. 오류는 화면 안에 적는다 — 웹에서는 Alert 가 뜨지 않는다.
  */
 export default function AiRouteScreen() {
+  const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const router = useRouter();
   const qc = useQueryClient();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
@@ -203,7 +205,7 @@ export default function AiRouteScreen() {
   return (
     <View style={styles.safe}>
       <Stack.Screen options={{ title: 'AI 루트 만들기' }} />
-      <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 48 }}>
+      <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 48 + insets.bottom }}>
         {!preview ? (
           <>
             {/* 진행 표시 — 지금 몇 번째인지, 뒤로 갈 수 있는지 */}
