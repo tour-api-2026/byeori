@@ -3,7 +3,7 @@ import { Image } from '@/components/Image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ContentComments } from '@/components/ContentComments';
 import { Rating } from '@/components/Rating';
 import { usePerformanceQuery } from '@/lib/hooks/queries';
@@ -24,6 +24,7 @@ const STATE_LABEL: Record<string, string> = {
  * 예매처가 있으면 그때 내보낸다.
  */
 export default function PerformanceDetailScreen() {
+  const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { data: p, isLoading } = usePerformanceQuery(Number(id));
@@ -52,7 +53,7 @@ export default function PerformanceDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 + insets.bottom }}>
         <View style={styles.header}>
           <Pressable hitSlop={10} onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={24} color={colors.text} />

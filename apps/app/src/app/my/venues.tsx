@@ -8,6 +8,7 @@ import { Rating } from '@/components/Rating';
 import { Venue } from '@/lib/api/types';
 import { useMyVenuesQuery } from '@/lib/hooks/queries';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 type StatusKey = 'approved' | 'review' | 'rejected';
@@ -18,6 +19,7 @@ const TABS: { key: StatusKey; label: string; color: string; soft: string }[] = [
 ];
 
 export default function MyVenuesScreen() {
+  const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const router = useRouter();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const { data, isLoading } = useMyVenuesQuery();
@@ -59,7 +61,7 @@ export default function MyVenuesScreen() {
       {isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
       ) : shown.length ? (
-        <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 }}>
+        <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 + insets.bottom }}>
           {shown.map((v) => <VenueStatusCard key={v.id} venue={v} statusLabel={cfg.label} color={cfg.color} soft={cfg.soft} />)}
         </ScrollView>
       ) : (
