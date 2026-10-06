@@ -275,19 +275,7 @@ public class ItineraryService {
         if (req == null || req.visitDate() == null) {
             throw new BadRequestException("ITEM_INVALID", "방문 날짜는 필수입니다.");
         }
-        String kakaoId = req.kakaoPlaceId() == null ? "" : req.kakaoPlaceId().strip();
-        String name = req.name() == null ? "" : req.name().strip();
-        if (!kakaoId.matches("\\d{1,20}") || name.isEmpty() || name.length() > 100) {
-            throw new BadRequestException("PLACE_INVALID", "장소 정보가 올바르지 않아요.");
-        }
-        if (req.lat() == null || req.lng() == null
-                || req.lat() < 33 || req.lat() > 39 || req.lng() < 124 || req.lng() > 132) {
-            throw new BadRequestException("PLACE_INVALID", "국내 장소만 추가할 수 있어요.");
-        }
-        Venue venue = venueRepo.findFirstByCreatedByUserIdAndKakaoPlaceId(userId, kakaoId)
-                .orElseGet(() -> venueRepo.save(Venue.privatePlace(userId, kakaoId, name,
-                        clip(req.address(), 300), BigDecimal.valueOf(req.lat()), BigDecimal.valueOf(req.lng()),
-                        KakaoLocalClient.toByeoriCategory(req.category()), clip(req.phone(), 30))));
+        Venue venue = resolvePlaceVenue(userId, req);
         ItineraryItem saved = itemRepo.save(new ItineraryItem(id, null, venue.getId(),
                 req.visitDate(), req.sortOrder(), null, null));
         return toItemResponse(saved);
@@ -305,6 +293,12 @@ public class ItineraryService {
         ItineraryItem item = itemRepo.findById(itemId)
                 .orElseThrow(() -> new NotFoundException("ITEM_NOT_FOUND", "일정 항목을 찾을 수 없습니다."));
         if (!item.getItineraryId().equals(id)) throw new BadRequestException("ITEM_MISMATCH", "해당 일지의 항목이 아닙니다.");
+        // 장소 교체. 둘 다 와야 바꾼다 — 하나만 오면 무엇으로 바꾸라는 건지 알 수 없다.
+        if (req.targetType() != null && req.targetId() != null) {
+            ContentTarget t = new ContentTarget(ContentType.from(req.targetType()), req.targetId());
+            requireExists(t);
+            item.changeTarget(t.performanceId(), t.venueId());
+        }
         item.update(req.visitDate(), req.sortOrder(), req.plannedTime(), req.memo());
         return toItemResponse(item);
     }
@@ -323,6 +317,48 @@ public class ItineraryService {
                 .orElseThrow(() -> new NotFoundException("ITINERARY_NOT_FOUND", "여행 일지를 찾을 수 없습니다."));
         if (!i.getUserId().equals(userId)) throw new BadRequestException("ITINERARY_FORBIDDEN", "본인 일지만 접근할 수 있습니다.");
         return i;
+    }
+
+    /** 카카오 장소를 내 장소로 바꿔 준다. 넣기와 교체가 같은 규칙을 쓰도록 한 군데에 둔다. */
+    private Venue resolvePlaceVenue(Long userId, PlaceItemRequest req) {
+        String kakaoId = req.kakaoPlaceId() == null ? "" : req.kakaoPlaceId().strip();
+        String name = req.name() == null ? "" : req.name().strip();
+        if (!kakaoId.matches("\\d{1,20}") || name.isEmpty() || name.length() > 100) {
+            throw new BadRequestException("PLACE_INVALID", "장소 정보가 올바르지 않아요.");
+        }
+        if (req.lat() == null || req.lng() == null
+                || req.lat() < 33 || req.lat() > 39 || req.lng() < 124 || req.lng() > 132) {
+            throw new BadRequestException("PLACE_INVALID", "국내 장소만 추가할 수 있어요.");
+        }
+        return venueRepo.findFirstByCreatedByUserIdAndKakaoPlaceId(userId, kakaoId)
+                .orElseGet(() -> venueRepo.save(Venue.privatePlace(userId, kakaoId, name,
+                        clip(req.address(), 300), BigDecimal.valueOf(req.lat()), BigDecimal.valueOf(req.lng()),
+                        KakaoLocalClient.toByeoriCategory(req.category()), clip(req.phone(), 30))));
+    }
+
+    /** 없는 곳으로 바꾸면 그 줄은 이름도 좌표도 없는 빈 칸이 된다. 미리 막는다. */
+    private void requireExists(ContentTarget t) {
+        boolean ok = t.targetType() == ContentType.VENUE
+                ? venueRepo.existsById(t.targetId())
+                : performanceRepo.existsById(t.targetId());
+        if (!ok) throw new NotFoundException("TARGET_NOT_FOUND", "그 장소를 찾을 수 없어요.");
+    }
+
+    /**
+     * 카카오에서 고른 장소를 이 자리로 바꾼다.
+     *
+     * 넣기(addPlaceItem)와 같은 규칙을 쓴다 — 같은 사용자가 전에 넣은 곳이면 그 장소를
+     * 다시 쓰고, 처음이면 그 사용자만 보는 장소로 만든다.
+     */
+    @Transactional
+    public ItemResponse replaceItemPlace(Long userId, Long id, Long itemId, PlaceItemRequest req) {
+        own(userId, id);
+        ItineraryItem item = itemRepo.findById(itemId)
+                .orElseThrow(() -> new NotFoundException("ITEM_NOT_FOUND", "일정 항목을 찾을 수 없습니다."));
+        if (!item.getItineraryId().equals(id)) throw new BadRequestException("ITEM_MISMATCH", "해당 일지의 항목이 아닙니다.");
+        Venue venue = resolvePlaceVenue(userId, req);
+        item.changeTarget(null, venue.getId());
+        return toItemResponse(item);
     }
 
     private ItemResponse toItemResponse(ItineraryItem item) {

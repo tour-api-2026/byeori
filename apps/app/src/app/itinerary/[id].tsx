@@ -94,10 +94,17 @@ function Editor({ id }: { id: number }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data, isLoading } = useItineraryQuery(id);
-  const { add, addPlace, remove, reorder, update: updateItem } = useItineraryItemMutation(id);
+  const { add, addPlace, remove, reorder, replacePlace, update: updateItem } = useItineraryItemMutation(id);
   // 스톱을 누르면 여는 편집 시트. 어느 항목인지만 들고 있는다.
   const [editingItem, setEditingItem] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  /**
+   * 장소 고르는 창을 무엇 때문에 열었는지.
+   *
+   * null 이면 새로 담는 중이고, 숫자가 들어 있으면 그 항목의 장소를 바꾸는 중이다.
+   * 창을 둘로 나누면 검색·주변·카카오 탭을 그대로 복사하게 된다.
+   */
+  const [replacingItem, setReplacingItem] = useState<number | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const update = useUpdateItineraryMutation(id);
   // 이름·기간 편집. 열려 있는 동안만 임시값을 들고 있다가 저장할 때 한 번에 보낸다.
@@ -283,9 +290,15 @@ function Editor({ id }: { id: number }) {
         dayList={allDays(data.startDate, data.endDate)}
         startDate={data.startDate}
         sameDayIds={editingDayIds}
-        pending={updateItem.isPending || remove.isPending || reorder.isPending}
+        pending={updateItem.isPending || remove.isPending || reorder.isPending || replacePlace.isPending}
         onClose={() => setEditingItem(null)}
         onChange={(patch) => updateItem.mutate({ itemId: editingItem as number, ...patch })}
+        onReplacePlace={() => {
+          // 시트를 닫고 장소 창을 연다. 둘이 겹쳐 뜨면 뒤엣것을 못 누른다.
+          setReplacingItem(editingItem);
+          setEditingItem(null);
+          setPickerOpen(true);
+        }}
         onMove={(dir) => {
           // 한 칸 움직이는 것도 '그날 순서 전체'로 보낸다. 한 항목의 sortOrder 만 고치면
           // 같은 번호가 둘이 되어 어느 쪽이 위인지 서버가 정하지 못한다.
@@ -308,16 +321,33 @@ function Editor({ id }: { id: number }) {
       {/* 장소 선택: 이름 검색 · 이 루트 주변 · 카카오맵에서 직접 찾기 */}
       <PlacePicker
         visible={pickerOpen}
-        onClose={() => setPickerOpen(false)}
+        onClose={() => { setPickerOpen(false); setReplacingItem(null); }}
         near={near}
-        excludeIds={data.items.filter((it) => it.targetType === 'VENUE').map((it) => it.targetId)}
+        // 바꾸는 중에는 지금 이 자리의 장소도 후보에 둬야 한다 — 그래야 "역시 그대로" 가 된다.
+        excludeIds={data.items
+          .filter((it) => it.targetType === 'VENUE' && it.id !== replacingItem)
+          .map((it) => it.targetId)}
         onPickVenue={(venueId) => {
-          add.mutate({ targetType: 'VENUE', targetId: venueId, visitDate: activeDay, sortOrder: dayItems.length });
+          if (replacingItem != null) {
+            updateItem.mutate({ itemId: replacingItem, targetType: 'VENUE', targetId: venueId }, {
+              onError: (e: any) => Alert.alert('장소를 바꾸지 못했어요', e?.message ?? '잠시 후 다시 시도해 주세요.'),
+            });
+          } else {
+            add.mutate({ targetType: 'VENUE', targetId: venueId, visitDate: activeDay, sortOrder: dayItems.length });
+          }
           setPickerOpen(false);
+          setReplacingItem(null);
         }}
         onPickPlace={(place) => {
-          addPlace.mutate({ place, visitDate: activeDay, sortOrder: dayItems.length });
+          if (replacingItem != null) {
+            replacePlace.mutate({ itemId: replacingItem, place }, {
+              onError: (e: any) => Alert.alert('장소를 바꾸지 못했어요', e?.message ?? '잠시 후 다시 시도해 주세요.'),
+            });
+          } else {
+            addPlace.mutate({ place, visitDate: activeDay, sortOrder: dayItems.length });
+          }
           setPickerOpen(false);
+          setReplacingItem(null);
         }}
       />
     </View>

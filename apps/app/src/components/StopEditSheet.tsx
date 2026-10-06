@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ItineraryItem } from '@/lib/api/itineraries';
 import { colors, fonts, radius, space } from '@/lib/theme';
@@ -9,6 +10,21 @@ const TIMES = Array.from({ length: 28 }, (_, i) => {
   const m = 9 * 60 + i * 30;
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 });
+
+/**
+ * 사람이 친 글자를 'HH:MM' 으로 만든다. 못 만들면 null.
+ *
+ * '930' · '0930' · '9:30' · '09:30' 을 모두 받는다. 숫자만 치는 사람이 많은데
+ * 콜론을 안 넣었다고 안 되면 왜 안 되는지 알기 어렵다.
+ */
+export function parseTime(raw: string): string | null {
+  const d = raw.replace(/[^0-9]/g, '');
+  if (d.length !== 3 && d.length !== 4) return null;
+  const h = Number(d.slice(0, d.length - 2));
+  const m = Number(d.slice(-2));
+  if (h > 23 || m > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
 
 /** 'YYYY-MM-DD' 두 날짜의 일수 차이 + 1 = 며칠째. */
 function dayNo(start: string, date: string) {
@@ -22,7 +38,7 @@ function dayNo(start: string, date: string) {
  * 서버는 처음부터 PATCH 로 방문일·시간·순서·메모를 받고 있었고 화면만 없었다.
  */
 export function StopEditSheet({
-  item, dayList, startDate, sameDayIds, pending, onClose, onChange, onMove, onRemove,
+  item, dayList, startDate, sameDayIds, pending, onClose, onChange, onMove, onReplacePlace, onRemove,
 }: {
   item: ItineraryItem | null;
   /** 이 루트의 전체 날짜. 하루짜리면 '일차 옮기기'를 숨긴다. */
@@ -33,12 +49,20 @@ export function StopEditSheet({
   pending: boolean;
   onClose: () => void;
   onChange: (patch: { visitDate?: string; plannedTime?: string | null }) => void;
+  /** 이 자리의 장소를 다른 곳으로 바꾼다. 장소 고르는 창은 부모가 연다. */
+  onReplacePlace: () => void;
   /** 한 칸 위/아래. 드래그와 같은 경로(그날 순서 전체 다시 매기기)로 나간다. */
   onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  // 입력 중에는 아직 시각이 아닌 글자('9')도 들고 있어야 한다. 다 치면 그때 보낸다.
+  const [timeText, setTimeText] = useState('');
+  useEffect(() => { setTimeText(item?.plannedTime ?? ''); }, [item?.id, item?.plannedTime]);
   if (!item) return null;
+
+  const typed = parseTime(timeText);
+  const timeBad = timeText.trim().length > 0 && typed === null;
 
   // sortOrder 값을 믿지 않는다 — 보이는 차례가 기준이다.
   const at = sameDayIds.indexOf(item.id);
@@ -58,19 +82,50 @@ export function StopEditSheet({
           </Pressable>
         </View>
 
-        {/* 시간 */}
+        {/* 장소 바꾸기 */}
+        <Pressable style={styles.swap} onPress={onReplacePlace} disabled={pending}>
+          <Ionicons name="swap-horizontal" size={16} color={colors.primary} />
+          <Text style={styles.swapText}>다른 장소로 바꾸기</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
+        </Pressable>
+
+        {/* 시간 — 직접 치거나 아래에서 고른다 */}
         <Text style={styles.label}>시간</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        <View style={styles.timeRow}>
+          <TextInput
+            style={[styles.timeInput, timeBad && styles.timeInputBad]}
+            value={timeText}
+            onChangeText={setTimeText}
+            onBlur={() => { if (typed && typed !== item.plannedTime) onChange({ plannedTime: typed }); }}
+            onSubmitEditing={() => { if (typed && typed !== item.plannedTime) onChange({ plannedTime: typed }); }}
+            placeholder="예) 0930"
+            placeholderTextColor={colors.textFaint}
+            keyboardType="numbers-and-punctuation"
+            returnKeyType="done"
+            maxLength={5}
+          />
+          <Pressable
+            style={[styles.timeApply, (!typed || typed === item.plannedTime) && styles.timeApplyOff]}
+            disabled={!typed || typed === item.plannedTime || pending}
+            onPress={() => onChange({ plannedTime: typed })}>
+            <Text style={styles.timeApplyText}>적용</Text>
+          </Pressable>
+        </View>
+        <Text style={[styles.hint, timeBad && styles.hintBad]}>
+          {timeBad ? '0930 · 9:30 처럼 적어 주세요 (00:00~23:59)' : '숫자만 쳐도 됩니다. 예) 930 → 09:30'}
+        </Text>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.row, { marginTop: 8 }]}>
           <Pressable
             style={[styles.chip, !item.plannedTime && styles.chipOn]}
-            onPress={() => onChange({ plannedTime: null })}>
+            onPress={() => { setTimeText(''); onChange({ plannedTime: null }); }}>
             <Text style={[styles.chipText, !item.plannedTime && styles.chipTextOn]}>미정</Text>
           </Pressable>
           {TIMES.map((t) => (
             <Pressable
               key={t}
               style={[styles.chip, item.plannedTime === t && styles.chipOn]}
-              onPress={() => onChange({ plannedTime: t })}>
+              onPress={() => { setTimeText(t); onChange({ plannedTime: t }); }}>
               <Text style={[styles.chipText, item.plannedTime === t && styles.chipTextOn]}>{t}</Text>
             </Pressable>
           ))}
@@ -136,6 +191,18 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 6 },
   name: { flex: 1, fontSize: 16, fontFamily: fonts.bold, fontWeight: '800', color: colors.text },
   label: { fontSize: 13, color: colors.textFaint, marginTop: 16, marginBottom: 8 },
+  swap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, paddingVertical: 12, paddingHorizontal: 14,
+          borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },
+  swapText: { flex: 1, fontSize: 14, color: colors.text, fontFamily: fonts.semibold, fontWeight: '600' },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  timeInput: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
+               paddingHorizontal: 14, paddingVertical: 11, fontSize: 15, color: colors.text },
+  timeInputBad: { borderColor: colors.danger },
+  timeApply: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: 16, paddingVertical: 12 },
+  timeApplyOff: { backgroundColor: colors.border },
+  timeApplyText: { color: colors.white, fontSize: 14, fontFamily: fonts.bold, fontWeight: '800' },
+  hint: { fontSize: 12, color: colors.textFaint, marginTop: 6, marginBottom: 2 },
+  hintBad: { color: colors.danger },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   chip: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8 },
   chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
