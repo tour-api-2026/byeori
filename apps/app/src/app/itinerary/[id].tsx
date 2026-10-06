@@ -219,6 +219,7 @@ function Editor({ id }: { id: number }) {
                 rangeStart={draftRange.start}
                 rangeEnd={draftRange.end}
                 marked={dates}
+                markedLabel="장소를 담은 날"
                 onSelectDate={(d) => {
                   if (picking === 'start') {
                     // 시작일이 기존 종료일을 넘으면 하루짜리로 맞춘다
@@ -252,6 +253,7 @@ function Editor({ id }: { id: number }) {
               rangeStart={activeDay}
               rangeEnd={activeDay}
               marked={dates}
+              markedLabel="장소를 담은 날"
               onSelectDate={setSelectedDay}
             />
           )}
