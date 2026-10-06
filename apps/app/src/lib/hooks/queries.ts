@@ -6,7 +6,7 @@ import {
   addItineraryItem, addPlaceItem, createItinerary, deleteItinerary, deleteItineraryItem,
   fetchItinerary, fetchItineraryRoute, fetchMyItineraries, type KakaoPlace,
 } from '../api/itineraries';
-import { fetchPerformance, fetchPerformances, PerformanceFilter } from '../api/performances';
+import { fetchPerformance, fetchPerformances, PerformanceFilter, fetchNearbyPerformances } from '../api/performances';
 import { createReview, deleteReview, fetchMyReviews, fetchReviews, reportReview } from '../api/reviews';
 import { fetchContentTags, unvoteTag, voteTag } from '../api/tags';
 import {
@@ -51,6 +51,16 @@ export function useNearbyVenuesQuery(p: NearbyParams | null) {
 export function useVenueDetailQuery(id: number | string) {
   return useQuery({ queryKey: ['venue', id], queryFn: () => fetchVenueDetail(id), enabled: !!id });
 }
+/** 좌표 주변 행사. 좌표가 없으면 호출하지 않는다. */
+export function useNearbyPerformancesQuery(p: { lat?: number | null; lng?: number | null } | null) {
+  const on = p?.lat != null && p?.lng != null;
+  return useQuery({
+    queryKey: ['performances-nearby', p?.lat, p?.lng],
+    queryFn: () => fetchNearbyPerformances({ lat: Number(p!.lat), lng: Number(p!.lng) }),
+    enabled: on,
+  });
+}
+
 export function useVenuePerformancesQuery(id: number) {
   return useQuery({ queryKey: ['venue', id, 'performances'], queryFn: () => fetchVenuePerformances(id), enabled: !!id });
 }

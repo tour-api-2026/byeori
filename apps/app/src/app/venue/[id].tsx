@@ -9,7 +9,7 @@ import { PerformanceCarousel, stateCaption } from '@/components/PerformanceCarou
 import { Rating } from '@/components/Rating';
 import { ReportDialog } from '@/components/ReportDialog';
 import {
-  useDeleteVenueMutation, useReportVenueMutation, useToggleWishlistMutation,
+  useDeleteVenueMutation, useNearbyPerformancesQuery, useReportVenueMutation, useToggleWishlistMutation,
   useVenueDetailQuery, useVenuePerformancesQuery,
 } from '@/lib/hooks/queries';
 import { useAuthStore } from '@/lib/store/authStore';
@@ -56,6 +56,9 @@ export default function VenueDetailScreen() {
     ]);
   };
   const perfs = useVenuePerformancesQuery(vid);
+  // 공연시설명으로 못 이은 행사가 1,400여 건 남아 있다. 그쪽도 좌표는 있으니
+  // "여기서 열린다"고 단정하지 않고 "이 근처에서 열린다"로 보여준다.
+  const nearbyPerfs = useNearbyPerformancesQuery(v ? { lat: v.lat, lng: v.lng } : null);
   const has = useBookmarkStore((s) => s.venueIds.includes(vid));
   const toggleLocal = useBookmarkStore((s) => s.toggle);
   const wishlist = useToggleWishlistMutation();
@@ -191,6 +194,19 @@ export default function VenueDetailScreen() {
               <PerformanceCarousel items={perfs.data} caption={stateCaption} />
             </View>
           )}
+
+          {/* 주변에서 열리는 행사 — 위 섹션에 이미 나온 건 뺀다. */}
+          {(() => {
+            const shown = new Set((perfs.data ?? []).map((p) => p.id));
+            const around = (nearbyPerfs.data ?? []).filter((p) => !shown.has(p.id));
+            if (!around.length) return null;
+            return (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>주변에서 열리는 행사</Text>
+                <PerformanceCarousel items={around} caption={stateCaption} />
+              </View>
+            );
+          })()}
 
           <ContentComments targetType="VENUE" targetId={vid} targetName={v.name} />
         </View>
