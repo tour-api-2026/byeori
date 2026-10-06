@@ -96,6 +96,8 @@ export function addItineraryItem(id: number, body: { targetType: string; targetI
 /** 항목의 방문일·시간·순서·메모 수정. 서버는 처음부터 PATCH 를 받고 있었다. */
 export function updateItineraryItem(id: number, itemId: number, body: {
   visitDate?: string; sortOrder?: number; plannedTime?: string | null; memo?: string | null;
+  /** 장소 교체. 둘 다 보내야 바뀐다. 서버가 메모를 지운다(AI 추천 이유가 남으면 엉뚱해진다). */
+  targetType?: 'VENUE' | 'PERFORMANCE'; targetId?: number;
 }): Promise<ItineraryItem> {
   return unwrap<ItineraryItem>(api.patch<ApiEnvelope<ItineraryItem>>(`/itineraries/${id}/items/${itemId}`, body));
 }
@@ -133,6 +135,19 @@ export type KakaoPlace = {
 export function searchKakaoPlaces(query: string, near?: { lat: number; lng: number } | null): Promise<KakaoPlace[]> {
   return unwrap<KakaoPlace[]>(api.get<ApiEnvelope<KakaoPlace[]>>('/places/search', {
     params: { query, lat: near?.lat, lng: near?.lng },
+  }));
+}
+
+/** 이 자리의 장소를 카카오에서 고른 곳으로 바꾼다. */
+export function replaceItemPlace(id: number, itemId: number, place: KakaoPlace): Promise<ItineraryItem> {
+  return unwrap<ItineraryItem>(api.patch<ApiEnvelope<ItineraryItem>>(`/itineraries/${id}/items/${itemId}/place`, {
+    kakaoPlaceId: place.kakaoPlaceId,
+    name: place.name,
+    address: place.address,
+    category: place.category === '맛집' ? 'FD6' : place.category === '카페' ? 'CE7' : '',
+    phone: place.phone,
+    lat: place.lat,
+    lng: place.lng,
   }));
 }
 

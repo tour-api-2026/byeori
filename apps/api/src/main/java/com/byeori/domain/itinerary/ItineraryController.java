@@ -107,6 +107,15 @@ public class ItineraryController {
         return ApiResponse.ok(service.reorderItems(userId, id, req));
     }
 
+    /** 이 자리의 장소를 카카오에서 고른 곳으로 바꾼다. */
+    @PatchMapping("/itineraries/{id}/items/{itemId}/place")
+    public ApiResponse<ItemResponse> replaceItemPlace(@AuthenticationPrincipal Long userId,
+                                                      @PathVariable("id") Long id,
+                                                      @PathVariable("itemId") Long itemId,
+                                                      @RequestBody PlaceItemRequest req) {
+        return ApiResponse.ok(service.replaceItemPlace(userId, id, itemId, req));
+    }
+
     @DeleteMapping("/itineraries/{id}/items/{itemId}")
     public ApiResponse<Void> deleteItem(@AuthenticationPrincipal Long userId,
                                         @PathVariable("id") Long id, @PathVariable("itemId") Long itemId) {

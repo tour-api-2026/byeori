@@ -5,7 +5,7 @@ import { fetchCourseDetail, fetchCourses } from '../api/courses';
 import {
   addItineraryItem, addPlaceItem, createItinerary, deleteItinerary, deleteItineraryItem,
   fetchItinerary, fetchItineraryRoute, fetchMyItineraries, fetchSharedItinerary,
-  reorderItineraryItems, type KakaoPlace, updateItinerary, updateItineraryItem } from '../api/itineraries';
+  reorderItineraryItems, replaceItemPlace, type KakaoPlace, updateItinerary, updateItineraryItem } from '../api/itineraries';
 import { fetchPerformance, fetchPerformances, PerformanceFilter, fetchNearbyPerformances } from '../api/performances';
 import { createReview, deleteReview, fetchMyReviews, fetchReviews, reportReview } from '../api/reviews';
 import { fetchContentTags, unvoteTag, voteTag } from '../api/tags';
@@ -250,8 +250,15 @@ export function useItineraryItemMutation(itineraryId: number) {
     }),
     /** 방문일·시간·순서·메모 수정. 보내지 않은 필드는 서버가 건드리지 않는다. */
     update: useMutation({
-      mutationFn: (p: { itemId: number; visitDate?: string; sortOrder?: number; plannedTime?: string | null; memo?: string | null }) =>
-        updateItineraryItem(itineraryId, p.itemId, p),
+      mutationFn: (p: {
+        itemId: number; visitDate?: string; sortOrder?: number; plannedTime?: string | null; memo?: string | null;
+        /** 장소 교체(벼리 DB 안의 곳). 카카오 장소는 replacePlace 를 쓴다. */
+        targetType?: 'VENUE' | 'PERFORMANCE'; targetId?: number;
+      }) => updateItineraryItem(itineraryId, p.itemId, p),
+      onSuccess: invalidate,
+    }),
+    replacePlace: useMutation({
+      mutationFn: (p: { itemId: number; place: KakaoPlace }) => replaceItemPlace(itineraryId, p.itemId, p.place),
       onSuccess: invalidate,
     }),
     reorder: useMutation({
