@@ -68,6 +68,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/reviews").permitAll()
+                        // 공유 링크로 보는 루트. 토큰을 아는 사람만 열 수 있으므로 로그인을 묻지 않는다.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shared/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/uploads/**").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/venues/**",

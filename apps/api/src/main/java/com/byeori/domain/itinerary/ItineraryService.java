@@ -15,6 +15,8 @@ import com.byeori.global.external.KakaoLocalClient;
 import com.byeori.global.external.KakaoMobilityClient;
 import com.byeori.global.external.dto.KakaoRoute;
 import java.math.BigDecimal;
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,6 +46,9 @@ public class ItineraryService {
         this.mobilityClient = mobilityClient;
     }
 
+    /** 공유 토큰 생성용. SecureRandom 은 스레드 안전해서 하나를 돌려 쓴다. */
+    private static final SecureRandom TOKEN_RANDOM = new SecureRandom();
+
     public List<Summary> listMine(Long userId) {
         return repo.findByUserIdOrderByCreatedAtDesc(userId).stream()
                 .map(i -> Summary.from(i, itemRepo.findByItineraryIdOrderByVisitDateAscSortOrderAsc(i.getId()).size()))
@@ -55,6 +60,51 @@ public class ItineraryService {
         List<ItemResponse> items = itemRepo.findByItineraryIdOrderByVisitDateAscSortOrderAsc(id).stream()
                 .map(this::toItemResponse).toList();
         return Detail.from(i, items);
+    }
+
+    // ── 공유 링크 ─────────────────────────────
+
+    /**
+     * 공유 링크 토큰을 내준다. 없으면 만들고, 있으면 있던 것을 그대로 준다.
+     *
+     * 공유 버튼을 누를 때마다 부르는 자리라 매번 새로 만들면 토큰이 쌓이고, 먼저 보낸
+     * 링크가 죽는다. 그래서 처음 한 번만 심는다(Itinerary.shareWith).
+     */
+    @Transactional
+    public ShareResponse share(Long userId, Long id) {
+        Itinerary i = own(userId, id);
+        if (i.getShareToken() == null) i.shareWith(newToken());
+        return new ShareResponse(i.getShareToken());
+    }
+
+    /**
+     * 토큰으로 보는 루트. 로그인을 묻지 않는다 — 토큰 자체가 열쇠다.
+     *
+     * 128비트 난수를 URL 안전 문자로 적어 22자가 된다. 훑어서 맞히는 건 현실적으로 불가능하고,
+     * id 가 응답에 없어 이걸로 다른 루트를 짚어 볼 수도 없다.
+     */
+    public SharedDetail getShared(String token) {
+        if (token == null || token.isBlank()) {
+            throw new NotFoundException("SHARED_NOT_FOUND", "공유된 루트를 찾을 수 없습니다.");
+        }
+        Itinerary i = repo.findByShareToken(token)
+                .orElseThrow(() -> new NotFoundException("SHARED_NOT_FOUND", "공유된 루트를 찾을 수 없습니다."));
+        List<SharedStop> stops = itemRepo.findByItineraryIdOrderByVisitDateAscSortOrderAsc(i.getId()).stream()
+                .map(this::toSharedStop).toList();
+        return new SharedDetail(i.getTitle(), i.getStartDate(), i.getEndDate(), stops);
+    }
+
+    private static String newToken() {
+        byte[] bytes = new byte[16];
+        TOKEN_RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    /** 공유로 내보낼 모양. memo 는 **옮기지 않는다** — 개인 메모가 적혀 있을 수 있다. */
+    private SharedStop toSharedStop(ItineraryItem item) {
+        ItemResponse r = toItemResponse(item);
+        return new SharedStop(r.targetType(), r.targetId(), r.name(), r.imageUrl(),
+                r.visitDate(), r.sortOrder(), r.plannedTime(), r.lat(), r.lng());
     }
 
     /**

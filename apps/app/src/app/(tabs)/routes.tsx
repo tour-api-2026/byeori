@@ -1,7 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -12,11 +15,20 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import LoginRequired from "@/components/LoginRequired";
 import { useTabBarHeight } from "@/components/TabBar";
-import { ItinerarySummary } from "@/lib/api/itineraries";
+import { ItinerarySummary, shareItinerary } from "@/lib/api/itineraries";
 import { useAiStatusQuery, useItineraryQuery, useMyItinerariesQuery } from "@/lib/hooks/queries";
 import { useAuthStore } from "@/lib/store/authStore";
 import { colors, fonts, radius, shadow, space } from "@/lib/theme";
 import { segmentColor } from "@/lib/routeColors";
+
+/**
+ * 공유 링크의 바탕 주소.
+ *
+ * 웹에서는 지금 열려 있는 오리진을 그대로 쓴다 — 로컬에서 띄워 보면 로컬 주소가 나와야
+ * 눌러서 확인할 수 있다. 앱에는 주소창이 없으니 배포 도메인을 적는다.
+ */
+const SITE_ORIGIN =
+  Platform.OS === "web" ? window.location.origin : "https://byeori.ernebi.org";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 function todayIso() {
@@ -207,10 +219,55 @@ function RouteCard({ summary }: { summary: ItinerarySummary }) {
   const stops = data?.items ?? [];
   const past = isPastTrip(summary); // 지난 여행은 물빠진 색으로 흐리게
 
-  const share = () =>
-    Share.share({
-      message: `[벼리] '${summary.title}' 여행 루트를 함께 보아요! (${summary.startDate} ~ ${summary.endDate})`,
-    });
+  const [shareState, setShareState] = useState<"idle" | "working" | "copied" | "failed">("idle");
+
+  /**
+   * 공유 링크를 받아 보낸다.
+   *
+   * 토큰은 서버가 처음 한 번만 만들고 그 뒤로는 같은 값을 준다. 공유를 다시 눌러도 링크가
+   * 바뀌지 않아, 먼저 보낸 링크가 계속 살아 있다.
+   *
+   * 웹이 까다롭다. react-native-web 의 Share 는 navigator.share 가 없으면 그냥 거부하는데
+   * (데스크톱 파이어폭스·일부 크롬), 같은 RN-web 의 Alert.alert 는 **빈 함수**라 실패를
+   * 알릴 수도 없다. 그래서 웹에서는 공유 창 대신 링크를 복사하고, 버튼 글자로 알린다.
+   */
+  const share = async () => {
+    if (shareState === "working") return;
+    setShareState("working");
+    try {
+      const { token } = await shareItinerary(summary.id);
+      const url = `${SITE_ORIGIN}/s/${token}`;
+      const text = `[벼리] '${summary.title}' 여행 루트 (${summary.startDate} ~ ${summary.endDate})`;
+
+      if (Platform.OS === "web" && !(navigator as any).share) {
+        await navigator.clipboard.writeText(url);
+        setShareState("copied");
+        setTimeout(() => setShareState("idle"), 2000);
+        return;
+      }
+
+      await Share.share(
+        // 안드로이드는 url 필드를 무시하므로 message 에 함께 넣어야 링크가 간다.
+        Platform.OS === "ios" ? { message: text, url } : { message: `${text}\n${url}` },
+      );
+      setShareState("idle");
+    } catch (e: any) {
+      // 네이티브에서는 Alert 가 보이고, 웹에서는 버튼 글자가 유일한 통로다.
+      if (Platform.OS !== "web") {
+        Alert.alert("공유하지 못했어요", e?.message ?? "잠시 후 다시 시도해 주세요.");
+        setShareState("idle");
+      } else {
+        setShareState("failed");
+        setTimeout(() => setShareState("idle"), 2500);
+      }
+    }
+  };
+
+  const shareLabel =
+    shareState === "working" ? "준비 중…"
+    : shareState === "copied" ? "링크 복사됨"
+    : shareState === "failed" ? "실패"
+    : "공유하기";
 
   return (
     <View style={[styles.card, past && styles.cardPast]}>
@@ -224,8 +281,8 @@ function RouteCard({ summary }: { summary: ItinerarySummary }) {
             {summary.itemCount}곳 · {summary.startDate} ~ {summary.endDate}
           </Text>
         </View>
-        <Pressable style={styles.shareBtn} onPress={share}>
-          <Text style={styles.shareText}>공유하기</Text>
+        <Pressable style={styles.shareBtn} disabled={shareState === "working"} onPress={share}>
+          <Text style={styles.shareText}>{shareLabel}</Text>
         </Pressable>
       </View>
       <View style={styles.cardBody}>
