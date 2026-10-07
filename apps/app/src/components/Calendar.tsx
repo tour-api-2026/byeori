@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, fonts, radius } from '@/lib/theme';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -112,20 +112,35 @@ export function Calendar({
                 : null;
               return (
                 <Pressable key={date} style={styles.cell} disabled={off} onPress={() => onSelectDate(date)}>
-                  {band && <View style={[styles.band, band]} />}
-                  <View style={[
-                    styles.day,
-                    end && styles.dayOn,
-                    isToday && !end && styles.dayToday,
-                  ]}>
-                    <Text style={[
-                      styles.dayText,
-                      end && styles.dayTextOn,
-                      within && !end && styles.dayTextWithin,
-                      off && styles.dayTextOff,
-                    ]}>{d}</Text>
-                  </View>
-                  {markedSet.has(date) && !end && <View style={styles.dot} />}
+                  {/*
+                    children 을 함수로 받으면 react-native-web 이 focused 를 내려 준다.
+                    브라우저 기본 외곽선은 칸(네모) 전체를 두르는 검은 테두리라 동그라미와
+                    따로 놀았다. 그걸 끄고(cell 의 outlineStyle) 동그라미에 맞춘 링을 직접 그린다.
+                    지우지 않는 이유: 키보드로 넘길 때 지금 어느 날에 있는지 알 수 없게 된다.
+                  */}
+                  {(state) => {
+                    // react-native-web 은 focused 도 함께 준다. RN 타입에는 없어 따로 꺼낸다.
+                    const focused = (state as { focused?: boolean }).focused;
+                    return (
+                    <>
+                      {band && <View style={[styles.band, band]} />}
+                      {focused && <View pointerEvents="none" style={styles.focusRing} />}
+                      <View style={[
+                        styles.day,
+                        end && styles.dayOn,
+                        isToday && !end && styles.dayToday,
+                      ]}>
+                        <Text style={[
+                          styles.dayText,
+                          end && styles.dayTextOn,
+                          within && !end && styles.dayTextWithin,
+                          off && styles.dayTextOff,
+                        ]}>{d}</Text>
+                      </View>
+                      {markedSet.has(date) && !end && <View style={styles.dot} />}
+                    </>
+                    );
+                  }}
                 </Pressable>
               );
             })}
@@ -156,7 +171,27 @@ const styles = StyleSheet.create({
   weekday: { flex: 1, textAlign: 'center', fontSize: 12, fontFamily: fonts.medium, fontWeight: '500', color: colors.textFaint },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  cell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
+  cell: {
+    width: `${100 / 7}%`, aspectRatio: 1, alignItems: 'center', justifyContent: 'center',
+    /**
+     * 기본 외곽선은 칸 전체를 두르는 검은 네모라 동그라미와 어긋난다. 끄고 직접 그린다.
+     *
+     * 두께만 0으로 두면 안 꺼진다 — 크롬의 기본값이 outline-style:auto 인데, auto 는
+     * outline-width 를 무시하고 제 굵기로 그린다(마우스로 누를 땐 안 보이고 Tab 으로
+     * 옮길 때만 나와서 하마터면 놓칠 뻔했다). style 을 solid 로 바꿔야 두께가 먹는다.
+     * 'none' 은 RN 타입이 solid|dotted|dashed 만 받아 쓸 수 없다.
+     */
+    ...(Platform.OS === 'web' ? { outlineStyle: 'solid' as const, outlineWidth: 0 } : null),
+  },
+
+  // 키보드 포커스 표시. 동그라미보다 조금 크게 둘러 글자를 가리지 않는다.
+  focusRing: {
+    position: 'absolute',
+    top: '50%', left: '50%',
+    marginTop: -(DAY + 8) / 2, marginLeft: -(DAY + 8) / 2,
+    width: DAY + 8, height: DAY + 8, borderRadius: (DAY + 8) / 2,
+    borderWidth: 2, borderColor: colors.primary,
+  },
 
   // 구간 표시. 칸을 가로질러 깔리므로 날짜 사이가 끊기지 않는다.
   band: { position: 'absolute', top: '50%', marginTop: -DAY / 2, height: DAY, backgroundColor: colors.primarySoft },
