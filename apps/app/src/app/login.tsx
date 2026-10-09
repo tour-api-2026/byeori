@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from '@/components/Image';
 import { useRouter } from 'expo-router';
+import { fetchMyInterests } from '@/lib/api/interests';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,7 +20,14 @@ export default function LoginScreen() {
     setBusy(provider);
     try {
       await fn();
-      router.replace('/(tabs)');
+      // 관심사를 아직 안 고른 사람만 온보딩으로 보낸다. 매번 물으면 로그인할 때마다 걸린다.
+      // 조회가 실패하면(네트워크 등) 그냥 홈으로 간다 — 관심사 때문에 로그인이 막히면 안 된다.
+      let first = false;
+      try {
+        const mine = await fetchMyInterests();
+        first = mine.topics.length === 0 && mine.regions.length === 0;
+      } catch { /* 못 물어봤으면 묻지 않은 셈 치고 홈으로 */ }
+      router.replace(first ? '/onboarding' : '/(tabs)');
     } catch (e: any) {
       if (!isCancelled(e)) {
         Alert.alert('로그인 실패', e?.message ?? '잠시 후 다시 시도해주세요.');

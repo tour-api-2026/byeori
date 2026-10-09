@@ -44,6 +44,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/me").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/me/**").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/users/me").authenticated()
+                        // PUT 은 위의 GET/PATCH 규칙에 걸리지 않는다. 빼 두면 anyRequest().permitAll()
+                        // 로 떨어져 남의 관심사를 아무나 덮어쓸 수 있다.
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/users/me/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/users/me").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/users/me/blocks").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/users/me/blocks/**").authenticated()
