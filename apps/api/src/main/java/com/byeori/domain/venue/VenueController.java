@@ -1,5 +1,6 @@
 package com.byeori.domain.venue;
 
+import com.byeori.domain.activity.ActivityLogger;
 import com.byeori.domain.performance.PerformanceService;
 import com.byeori.domain.performance.dto.PerformanceResponse;
 import com.byeori.domain.venue.dto.VenueCreateRequest;
@@ -21,10 +22,13 @@ public class VenueController {
 
     private final VenueService service;
     private final PerformanceService performanceService;
+    private final ActivityLogger activity;
 
-    public VenueController(VenueService service, PerformanceService performanceService) {
+    public VenueController(VenueService service, PerformanceService performanceService,
+                           ActivityLogger activity) {
         this.service = service;
         this.performanceService = performanceService;
+        this.activity = activity;
     }
 
     @GetMapping
@@ -66,8 +70,12 @@ public class VenueController {
             @RequestParam(name = "keyword") String keyword,
             @RequestParam(name = "category", required = false) String category,
             @RequestParam(name = "hanbokDiscount", required = false) Boolean hanbokDiscount,
-            @RequestParam(name = "size", defaultValue = "60") int size) {
-        return ApiResponse.ok(service.searchLive(keyword, category, hanbokDiscount, Math.min(size, 100)));
+            @RequestParam(name = "size", defaultValue = "60") int size,
+            @AuthenticationPrincipal Long userId) {
+        List<VenueResponse> found = service.searchLive(keyword, category, hanbokDiscount, Math.min(size, 100));
+        // 결과 수까지 남긴다. 0건이던 검색은 취향이 아니라 '우리에게 없는 것' 신호다.
+        activity.search(userId, keyword, category, found.size());
+        return ApiResponse.ok(found);
     }
 
     @GetMapping("/mine")
@@ -78,8 +86,13 @@ public class VenueController {
 
     /** id는 우리 장소 id 또는 공사 콘텐츠 ID. 실시간 결과에는 우리 id가 없는 장소가 많다. */
     @GetMapping("/{id}")
-    public ApiResponse<VenueDetailResponse> detail(@PathVariable("id") String id) {
-        return ApiResponse.ok(service.detailByKey(id));
+    public ApiResponse<VenueDetailResponse> detail(@AuthenticationPrincipal Long userId,
+                                                   @PathVariable("id") String id,
+                                                   @RequestParam(name = "from", required = false) String from) {
+        VenueDetailResponse found = service.detailByKey(id);
+        // 받은 id 가 아니라 **찾아낸 장소의 id** 로 남긴다 — 공사 콘텐츠 ID 로 들어오면 둘이 다르다.
+        activity.view(userId, "VENUE", found.id(), from);
+        return ApiResponse.ok(found);
     }
 
     @GetMapping("/{id}/performances")

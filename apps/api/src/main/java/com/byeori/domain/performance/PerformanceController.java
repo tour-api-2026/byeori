@@ -1,5 +1,6 @@
 package com.byeori.domain.performance;
 
+import com.byeori.domain.activity.ActivityLogger;
 import com.byeori.domain.performance.dto.PerformanceResponse;
 import java.util.List;
 import com.byeori.global.response.ApiResponse;
@@ -7,6 +8,7 @@ import com.byeori.global.response.PageResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -14,9 +16,11 @@ import org.springframework.web.bind.annotation.*;
 public class PerformanceController {
 
     private final PerformanceService service;
+    private final ActivityLogger activity;
 
-    public PerformanceController(PerformanceService service) {
+    public PerformanceController(PerformanceService service, ActivityLogger activity) {
         this.service = service;
+        this.activity = activity;
     }
 
     @GetMapping
@@ -44,7 +48,10 @@ public class PerformanceController {
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<PerformanceResponse> detail(@PathVariable("id") Long id) {
+    public ApiResponse<PerformanceResponse> detail(@AuthenticationPrincipal Long userId,
+                                                   @PathVariable("id") Long id,
+                                                   @RequestParam(name = "from", required = false) String from) {
+        activity.view(userId, "PERFORMANCE", id, from);
         return ApiResponse.ok(service.detail(id));
     }
 }
