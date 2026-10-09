@@ -35,7 +35,6 @@ export default function HomeScreen() {
   const tradOngoing = usePerformancesQuery({ traditional: true, state: 'ONGOING', size: 10 });
   const tradUpcoming = usePerformancesQuery({ traditional: true, state: 'UPCOMING', size: 10 });
   const traditional = tradOngoing.data?.content.length ? tradOngoing : tradUpcoming;
-  const recommended = useVenuesQuery({ size: 6 });
   const keyworded = useVenuesQuery({ category: keyword === '전체' ? undefined : keyword, size: 6 });
   const all = useVenuesQuery({ size: 50 });
 
@@ -122,10 +121,16 @@ export default function HomeScreen() {
           ) : <Loading />}
         </View>
 
-        {/* 당신을 위한 추천 — 로그인한 사람에게만. '당신'이 없으면 의미가 없다. */}
+        {/*
+          맞춤 추천 — 로그인한 사람에게만. '맞춤'인데 맞출 대상이 없으면 의미가 없다.
+
+          이 이름은 원래 바로 아래에 있던 섹션이 쓰고 있었는데, 그쪽은 useVenuesQuery({size:6})
+          라 누가 봐도 같은 장소 6곳이었다. 이름만 맞춤이고 사용자 정보가 한 톨도 안 들어갔다.
+          진짜 맞춤이 생겼으니 이름을 이쪽으로 가져오고 그쪽은 지웠다.
+        */}
         {signedIn && (feed.isLoading || (feed.data?.length ?? 0) > 0) && (
           <View style={styles.section}>
-            <SectionHeader title="당신을 위한 추천" />
+            <SectionHeader title="맞춤 추천" />
             {feed.data?.length ? <FeedCarousel items={feed.data} /> : <Loading />}
           </View>
         )}
@@ -138,12 +143,6 @@ export default function HomeScreen() {
             : (traditionalItems.length
               ? <PerformanceCarousel items={traditionalItems} />
               : <Text style={styles.empty}>진행 중인 전통 행사가 아직 없어요</Text>)}
-        </View>
-
-        {/* 맞춤 추천 */}
-        <View style={styles.section}>
-          <SectionHeader title="맞춤 추천" onMore={() => router.push('/search')} />
-          {recommended.isLoading ? <Loading /> : <Grid venues={recommended.data?.content ?? []} />}
         </View>
 
         {/* 키워드로 탐색 */}
