@@ -26,7 +26,9 @@ public class UserService {
     /** users.id를 참조하는 개인 데이터 테이블 — FK(NO ACTION) 때문에 users보다 먼저 지운다. */
     private static final List<String> PERSONAL_TABLES = List.of(
             "content_tag_votes", "venue_reports", "review_reports", "wishlists", "reviews",
-            "social_auths", "user_interests", "user_terms");
+            "social_auths", "user_interests", "user_terms",
+            // 행동 기록도 개인 데이터다. 빼면 지운 사람의 조회·검색이 남는다.
+            "view_logs", "search_logs");
 
     @Transactional
     public void deleteAccount(Long userId) {
