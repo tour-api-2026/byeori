@@ -2,6 +2,8 @@ package com.byeori.domain.auth;
 
 import com.byeori.domain.auth.dto.AuthDtos.*;
 import com.byeori.domain.upload.UploadedImageRepository;
+import com.byeori.domain.user.SocialAuth;
+import com.byeori.domain.user.SocialAuthRepository;
 import com.byeori.domain.user.User;
 import com.byeori.domain.user.UserRepository;
 import com.byeori.global.auth.GoogleClient;
@@ -11,6 +13,7 @@ import com.byeori.global.exception.BadRequestException;
 import com.byeori.global.exception.NotFoundException;
 import com.byeori.global.security.JwtTokenProvider;
 import io.jsonwebtoken.Claims;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final SocialAuthRepository socialAuthRepository;
     private final UploadedImageRepository uploadedImageRepository;
     private final KakaoClient kakaoClient;
     private final GoogleClient googleClient;
@@ -41,33 +45,127 @@ public class AuthService {
 
     @Transactional
     public TokenResponse socialLogin(SocialLoginRequest req) {
-        if (req == null || req.provider() == null) {
-            throw new BadRequestException("PROVIDER_REQUIRED", "provider가 필요합니다.");
-        }
-        SocialProfile profile = switch (req.provider().toLowerCase()) {
-            case "kakao" -> (req.accessToken() != null && !req.accessToken().isBlank())
-                    ? kakaoClient.verifyToken(req.accessToken())        // 네이티브 SDK 경로
-                    : kakaoClient.verify(req.code(), req.redirectUri()); // 웹 OAuth 경로
-            case "google" -> (req.code() != null && !req.code().isBlank())
-                    ? googleClient.verifyCode(req.code(), req.redirectUri())   // 웹 인가 코드 경로
-                    : googleClient.verify(req.idToken());                      // 네이티브 SDK 경로
-            default -> throw new BadRequestException("UNSUPPORTED_PROVIDER",
-                    "지원하지 않는 제공자입니다: " + req.provider());
-        };
+        SocialProfile profile = verify(req);
 
-        User user = userRepository
-                .findByAuthProviderAndProviderUserId(profile.provider(), profile.providerUserId())
-                .map(u -> {
-                    u.syncFromProvider(profile.email());
-                    return u;
-                })
-                .orElseGet(() -> userRepository.save(User.social(
-                        profile.provider(), profile.providerUserId(),
-                        profile.nickname(), profile.email(), profile.imageUrl())));
+        User user = findOrCreate(profile);
 
         String access = tokenProvider.generateAccess(user.getId(), user.getRole());
         String refresh = tokenProvider.generateRefresh(user.getId(), user.getRole());
         return new TokenResponse(access, refresh, toSummary(user));
+    }
+
+    // ── 계정 연결 ─────────────────────────────
+
+    /** 내가 지금 쓸 수 있는 로그인 수단. */
+    @Transactional(readOnly = true)
+    public List<LinkedAccount> linkedAccounts(Long userId) {
+        return socialAuthRepository.findByUserIdOrderByCreatedAtAsc(userId).stream()
+                .map(a -> new LinkedAccount(a.getProvider(), a.getCreatedAt()))
+                .toList();
+    }
+
+    /**
+     * 지금 로그인한 계정에 다른 소셜 계정을 잇는다.
+     *
+     * 이메일이 같다고 자동으로 잇지 않는다. 카카오는 애초에 이메일을 주지 않고, 검증되지
+     * 않은 이메일로 자동 연결하면 남의 이메일을 제 소셜 계정에 넣은 뒤 그 서비스로 들어와
+     * 남의 벼리 계정을 차지할 수 있다. 그래서 **로그인한 사람이 직접** 잇는다.
+     *
+     * 그 소셜 계정이 이미 다른 벼리 계정에 붙어 있으면 거부한다. 합치기는 찜·루트·리뷰를
+     * 옮기고 한쪽을 지우는 되돌릴 수 없는 일이라, 여기서 조용히 해치울 것이 아니다.
+     */
+    @Transactional
+    public List<LinkedAccount> link(Long userId, SocialLoginRequest req) {
+        SocialProfile profile = verify(req);
+        var existing = socialAuthRepository
+                .findByProviderAndProviderUserId(profile.provider(), profile.providerUserId());
+        if (existing.isPresent()) {
+            if (existing.get().getUserId().equals(userId)) {
+                return linkedAccounts(userId);          // 이미 내 것 — 두 번 눌러도 탈나지 않게
+            }
+            throw new BadRequestException("SOCIAL_ALREADY_LINKED",
+                    "이 계정은 다른 벼리 계정에 연결되어 있어요. 그 계정으로 로그인해 주세요.");
+        }
+        socialAuthRepository.save(new SocialAuth(userId, profile.provider(), profile.providerUserId()));
+        return linkedAccounts(userId);
+    }
+
+    /**
+     * 연결을 끊는다.
+     *
+     * 마지막 하나는 끊지 못한다 — 끊는 순간 로그인할 길이 사라져 제 계정에 영영 못 들어간다.
+     * 아이디/비밀번호가 있는 계정(ADMIN·REVIEW)은 소셜이 0개여도 들어갈 수 있지만, 그 둘은
+     * 소셜을 연결하지도 않으므로 여기 올 일이 없다.
+     */
+    @Transactional
+    public List<LinkedAccount> unlink(Long userId, String provider) {
+        String p = provider == null ? "" : provider.toUpperCase();
+        if (!socialAuthRepository.existsByUserIdAndProvider(userId, p)) {
+            throw new NotFoundException("SOCIAL_NOT_LINKED", "연결되지 않은 계정이에요.");
+        }
+        if (socialAuthRepository.countByUserId(userId) <= 1) {
+            throw new BadRequestException("SOCIAL_LAST_ONE",
+                    "마지막 로그인 수단은 끊을 수 없어요. 다른 계정을 먼저 연결해 주세요.");
+        }
+        socialAuthRepository.deleteByUserIdAndProvider(userId, p);
+        return linkedAccounts(userId);
+    }
+
+    /** 로그인과 연결이 같은 검증을 쓴다. 한쪽만 고쳐져 어긋나는 일이 없게 한 곳에 둔다. */
+    private SocialProfile verify(SocialLoginRequest req) {
+        if (req == null || req.provider() == null) {
+            throw new BadRequestException("PROVIDER_REQUIRED", "provider가 필요합니다.");
+        }
+        return switch (req.provider().toLowerCase()) {
+            case "kakao" -> (req.accessToken() != null && !req.accessToken().isBlank())
+                    ? kakaoClient.verifyToken(req.accessToken())
+                    : kakaoClient.verify(req.code(), req.redirectUri());
+            case "google" -> (req.code() != null && !req.code().isBlank())
+                    ? googleClient.verifyCode(req.code(), req.redirectUri())
+                    : googleClient.verify(req.idToken());
+            default -> throw new BadRequestException("UNSUPPORTED_PROVIDER",
+                    "지원하지 않는 제공자입니다: " + req.provider());
+        };
+    }
+
+    /** 연결된 수단 한 줄. 제공자 쪽 id 는 내보내지 않는다 — 화면이 쓸 일이 없다. */
+    public record LinkedAccount(String provider, java.time.LocalDateTime linkedAt) {}
+
+    /**
+     * 소셜 프로필로 사람을 찾는다. 없으면 새로 만든다.
+     *
+     * **social_auths 를 먼저 본다.** 한 사람이 카카오·구글을 둘 다 연결했을 때, 어느 쪽으로
+     * 들어와도 같은 계정이 나와야 한다. users 의 (auth_provider, provider_user_id) 로만
+     * 찾으면 수단을 하나밖에 못 보므로 연결해 둔 쪽이 무시된다.
+     *
+     * users 쪽 조회는 **옮기다 빠진 줄을 위한 그물**이다. 마이그레이션(V25)이 기존 사용자를
+     * 모두 옮기지만, 그때 없던 줄이 있거나 옮기기가 일부 실패해도 로그인이 끊기지 않아야 한다.
+     * 그런 줄을 만나면 그 자리에서 social_auths 에 채워 넣는다.
+     */
+    private User findOrCreate(SocialProfile profile) {
+        var linked = socialAuthRepository
+                .findByProviderAndProviderUserId(profile.provider(), profile.providerUserId());
+        if (linked.isPresent()) {
+            User user = userRepository.findById(linked.get().getUserId())
+                    .orElseThrow(() -> new NotFoundException("USER_NOT_FOUND", "사용자를 찾을 수 없습니다."));
+            user.syncFromProvider(profile.email());
+            return user;
+        }
+
+        var legacy = userRepository
+                .findByAuthProviderAndProviderUserId(profile.provider(), profile.providerUserId());
+        if (legacy.isPresent()) {
+            User user = legacy.get();
+            user.syncFromProvider(profile.email());
+            socialAuthRepository.save(new SocialAuth(user.getId(), profile.provider(), profile.providerUserId()));
+            return user;
+        }
+
+        User created = userRepository.save(User.social(
+                profile.provider(), profile.providerUserId(),
+                profile.nickname(), profile.email(), profile.imageUrl()));
+        socialAuthRepository.save(new SocialAuth(created.getId(), profile.provider(), profile.providerUserId()));
+        return created;
     }
 
     /**

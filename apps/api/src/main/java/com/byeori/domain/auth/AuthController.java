@@ -2,6 +2,7 @@ package com.byeori.domain.auth;
 
 import com.byeori.domain.auth.dto.AuthDtos.*;
 import com.byeori.global.response.ApiResponse;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -39,6 +40,30 @@ public class AuthController {
     @GetMapping("/users/me")
     public ApiResponse<UserSummary> me(@AuthenticationPrincipal Long userId) {
         return ApiResponse.ok(service.me(userId));
+    }
+
+    /** 내 계정에 붙어 있는 로그인 수단. */
+    @GetMapping("/users/me/social")
+    public ApiResponse<List<AuthService.LinkedAccount>> linked(@AuthenticationPrincipal Long userId) {
+        return ApiResponse.ok(service.linkedAccounts(userId));
+    }
+
+    /**
+     * 지금 로그인한 계정에 다른 소셜 계정을 잇는다.
+     *
+     * 몸체는 로그인과 **같은 모양**(provider + code/idToken/accessToken)이다. 화면이 평소
+     * 로그인하듯 제공자 창을 띄우고, 받은 것을 그대로 여기로 보내면 된다.
+     */
+    @PostMapping("/users/me/social")
+    public ApiResponse<List<AuthService.LinkedAccount>> link(@AuthenticationPrincipal Long userId,
+                                                             @RequestBody SocialLoginRequest req) {
+        return ApiResponse.ok(service.link(userId, req));
+    }
+
+    @DeleteMapping("/users/me/social/{provider}")
+    public ApiResponse<List<AuthService.LinkedAccount>> unlink(@AuthenticationPrincipal Long userId,
+                                                               @PathVariable("provider") String provider) {
+        return ApiResponse.ok(service.unlink(userId, provider));
     }
 
     @PatchMapping("/users/me")

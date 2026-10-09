@@ -15,6 +15,8 @@ type MenuItem = { icon: string; label: string; route?: string; action?: 'contact
 const GROUP1: MenuItem[] = [
   // 온보딩에서 한 번 고르고 끝이면 바꿀 길이 없다. 취향은 변한다.
   { icon: 'sparkles', label: '관심 주제·지역', route: '/onboarding?edit=1', tint: colors.primary, soft: colors.primarySoft },
+  // 카카오·구글을 둘 다 쓰는 사람은 계정이 갈려 있다. 여기서 이어 붙인다.
+  { icon: 'link', label: '연결된 계정', route: '/my/accounts', tint: colors.accent, soft: colors.accentSoft },
   { icon: 'chatbubble-ellipses', label: '내가 쓴 리뷰', route: '/my/reviews', tint: colors.accent, soft: colors.accentSoft },
   { icon: 'location', label: '내가 등록한 장소', route: '/my/venues', tint: colors.primary, soft: colors.primarySoft },
   { icon: 'heart', label: '찜한 장소', route: '/bookmarks', tint: colors.hanbok, soft: '#FDECEC' },
