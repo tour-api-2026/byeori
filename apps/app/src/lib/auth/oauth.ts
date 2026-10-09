@@ -43,14 +43,37 @@ const KAKAO_DISCOVERY: AuthSession.DiscoveryDocument = {
   tokenEndpoint: 'https://kauth.kakao.com/oauth/token',
 };
 
-// 백엔드 /auth/social 호출 → 세션 저장
-async function exchangeWithBackend(body: {
+/** 제공자에게서 받아 백엔드로 넘길 자격증명. 로그인과 연결이 같은 모양을 쓴다. */
+type Credential = {
   provider: 'kakao' | 'google';
   code?: string;
   idToken?: string;
   accessToken?: string;
   redirectUri?: string;
-}) {
+};
+
+/** 연결된 로그인 수단 하나. 서버 AuthService.LinkedAccount 와 같다. */
+export type LinkedAccount = { provider: string; linkedAt: string };
+
+/**
+ * 자격증명을 어디로 보낼지.
+ *
+ * - login: /auth/social — 세션을 **갈아끼운다**
+ * - link:  /users/me/social — 지금 로그인한 계정에 **덧붙인다**. 세션은 그대로 둔다.
+ *
+ * 둘이 받는 몸체가 같아서 제공자 창을 띄우는 코드를 한 벌만 둔다. 갈라 놓으면 한쪽만
+ * 고쳐져 어긋난다 — 웹/네이티브 경로가 제공자마다 다른 터라 특히 그렇다.
+ */
+type Mode = 'login' | 'link';
+
+async function exchangeWithBackend(body: Credential, mode: Mode = 'login') {
+  if (mode === 'link') {
+    const res = await api.post<ApiEnvelope<LinkedAccount[]>>('/users/me/social', body);
+    if (!res.data.success) {
+      throw new Error(res.data.error?.message ?? '계정을 연결하지 못했습니다.');
+    }
+    return res.data.data;
+  }
   const res = await api.post<ApiEnvelope<Session>>('/auth/social', body);
   if (!res.data.success || !res.data.data?.accessToken) {
     throw new Error(res.data.error?.message ?? '로그인에 실패했습니다.');
@@ -67,7 +90,7 @@ async function exchangeWithBackend(body: {
  * redirect_uri는 카카오 콘솔에 등록된 값과 **정확히** 같아야 한다.
  * 배포 오리진을 그대로 쓰므로 콘솔에는 https://byeori.ernebi.org 형태로 등록한다.
  */
-async function loginKakaoWeb() {
+async function loginKakaoWeb(mode: Mode = 'login') {
   const clientId = process.env.EXPO_PUBLIC_KAKAO_REST_KEY;
   if (!clientId) {
     throw new Error('카카오 웹 로그인 설정이 필요해요. (EXPO_PUBLIC_KAKAO_REST_KEY 미설정)');
@@ -95,7 +118,7 @@ async function loginKakaoWeb() {
   const code = result.params.code;
   if (!code) throw new Error('카카오 인가 코드를 받지 못했습니다.');
 
-  return exchangeWithBackend({ provider: 'kakao', code, redirectUri: webRedirectUri });
+  return exchangeWithBackend({ provider: 'kakao', code, redirectUri: webRedirectUri }, mode);
 }
 
 /**
@@ -111,8 +134,8 @@ function detail(e: any): string {
   return parts.length ? ` (${parts.join(': ')})` : '';
 }
 
-export async function loginKakao() {
-  if (Platform.OS === 'web') return loginKakaoWeb();
+export async function loginKakao(mode: Mode = 'login') {
+  if (Platform.OS === 'web') return loginKakaoWeb(mode);
 
   let KakaoLogin: typeof import('@react-native-seoul/kakao-login');
   try {
@@ -123,7 +146,7 @@ export async function loginKakao() {
   try {
     const token = await KakaoLogin.login();
     if (!token?.accessToken) throw new Error('카카오 토큰을 받지 못했습니다.');
-    return exchangeWithBackend({ provider: 'kakao', accessToken: token.accessToken });
+    return exchangeWithBackend({ provider: 'kakao', accessToken: token.accessToken }, mode);
   } catch (e: any) {
     // 사용자가 카카오 화면에서 취소
     const msg = String(e?.message ?? e?.code ?? '');
@@ -164,8 +187,8 @@ export async function loginAdmin(id: string, password: string) {
  * 더하는 것뿐이고(firebase 미사용 경로), 안드로이드는 autolinking 으로 충분하다.
  * iOS 를 시작할 때 실제 iOS 클라이언트 ID 로 플러그인을 추가하면 된다.
  */
-export async function loginGoogle() {
-  if (Platform.OS === 'web') return loginGoogleWeb();
+export async function loginGoogle(mode: Mode = 'login') {
+  if (Platform.OS === 'web') return loginGoogleWeb(mode);
 
   const clientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
   if (!clientId) {
@@ -188,7 +211,7 @@ export async function loginGoogle() {
 
     const idToken = res.data.idToken;
     if (!idToken) throw new Error('구글 id_token을 받지 못했습니다.');
-    return exchangeWithBackend({ provider: 'google', idToken });
+    return exchangeWithBackend({ provider: 'google', idToken }, mode);
   } catch (e: any) {
     if (e instanceof AuthCancelledError) throw e;
     // 구버전 SDK 는 취소를 예외로 던진다
@@ -205,7 +228,7 @@ export async function loginGoogle() {
  * 원인을 바깥에서 특정하지 못해, 같은 앱에서 멀쩡히 도는 카카오 웹과 같은 구조로 맞춘다.
  * 코드 교환은 백엔드가 한다(클라이언트 보안 비밀이 브라우저로 내려가면 안 된다).
  */
-async function loginGoogleWeb() {
+async function loginGoogleWeb(mode: Mode = 'login') {
   const clientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
   if (!clientId) {
     throw new Error('구글 로그인 설정이 필요해요. (EXPO_PUBLIC_GOOGLE_CLIENT_ID 미설정)');
@@ -230,5 +253,21 @@ async function loginGoogleWeb() {
   const code = result.params.code;
   if (!code) throw new Error('구글 인가 코드를 받지 못했습니다.');
 
-  return exchangeWithBackend({ provider: 'google', code, redirectUri: webRedirectUri });
+  return exchangeWithBackend({ provider: 'google', code, redirectUri: webRedirectUri }, mode);
+}
+
+// ── 계정 연결 ─────────────────────────────
+
+/**
+ * 지금 로그인한 계정에 소셜 계정을 **덧붙인다.** 세션은 바뀌지 않는다.
+ *
+ * 제공자 창을 띄우는 과정은 로그인과 완전히 같다 — 보내는 곳만 다르다.
+ * 그래서 loginKakao/loginGoogle 에 모드를 넘기는 얇은 껍데기로 둔다.
+ */
+export async function linkKakao(): Promise<LinkedAccount[]> {
+  return (await loginKakao('link')) as LinkedAccount[];
+}
+
+export async function linkGoogle(): Promise<LinkedAccount[]> {
+  return (await loginGoogle('link')) as LinkedAccount[];
 }
