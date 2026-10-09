@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { blockUser, fetchBlockedUsers, unblockUser } from '../api/account';
 import { fetchAiStatus } from '../api/ai';
+import { fetchFeed } from '../api/feed';
 import { fetchMyInterests, saveMyInterests, type Interests } from '../api/interests';
 import { fetchCourseDetail, fetchCourses } from '../api/courses';
 import {
@@ -207,6 +208,22 @@ export function useItineraryQuery(id: number) {
  * retry 를 끈 이유: 토큰이 틀리면 404 가 확정이라 다시 물어도 같은 답이다.
  * 기본값(3회)대로 두면 "루트를 찾을 수 없어요" 가 뜨기까지 몇 초를 기다리게 된다.
  */
+/**
+ * '당신을 위한 추천'. 로그인 상태에서만 부른다.
+ *
+ * 좌표는 있으면 보내고 없으면 생략한다 — 홈에서 위치 권한을 새로 묻지 않는다.
+ * 1분간은 다시 묻지 않는다. 홈을 오갈 때마다 34,728건을 다시 점수 매길 이유가 없다.
+ */
+export function useFeedQuery(enabled: boolean, coords: { lat: number; lng: number } | null, size = 12) {
+  return useQuery({
+    queryKey: ['feed', coords?.lat ?? null, coords?.lng ?? null, size],
+    queryFn: () => fetchFeed({ lat: coords?.lat, lng: coords?.lng, size }),
+    enabled,
+    retry: false,
+    staleTime: 60 * 1000,
+  });
+}
+
 /**
  * 내가 고른 관심 주제·지역. 로그인 상태에서만 부른다.
  *
