@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,6 +32,21 @@ public class UserController {
     public record BlockRequest(Long userId) {}
 
     /** 내가 차단한 사용자 id 목록. */
+    /** 고른 관심 주제·지역. 비어 있으면 아직 고르지 않은 사람이다. */
+    @GetMapping("/me/interests")
+    public ApiResponse<UserService.Interests> interests(@AuthenticationPrincipal Long userId) {
+        return ApiResponse.ok(service.getInterests(userId));
+    }
+
+    /** 통째로 교체. 더하기가 아니라 화면이 들고 있는 전체 목록으로 덮는다. */
+    @PutMapping("/me/interests")
+    public ApiResponse<UserService.Interests> updateInterests(@AuthenticationPrincipal Long userId,
+                                                              @RequestBody InterestsRequest req) {
+        return ApiResponse.ok(service.replaceInterests(userId, req.topics(), req.regions()));
+    }
+
+    public record InterestsRequest(java.util.List<String> topics, java.util.List<String> regions) {}
+
     @GetMapping("/me/blocks")
     public ApiResponse<List<Long>> listBlocks(@AuthenticationPrincipal Long userId) {
         return ApiResponse.ok(service.listBlocked(userId));

@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { blockUser, fetchBlockedUsers, unblockUser } from '../api/account';
 import { fetchAiStatus } from '../api/ai';
+import { fetchMyInterests, saveMyInterests, type Interests } from '../api/interests';
 import { fetchCourseDetail, fetchCourses } from '../api/courses';
 import {
   addItineraryItem, addPlaceItem, createItinerary, deleteItinerary, deleteItineraryItem,
@@ -206,6 +207,23 @@ export function useItineraryQuery(id: number) {
  * retry 를 끈 이유: 토큰이 틀리면 404 가 확정이라 다시 물어도 같은 답이다.
  * 기본값(3회)대로 두면 "루트를 찾을 수 없어요" 가 뜨기까지 몇 초를 기다리게 된다.
  */
+/**
+ * 내가 고른 관심 주제·지역. 로그인 상태에서만 부른다.
+ *
+ * retry 를 끄는 이유: 비로그인이면 401 이 확정이라 다시 물어도 같은 답이다.
+ */
+export function useMyInterestsQuery(enabled: boolean) {
+  return useQuery({ queryKey: ['my-interests'], queryFn: fetchMyInterests, enabled, retry: false });
+}
+
+export function useSaveInterestsMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Interests) => saveMyInterests(body),
+    onSuccess: (saved) => qc.setQueryData(['my-interests'], saved),
+  });
+}
+
 export function useSharedItineraryQuery(token: string) {
   return useQuery({
     queryKey: ['shared-itinerary', token],
