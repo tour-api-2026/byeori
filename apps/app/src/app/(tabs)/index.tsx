@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { Image } from '@/components/Image';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -7,11 +8,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Chip } from '@/components/Chip';
 import { useTabBarHeight } from '@/components/TabBar';
 import { SectionHeader } from '@/components/SectionHeader';
+import { FeedCarousel } from '@/components/FeedCarousel';
 import { PerformanceCarousel } from '@/components/PerformanceCarousel';
 import { VenueCard } from '@/components/VenueCard';
 import { Performance, VenueCardItem } from '@/lib/api/types';
 import { sized } from '@/lib/img';
-import { useNearbyVenuesQuery, usePerformancesQuery, useVenuesQuery } from '@/lib/hooks/queries';
+import { useFeedQuery, useNearbyVenuesQuery, usePerformancesQuery, useVenuesQuery } from '@/lib/hooks/queries';
+import { useAuthStore } from '@/lib/store/authStore';
 import { useRecentStore } from '@/lib/store/recentStore';
 import { REGIONS, regionSpot } from '@/lib/regions';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
@@ -41,6 +44,29 @@ export default function HomeScreen() {
   const traditionalItems = (traditional.data?.content ?? []).filter((p) => p.id !== top?.id);
   // 지역을 고르면 그 좌표로 실시간 조회한다. 저장 목록을 주소로 거르면
   // 상위 50건이 전부 서울이라 서울 외 지역이 비어 보였다.
+  const signedIn = useAuthStore((st) => !!st.accessToken);
+
+  /**
+   * 추천에 쓸 좌표. **권한을 새로 묻지 않는다** — 홈을 열자마자 권한 창이 뜨면 거슬린다.
+   * 지도 화면에서 이미 허락한 사람만 마지막으로 알던 위치를 가져온다. 없으면 좌표 없이
+   * 추천하고, 그때는 거리 항이 모두 같은 값이 되어 취향·임박도가 순위를 가른다.
+   */
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { granted } = await Location.getForegroundPermissionsAsync();
+        if (!granted) return;
+        const last = await Location.getLastKnownPositionAsync();
+        if (alive && last) setCoords({ lat: last.coords.latitude, lng: last.coords.longitude });
+      } catch { /* 위치를 못 얻어도 추천은 돈다 */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const feed = useFeedQuery(signedIn, coords);
+
   const spot = regionSpot(region);
   const byRegion = useNearbyVenuesQuery(spot);
   const regionVenues = useMemo(() => {
@@ -95,6 +121,14 @@ export default function HomeScreen() {
             </Pressable>
           ) : <Loading />}
         </View>
+
+        {/* 당신을 위한 추천 — 로그인한 사람에게만. '당신'이 없으면 의미가 없다. */}
+        {signedIn && (feed.isLoading || (feed.data?.length ?? 0) > 0) && (
+          <View style={styles.section}>
+            <SectionHeader title="당신을 위한 추천" />
+            {feed.data?.length ? <FeedCarousel items={feed.data} /> : <Loading />}
+          </View>
+        )}
 
         {/* 전통 테마 행사 */}
         <View style={styles.section}>

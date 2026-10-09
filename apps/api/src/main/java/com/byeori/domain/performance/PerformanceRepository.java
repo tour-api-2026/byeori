@@ -112,4 +112,20 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
                                          @Param("minLng") BigDecimal minLng,
                                          @Param("maxLng") BigDecimal maxLng,
                                          Pageable pageable);
+
+    /**
+     * 추천 후보: 지금 하거나 곧 시작하는 행사.
+     *
+     * 11,961건을 전부 점수 매길 수 없으므로 여기서 먼저 줄인다. 시작일 순으로 끊는 이유는
+     * 임박한 것이 추천 가치가 높아서다 — 반년 뒤 공연을 오늘 권해도 할 수 있는 게 없다.
+     */
+    @Query("""
+            select p from Performance p
+            where (p.endDate is null or p.endDate >= :today)
+              and (p.startDate is null or p.startDate <= :until)
+            order by p.startDate asc, p.id asc
+            """)
+    List<Performance> findUpcomingCandidates(@Param("today") LocalDate today,
+                                             @Param("until") LocalDate until,
+                                             Pageable pageable);
 }
