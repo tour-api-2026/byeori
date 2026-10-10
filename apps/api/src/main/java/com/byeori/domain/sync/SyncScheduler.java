@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 public class SyncScheduler {
 
     private final SyncService syncService;
+    private final PerformanceDeduper deduper;
 
     // 한국관광공사가 04:30에 원본을 갱신한다(공사 안내 기준). 그 이후에 받는다.
     //
@@ -26,5 +27,9 @@ public class SyncScheduler {
         syncService.syncPerformances();
         syncService.syncFestivals();
         syncService.syncSeoulEvents();
+        // 출처가 다른 같은 행사를 가린다. 받아오는 쪽을 전부 끝낸 다음에 한 번 쓴다 —
+        // 출처별 중복 방지(kopis_id / seoul_id)는 출처를 넘지 못하므로, 쓸지 않으면
+        // 동기화마다 같은 행사가 한 줄씩 늘어난다.
+        deduper.sweep();
     }
 }

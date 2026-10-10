@@ -37,7 +37,7 @@ class AuthServiceProfileTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuthService(userRepository, uploadedImageRepository, null, null, null);
+        service = new AuthService(userRepository, null, null, uploadedImageRepository, null, null, null);
         user = User.social("KAKAO", "123", "카카오이름", "a@b.c", KAKAO_IMG);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(uploadedImageRepository.findById(MINE))

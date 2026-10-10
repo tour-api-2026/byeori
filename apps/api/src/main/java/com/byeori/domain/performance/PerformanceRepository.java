@@ -43,6 +43,7 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
               and (:venueId is null or p.venueId = :venueId)
               and (:keyword is null or p.title like %:keyword%)
               and (:traditional is null or p.traditional = :traditional)
+              and p.duplicateOf is null
             order by case when p.posterImageUrl is null or p.posterImageUrl = '' then 1 else 0 end,
                      p.startDate desc, p.id asc
             """)
@@ -65,6 +66,7 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
             select p from Performance p
             where p.venueId = :venueId
               and (p.endDate is null or p.endDate >= :today)
+              and p.duplicateOf is null
             order by p.startDate asc, p.id asc
             """)
     List<Performance> findVisibleByVenue(@Param("venueId") Long venueId, @Param("today") LocalDate today,
@@ -85,6 +87,7 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
             where p.lat between :minLat and :maxLat
               and p.lng between :minLng and :maxLng
               and (p.endDate is null or p.endDate >= current_date)
+              and p.duplicateOf is null
             order by (p.lat - :lat) * (p.lat - :lat)
                    + (p.lng - :lng) * (p.lng - :lng) * 0.656,
                      p.id asc
@@ -103,6 +106,7 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
             where p.startDate <= :date and p.endDate >= :date
               and p.lat between :minLat and :maxLat
               and p.lng between :minLng and :maxLng
+              and p.duplicateOf is null
             order by p.traditional desc, p.id asc
             """)
 
@@ -123,9 +127,25 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
             select p from Performance p
             where (p.endDate is null or p.endDate >= :today)
               and (p.startDate is null or p.startDate <= :until)
+              and p.duplicateOf is null
             order by p.startDate asc, p.id asc
             """)
     List<Performance> findUpcomingCandidates(@Param("today") LocalDate today,
                                              @Param("until") LocalDate until,
                                              Pageable pageable);
+
+    /**
+     * 중복 쓸기 대상 — 아직 끝나지 않고 기간이 분명한 행사. 가려진 줄도 함께 받는다.
+     *
+     * 가려진 줄을 빼면 숨김을 풀 수 없다. 매번 전체를 다시 판정해야 제목이 바뀐 뒤에도
+     * 답이 맞는다(PerformanceDeduper 참고). 시작일·종료일이 같을 때만 비교하므로
+     * 둘 중 하나라도 비면 애초에 후보가 아니다.
+     */
+    @Query("""
+            select p from Performance p
+            where p.startDate is not null
+              and p.endDate is not null and p.endDate >= :today
+            order by p.startDate asc, p.endDate asc, p.id asc
+            """)
+    List<Performance> findDedupeCandidates(@Param("today") LocalDate today);
 }

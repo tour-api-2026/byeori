@@ -18,12 +18,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class SyncController {
 
     private final SyncService syncService;
+    private final PerformanceDeduper deduper;
 
     /**
-     * only=all(기본)|incremental|venues|performances|festivals|seoul 로 대상 선택.
+     * only=all(기본)|incremental|venues|performances|festivals|seoul|dedupe 로 대상 선택.
      *
      * incremental = 변경분만(정기 동기화와 같은 경로, 약 3건 호출)
      * venues      = 전량 재수집(약 350건 호출) — 초기 적재·정합성 복구용
+     * dedupe      = 외부 호출 없이 중복 쓸기만 다시 실행(판정 규칙을 고친 뒤 확인용)
      */
     @PostMapping("/trigger")
     public ApiResponse<Map<String, Integer>> trigger(
@@ -34,11 +36,18 @@ public class SyncController {
             // 구간을 지정해 따라잡거나, 동작을 확인할 때 쓴다.
             return ApiResponse.ok(Map.of("incremental", syncService.syncVenuesIncremental(since)));
         }
+        if (only.equals("dedupe")) {
+            PerformanceDeduper.Summary s = deduper.sweep();
+            return ApiResponse.ok(Map.of("hidden", s.hidden(), "added", s.added(), "released", s.released()));
+        }
         boolean all = only.equals("all");
         int venues = (all || only.equals("venues")) ? syncService.syncVenues() : -1;
         int performances = (all || only.equals("performances")) ? syncService.syncPerformances() : -1;
         int festivals = (all || only.equals("festivals")) ? syncService.syncFestivals() : -1;
         int seoul = (all || only.equals("seoul")) ? syncService.syncSeoulEvents() : -1;
-        return ApiResponse.ok(Map.of("venues", venues, "performances", performances, "festivals", festivals, "seoul", seoul));
+        // 받아온 뒤에 쓴다. 출처 하나만 다시 받아도 다른 출처와의 중복이 새로 생긴다.
+        int hidden = deduper.sweep().hidden();
+        return ApiResponse.ok(Map.of("venues", venues, "performances", performances,
+                "festivals", festivals, "seoul", seoul, "duplicatesHidden", hidden));
     }
 }
