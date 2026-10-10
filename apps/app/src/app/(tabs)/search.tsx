@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Chip } from '@/components/Chip';
+import { Refresh } from '@/components/Refresh';
 import { useTabBarHeight } from '@/components/TabBar';
 import { VenueCard } from '@/components/VenueCard';
 import { useLiveSearchQuery, useNearbyVenuesQuery, useVenuesQuery } from '@/lib/hooks/queries';
@@ -86,7 +87,9 @@ export default function SearchScreen() {
       {isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
       ) : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: tabH + 24, paddingTop: 6 }}>
+        <ScrollView
+          refreshControl={<Refresh />}
+          contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: tabH + 24, paddingTop: 6 }}>
           {pageItems.length ? (
             <>
               <View style={styles.grid}>

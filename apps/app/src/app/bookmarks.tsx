@@ -4,6 +4,7 @@ import { Stack, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import LoginRequired from '@/components/LoginRequired';
 import { Rating } from '@/components/Rating';
+import { Refresh } from '@/components/Refresh';
 import { Wishlist } from '@/lib/api/wishlists';
 import { useMyWishlistsQuery, useVenueDetailQuery } from '@/lib/hooks/queries';
 import { useAuthStore } from '@/lib/store/authStore';
@@ -40,7 +41,10 @@ export default function BookmarksScreen() {
           </Pressable>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 + insets.bottom }} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          refreshControl={<Refresh />}
+          contentContainerStyle={{ padding: space.lg, paddingBottom: 28 + insets.bottom }}
+          showsVerticalScrollIndicator={false}>
           <Text style={styles.count}>총 <Text style={styles.countNum}>{data.length}</Text>개를 표시했어요</Text>
           <View style={styles.grid}>
             {data.map((w) => <BookmarkCard key={w.id} item={w} />)}
