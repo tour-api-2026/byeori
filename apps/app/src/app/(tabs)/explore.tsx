@@ -1,5 +1,6 @@
 import { Image } from '@/components/Image';
 import { useRouter } from 'expo-router';
+import { Refresh } from '@/components/Refresh';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTabBarHeight } from '@/components/TabBar';
@@ -21,6 +22,7 @@ export default function ExploreScreen() {
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
+          refreshControl={<Refresh />}
           data={data ?? []}
           keyExtractor={(c) => String(c.id)}
           contentContainerStyle={[styles.list, { paddingBottom: tabH + space.lg }]}

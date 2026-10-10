@@ -9,6 +9,7 @@ import { Chip } from '@/components/Chip';
 import { useTabBarHeight } from '@/components/TabBar';
 import { SectionHeader } from '@/components/SectionHeader';
 import { FeedCarousel } from '@/components/FeedCarousel';
+import { Refresh } from '@/components/Refresh';
 import { PerformanceCarousel } from '@/components/PerformanceCarousel';
 import { VenueCard } from '@/components/VenueCard';
 import { Performance, VenueCardItem } from '@/lib/api/types';
@@ -96,7 +97,10 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: tabH + 24 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: tabH + 24 }}
+        refreshControl={<Refresh />}>
         {/* 헤더 (중앙 타이틀) */}
         <View style={styles.header}><Text style={styles.title}>벼리</Text></View>
 

@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import LoginRequired from "@/components/LoginRequired";
+import { Refresh } from "@/components/Refresh";
 import { useTabBarHeight } from "@/components/TabBar";
 import { ItinerarySummary, shareItinerary } from "@/lib/api/itineraries";
 import { useAiStatusQuery, useItineraryQuery, useMyItinerariesQuery } from "@/lib/hooks/queries";
@@ -100,6 +101,7 @@ export default function RoutesScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <Text style={styles.h1}>내 여행 루트</Text>
       <ScrollView
+        refreshControl={<Refresh />}
         contentContainerStyle={{
           paddingHorizontal: space.lg,
           paddingBottom: tabH + 28,
