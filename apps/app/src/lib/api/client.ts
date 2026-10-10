@@ -79,6 +79,27 @@ async function runRefresh(): Promise<string | null> {
   }
 }
 
+/**
+ * 서버가 보낸 사람 말 메시지를 Error 로 바꾼다.
+ *
+ * 서버는 4xx 에도 봉투를 담아 보낸다 — { success:false, error:{ code, message } }.
+ * 그런데 axios 는 4xx 에서 **예외를 던지므로** 호출부의 `res.data.error.message` 를 읽는
+ * 줄에 닿지 못하고, 사용자는 "Request failed with status code 400" 이라는 axios 기본
+ * 문구를 본다. 실제로 계정 연결에서 그 화면이 떴고, 서버가 왜 거부했는지 알 길이 없었다.
+ *
+ * 화면마다 따로 꺼내면 다음 화면에서 또 빠지므로 여기 한 곳에서 바꾼다. code 와 status 도
+ * 함께 달아 둬서 호출부가 경우를 가를 수 있게 한다.
+ */
+function toApiError(error: AxiosError): unknown {
+  const body = error.response?.data as ApiEnvelope<unknown> | undefined;
+  const message = body?.error?.message;
+  if (!message) return error;        // 봉투가 없으면(네트워크 끊김 등) 원래 오류 그대로
+  const e = new Error(message) as Error & { code?: string; status?: number };
+  e.code = body?.error?.code;
+  e.status = error.response?.status;
+  return e;
+}
+
 // 응답: 401 → 1회 refresh → 성공 시 원요청 재시도, 실패 시 로그아웃
 api.interceptors.response.use(
   (res) => res,
@@ -94,12 +115,12 @@ api.interceptors.response.use(
       original.url?.includes('/auth/token/refresh') ||
       original.url?.includes('/auth/social')
     ) {
-      return Promise.reject(error);
+      return Promise.reject(toApiError(error));
     }
 
     // 토큰이 애초에 없으면(비로그인 보호 요청) refresh 시도하지 않음
     if (!useAuthStore.getState().accessToken) {
-      return Promise.reject(error);
+      return Promise.reject(toApiError(error));
     }
 
     original._retry = true;
@@ -110,7 +131,7 @@ api.interceptors.response.use(
 
     if (!newToken) {
       await useAuthStore.getState().logout();
-      return Promise.reject(error);
+      return Promise.reject(toApiError(error));
     }
 
     original.headers = original.headers ?? {};
