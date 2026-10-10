@@ -64,11 +64,12 @@ export type LinkedAccount = { provider: string; linkedAt: string };
  * 둘이 받는 몸체가 같아서 제공자 창을 띄우는 코드를 한 벌만 둔다. 갈라 놓으면 한쪽만
  * 고쳐져 어긋난다 — 웹/네이티브 경로가 제공자마다 다른 터라 특히 그렇다.
  */
-type Mode = 'login' | 'link';
+type Mode = 'login' | 'link' | 'merge';
 
 async function exchangeWithBackend(body: Credential, mode: Mode = 'login') {
-  if (mode === 'link') {
-    const res = await api.post<ApiEnvelope<LinkedAccount[]>>('/users/me/social', body);
+  if (mode === 'link' || mode === 'merge') {
+    const path = mode === 'merge' ? '/users/me/social/merge' : '/users/me/social';
+    const res = await api.post<ApiEnvelope<LinkedAccount[]>>(path, body);
     if (!res.data.success) {
       throw new Error(res.data.error?.message ?? '계정을 연결하지 못했습니다.');
     }
@@ -270,4 +271,19 @@ export async function linkKakao(): Promise<LinkedAccount[]> {
 
 export async function linkGoogle(): Promise<LinkedAccount[]> {
   return (await loginGoogle('link')) as LinkedAccount[];
+}
+
+/**
+ * 이미 다른 벼리 계정인 소셜 계정을 지금 계정으로 **합친다.**
+ *
+ * 연결하려다 "이미 다른 벼리 계정" 을 만났을 때만 쓴다. 제공자 창을 다시 띄우는 이유는
+ * 인가 코드가 한 번만 쓸 수 있어서이기도 하고, 되돌릴 수 없는 일에는 한 번 더 묻는 편이
+ * 맞아서이기도 하다.
+ */
+export async function mergeKakao(): Promise<LinkedAccount[]> {
+  return (await loginKakao('merge')) as LinkedAccount[];
+}
+
+export async function mergeGoogle(): Promise<LinkedAccount[]> {
+  return (await loginGoogle('merge')) as LinkedAccount[];
 }

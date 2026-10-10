@@ -2,6 +2,7 @@ package com.byeori.domain.auth;
 
 import com.byeori.domain.auth.dto.AuthDtos.*;
 import com.byeori.domain.upload.UploadedImageRepository;
+import com.byeori.domain.user.AccountMerger;
 import com.byeori.domain.user.SocialAuth;
 import com.byeori.domain.user.SocialAuthRepository;
 import com.byeori.domain.user.User;
@@ -28,6 +29,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final SocialAuthRepository socialAuthRepository;
+    private final AccountMerger accountMerger;
     private final UploadedImageRepository uploadedImageRepository;
     private final KakaoClient kakaoClient;
     private final GoogleClient googleClient;
@@ -83,10 +85,39 @@ public class AuthService {
             if (existing.get().getUserId().equals(userId)) {
                 return linkedAccounts(userId);          // 이미 내 것 — 두 번 눌러도 탈나지 않게
             }
+            // 무엇이 들어 있는지 함께 알린다. 합칠지 말지는 그걸 알아야 정할 수 있다.
+            // 방금 그 제공자로 인증했으므로 그 계정의 주인이 맞다 — 수치를 보여도 된다.
+            String has = accountMerger.summarize(existing.get().getUserId()).describe();
             throw new BadRequestException("SOCIAL_ALREADY_LINKED",
-                    "이 계정은 다른 벼리 계정에 연결되어 있어요. 그 계정으로 로그인해 주세요.");
+                    "이 계정은 이미 다른 벼리 계정이에요 (" + has + "). 두 계정을 합칠 수 있어요.");
         }
         socialAuthRepository.save(new SocialAuth(userId, profile.provider(), profile.providerUserId()));
+        return linkedAccounts(userId);
+    }
+
+    /**
+     * 지금 로그인한 계정으로 다른 계정을 합친다.
+     *
+     * 연결하려다 "이미 다른 벼리 계정" 을 만났을 때 쓰는 길이다. 그 제공자로 **다시 인증**
+     * 하게 해서 그 계정의 주인임을 증명받는다 — 인가 코드는 한 번만 쓸 수 있어 앞서 쓴 것을
+     * 재사용할 수 없고, 재사용할 수 있더라도 되돌릴 수 없는 일에는 한 번 더 묻는 편이 맞다.
+     *
+     * 합치고 나면 지금 쓰는 계정만 남는다. 상대 계정은 사라진다.
+     */
+    @Transactional
+    public List<LinkedAccount> mergeFrom(Long userId, SocialLoginRequest req) {
+        SocialProfile profile = verify(req);
+        var other = socialAuthRepository
+                .findByProviderAndProviderUserId(profile.provider(), profile.providerUserId());
+        if (other.isEmpty()) {
+            // 상대 계정이 없다 = 합칠 것이 없다. 그냥 연결해 주는 편이 사용자에게 자연스럽다.
+            socialAuthRepository.save(new SocialAuth(userId, profile.provider(), profile.providerUserId()));
+            return linkedAccounts(userId);
+        }
+        Long dropUserId = other.get().getUserId();
+        if (dropUserId.equals(userId)) return linkedAccounts(userId);   // 이미 내 것
+
+        accountMerger.merge(userId, dropUserId);
         return linkedAccounts(userId);
     }
 

@@ -60,6 +60,17 @@ public class AuthController {
         return ApiResponse.ok(service.link(userId, req));
     }
 
+    /**
+     * 이미 다른 벼리 계정인 소셜 계정을 지금 계정으로 합친다.
+     *
+     * 되돌릴 수 없다. 그 제공자로 다시 인증하게 해 소유를 증명받고, 화면이 먼저 확인을 받는다.
+     */
+    @PostMapping("/users/me/social/merge")
+    public ApiResponse<List<AuthService.LinkedAccount>> merge(@AuthenticationPrincipal Long userId,
+                                                              @RequestBody SocialLoginRequest req) {
+        return ApiResponse.ok(service.mergeFrom(userId, req));
+    }
+
     @DeleteMapping("/users/me/social/{provider}")
     public ApiResponse<List<AuthService.LinkedAccount>> unlink(@AuthenticationPrincipal Long userId,
                                                                @PathVariable("provider") String provider) {

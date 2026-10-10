@@ -50,7 +50,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/users/me").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/users/me/blocks").authenticated()
                         // 계정 연결·해제. POST /auth/** 가 permitAll 이라 여기서 따로 막는다.
-                        .requestMatchers(HttpMethod.POST, "/api/v1/users/me/social").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/users/me/social", "/api/v1/users/me/social/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/users/me/social/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/users/me/blocks/**").authenticated()
                         .requestMatchers("/api/v1/wishlists/**").authenticated()
