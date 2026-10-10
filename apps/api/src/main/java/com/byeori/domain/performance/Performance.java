@@ -38,6 +38,15 @@ public class Performance {
     private String facilityName;
 
     /**
+     * 같은 행사를 다른 출처에서 또 받았을 때 남길 쪽의 id. null 이면 가려지지 않은 줄이다.
+     *
+     * 지우는 대신 가리기만 한다 — 목록 쿼리가 duplicate_of is null 로 거르고, 상세·찜·루트는
+     * 그대로 열린다. 판정이 틀려도 이 칸을 null 로 되돌리면 복구된다.
+     * 값은 {@link com.byeori.domain.sync.PerformanceDeduper}가 동기화마다 다시 계산한다.
+     */
+    private Long duplicateOf;
+
+    /**
      * 기준일로 본 행사 상태.
      *
      * state 컬럼은 동기화 시점에 계산해 넣은 값이라, 저장된 뒤 기간이 지나도 그대로 남는다.
@@ -168,6 +177,11 @@ public class Performance {
         if (lng != null) this.lng = lng;
         if (externalBookingUrl != null) this.externalBookingUrl = externalBookingUrl;
         this.syncedAt = LocalDateTime.now();
+    }
+
+    /** 중복 판정 결과. 남길 쪽의 id, 또는 중복이 아니게 됐으면 null. */
+    public void markDuplicateOf(Long keeperId) {
+        this.duplicateOf = keeperId;
     }
 
     /** 전통 테마 태깅(동기화 시 TraditionalTagger 판정 결과 반영). */
