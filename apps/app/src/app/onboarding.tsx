@@ -75,19 +75,27 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* 상단: 이전 + 페이지 점 */}
+      {/*
+        상단 점 = 쪽 번호이자 이동 수단.
+
+        '이전으로' 를 따로 두지 않는다 — 점이 이미 어느 쪽인지 보여주고 있어, 그걸 누르면
+        거기로 가는 게 자연스럽다. 버튼이 둘이면 같은 일을 하는 길이 둘이 된다.
+
+        고른 값은 이 화면이 들고 있으므로 쪽을 오가도 그대로 남는다.
+      */}
       <View style={styles.top}>
-        {step === 1 ? (
-          <Pressable style={styles.back} hitSlop={8} onPress={() => setStep(0)}>
-            <Ionicons name="chevron-back" size={20} color={colors.text} />
-            <Text style={styles.backText}>이전으로</Text>
-          </Pressable>
-        ) : <View style={{ width: 80 }} />}
         <View style={styles.dots}>
-          <View style={[styles.dot, step === 0 && styles.dotActive]} />
-          <View style={[styles.dot, step === 1 && styles.dotActive]} />
+          {[0, 1].map((i) => (
+            <Pressable
+              key={i}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={`${i + 1}번째 단계로`}
+              onPress={() => setStep(i)}>
+              <View style={[styles.dot, step === i && styles.dotActive]} />
+            </Pressable>
+          ))}
         </View>
-        <View style={{ width: 80 }} />
       </View>
 
       <Text style={styles.title}>관심있는 {whatObj} 선택해주세요!</Text>
@@ -118,15 +126,16 @@ export default function OnboardingScreen() {
                 <Ionicons name="chevron-forward" size={16} color={colors.white} />
               </>}
         </Pressable>
-        {isTopic ? (
-          <Pressable hitSlop={8} onPress={() => setStep(1)}>
-            <Text style={styles.skip}>건너뛰기 ›</Text>
-          </Pressable>
-        ) : !editing && (
-          <Pressable hitSlop={8} disabled={save.isPending} onPress={leave}>
-            <Text style={styles.skip}>건너뛰기 ›</Text>
-          </Pressable>
-        )}
+        {/*
+          건너뛰기는 **이 화면을 건너뛴다**는 뜻이다. 전에는 1쪽에서 누르면 2쪽으로 갔는데,
+          그건 '다음'과 같은 동작이라 글자가 거짓말을 했다. 이제 두 쪽 모두에서 나간다.
+
+          고치러 들어온 경우(edit)에는 '취소'가 맞는 말이다. 이 화면엔 헤더가 없어
+          이 버튼이 유일한 나가는 길이기도 하다.
+        */}
+        <Pressable hitSlop={8} disabled={save.isPending} onPress={leave}>
+          <Text style={styles.skip}>{editing ? '취소' : '건너뛰기 ›'}</Text>
+        </Pressable>
       </View>
     </SafeAreaView>
   );
@@ -135,10 +144,9 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
-  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.lg, paddingTop: 8, paddingBottom: 16 },
-  back: { flexDirection: 'row', alignItems: 'center', gap: 2, width: 80 },
-  backText: { fontSize: 14, color: colors.text, fontFamily: fonts.medium, fontWeight: '500' },
-  dots: { flexDirection: 'row', gap: 6 },
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.lg, paddingTop: 8, paddingBottom: 16 },
+  // 점 사이를 벌려 둔다. 8px 짜리 둘이 붙어 있으면 누를 때 옆엣것이 눌린다(hitSlop 이 겹친다).
+  dots: { flexDirection: 'row', gap: 14, alignItems: 'center' },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.border },
   dotActive: { width: 22, backgroundColor: colors.primary },
   title: { fontSize: 22, fontFamily: fonts.bold, fontWeight: '800', color: colors.text, textAlign: 'center', marginTop: 8 },
