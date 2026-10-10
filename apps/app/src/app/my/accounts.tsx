@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { confirmDestructive, notify } from '@/lib/alert';
 import { fetchLinkedAccounts, unlinkAccount, type LinkedAccount } from '@/lib/api/social';
-import { isCancelled, linkGoogle, linkKakao } from '@/lib/auth/oauth';
+import { isCancelled, linkGoogle, linkKakao, mergeGoogle, mergeKakao } from '@/lib/auth/oauth';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 const PROVIDERS = [
@@ -47,9 +47,39 @@ export default function LinkedAccountsScreen() {
       setList(key === 'KAKAO' ? await linkKakao() : await linkGoogle());
     } catch (e: any) {
       // 사용자가 제공자 화면에서 그만둔 것은 실패가 아니다.
-      if (!isCancelled(e)) {
-        notify(`${label} 연결 실패`, e?.message ?? '잠시 후 다시 시도해 주세요.');
+      if (isCancelled(e)) return;
+      // 그 소셜이 이미 다른 벼리 계정이면 연결이 아니라 '합치기'가 필요하다.
+      // 서버가 무엇이 들어 있는지까지 메시지에 담아 주므로 그대로 보여 주고 묻는다.
+      if (e?.code === 'SOCIAL_ALREADY_LINKED') {
+        await offerMerge(key, label, e?.message ?? '');
+        return;
       }
+      notify(`${label} 연결 실패`, e?.message ?? '잠시 후 다시 시도해 주세요.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /**
+   * 갈라진 두 계정을 합칠지 묻는다.
+   *
+   * 되돌릴 수 없다는 것과, 무엇이 넘어오고 무엇이 사라지는지를 먼저 적는다. 확인하면
+   * 제공자 창이 한 번 더 뜬다 — 인가 코드는 한 번만 쓸 수 있어 앞서 받은 것을 재사용할
+   * 수 없고, 이런 일에는 한 번 더 묻는 편이 맞다.
+   */
+  const offerMerge = async (key: string, label: string, serverMessage: string) => {
+    const ok = await confirmDestructive(
+      '두 계정을 합칠까요?',
+      `${serverMessage}\n\n그 계정의 루트·찜·리뷰가 지금 계정으로 넘어오고, 그 계정은 사라집니다. 되돌릴 수 없어요.\n확인을 누르면 ${label} 로그인 창이 한 번 더 뜹니다.`,
+      '합치기',
+    );
+    if (!ok) return;
+    setBusy(key);
+    try {
+      setList(key === 'KAKAO' ? await mergeKakao() : await mergeGoogle());
+      notify('두 계정을 합쳤어요', `이제 ${label} 로도 이 계정에 로그인할 수 있어요.`);
+    } catch (e: any) {
+      if (!isCancelled(e)) notify('합치지 못했어요', e?.message ?? '잠시 후 다시 시도해 주세요.');
     } finally {
       setBusy(null);
     }
