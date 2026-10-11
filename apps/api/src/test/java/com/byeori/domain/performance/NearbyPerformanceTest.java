@@ -38,6 +38,7 @@ class NearbyPerformanceTest {
     @Autowired PerformanceRepository repo;
     @Autowired EntityManager em;
 
+    private static final java.time.LocalDate TODAY = java.time.LocalDate.of(2026, 10, 11);
     private static final BigDecimal LAT = new BigDecimal("37.5663");   // 서울시청
     private static final BigDecimal LNG = new BigDecimal("126.9779");
 
@@ -51,7 +52,11 @@ class NearbyPerformanceTest {
                 new Row("TEST_3km",     "37.5930", "126.9900", "2026-10-01", "2026-12-31"),
                 new Row("TEST_먼곳",     "37.6500", "127.0500", "2026-10-01", "2026-12-31"),  // 약 10km
                 new Row("TEST_끝난행사", "37.5665", "126.9781", "2026-05-01", "2026-08-31"),  // 가깝지만 종료
-                new Row("TEST_좌표없음", null,      null,       "2026-10-01", "2026-12-31")
+                new Row("TEST_좌표없음", null,      null,       "2026-10-01", "2026-12-31"),
+                // 날짜 경계 두 건. 거리 테스트를 흐리지 않게 15km 밖에 둔다 —
+                // 종료일 당일은 아직 진행 중이고, 어제 끝난 것은 빠져야 한다.
+                new Row("TEST_오늘끝",   "37.7013", "126.9779", "2026-10-01", "2026-10-11"),
+                new Row("TEST_어제끝",   "37.7014", "126.9779", "2026-10-01", "2026-10-10")
         ).forEach(r -> em.createNativeQuery(
                         "insert into performances (title, lat, lng, start_date, end_date, state, source) "
                                 + "values (:t, cast(:la as numeric), cast(:lo as numeric), "
@@ -65,7 +70,7 @@ class NearbyPerformanceTest {
 
     private List<String> near(double radiusKm) {
         BigDecimal d = BigDecimal.valueOf(radiusKm / 111.0);   // 위도 1도 ≈ 111km
-        return repo.findNearbyOngoing(LAT, LNG, LAT.subtract(d), LAT.add(d),
+        return repo.findNearbyOngoing(TODAY, LAT, LNG, LAT.subtract(d), LAT.add(d),
                         LNG.subtract(d), LNG.add(d), PageRequest.of(0, 20))
                 .stream().map(Performance::getTitle).toList();
     }
@@ -73,7 +78,8 @@ class NearbyPerformanceTest {
     @Test
     @DisplayName("가까운 순으로 준다")
     void 거리순() {
-        assertThat(near(20)).containsExactly("TEST_바로옆", "TEST_1km", "TEST_3km", "TEST_먼곳");
+        assertThat(near(20))
+                .containsExactly("TEST_바로옆", "TEST_1km", "TEST_3km", "TEST_먼곳", "TEST_오늘끝");
     }
 
     @Test
@@ -86,6 +92,20 @@ class NearbyPerformanceTest {
     @DisplayName("좌표 없는 행사는 애초에 대상이 아니다")
     void 좌표_없음_제외() {
         assertThat(near(20)).doesNotContain("TEST_좌표없음");
+    }
+
+    /**
+     * 날짜 경계는 Java 가 계산한 날짜로 따진다.
+     *
+     * 전에는 이 질의만 SQL current_date 를 썼다. DB 가 자기 시간대로(운영은 UTC) 계산해
+     * 한국 날짜보다 하루 뒤처지므로, 자정부터 오전 9시까지는 어제 끝난 행사가 섞여 들었다
+     * (좌표 있는 행사 기준 159건). 고정된 날짜를 넘겨 그 경계를 못으로 박아 둔다.
+     */
+    @Test
+    @DisplayName("종료일 당일은 남고 어제 끝난 것은 빠진다 — DB 시간대에 흔들리지 않는다")
+    void 날짜_경계() {
+        assertThat(near(20)).contains("TEST_오늘끝");
+        assertThat(near(20)).doesNotContain("TEST_어제끝");
     }
 
     @Test

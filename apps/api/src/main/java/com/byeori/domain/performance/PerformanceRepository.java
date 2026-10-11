@@ -81,18 +81,24 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
      *
      * 사각 범위로 먼저 추린 뒤 제곱거리로 정렬한다. 정렬에는 순서만 맞으면 되고,
      * 경도는 위도보다 짧으므로(위도 36도에서 약 0.81배) 눌러서 비교한다.
+     *
+     * 끝나지 않았는지는 :today 로 따진다. 전에는 SQL current_date 를 썼는데, 그건 DB 가
+     * 자기 시간대로(운영은 UTC) 계산해 한국 날짜보다 하루 뒤처진다. 그래서 자정부터
+     * 오전 9시까지는 어제 끝난 행사 159건이 '근처 행사'에 섞여 들었다. 다른 목록 쿼리는
+     * 전부 Java 가 계산한 날짜를 받으므로, 여기만 어긋나 있었다.
      */
     @Query("""
             select p from Performance p
             where p.lat between :minLat and :maxLat
               and p.lng between :minLng and :maxLng
-              and (p.endDate is null or p.endDate >= current_date)
+              and (p.endDate is null or p.endDate >= :today)
               and p.duplicateOf is null
             order by (p.lat - :lat) * (p.lat - :lat)
                    + (p.lng - :lng) * (p.lng - :lng) * 0.656,
                      p.id asc
             """)
-    List<Performance> findNearbyOngoing(@Param("lat") BigDecimal lat,
+    List<Performance> findNearbyOngoing(@Param("today") LocalDate today,
+                                        @Param("lat") BigDecimal lat,
                                         @Param("lng") BigDecimal lng,
                                         @Param("minLat") BigDecimal minLat,
                                         @Param("maxLat") BigDecimal maxLat,
