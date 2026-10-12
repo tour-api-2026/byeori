@@ -52,7 +52,7 @@ public class PerformanceService {
                                             int radiusMeters, int size) {
         // 위도 1도 ≈ 111km. 사각 범위로 먼저 줄이고 정렬은 질의가 한다.
         java.math.BigDecimal d = java.math.BigDecimal.valueOf(radiusMeters / 111_000.0);
-        return repo.findNearbyOngoing(lat, lng,
+        return repo.findNearbyOngoing(java.time.LocalDate.now(), lat, lng,
                         lat.subtract(d), lat.add(d), lng.subtract(d), lng.add(d),
                         org.springframework.data.domain.PageRequest.of(0, size))
                 .stream().map(PerformanceResponse::from).toList();
