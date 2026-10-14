@@ -151,4 +151,61 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
                                @Param("maxLng") BigDecimal maxLng,
                                @Param("category") String category,
                                @Param("limit") int limit);
+
+    /**
+     * 맞춤 추천 후보. 분류마다 제 몫을 주고, 고른 분류에는 더 준다.
+     *
+     * 전에는 search(null, ...) 로 200건을 받았다. 그 정렬이 'avg_rating desc, id asc' 인데
+     * 별점 있는 장소가 33,906곳 중 4곳이라 사실상 id 순이 되어, 후보 200건이 문화 198 ·
+     * 체험 1 · 한복 1 로 나왔다. 음식·공예를 고른 사람에게는 맞는 후보가 0건이라 취향
+     * 항(가중치 0.40)이 전부 0이 되고, 관심사항을 바꿔도 추천이 그대로였다.
+     *
+     * 그래서 분류별로 창(window)을 나눠 뽑는다. 분류 하나가 낮은 id 를 다 가져가는 일이
+     * 없어, 공예 52건이나 전통시장 828건도 후보에 들어온다. 고르지 않은 분류에도 몫을
+     * 남기는 이유는 발견이다 — 고른 것만 보여주면 새로운 것을 만날 길이 막힌다.
+     *
+     * 지역은 걸러내지 않고 **우선순위로만** 쓴다. 걸러내면 그 지역에 공예가 4건뿐일 때
+     * 칸이 비는데, 정렬로 두면 모자란 칸이 전국에서 저절로 채워진다.
+     *
+     * :lat 이 null 이면 거리 항은 상수가 되어 id 순으로 떨어진다 — 홈은 위치 권한을 새로
+     * 묻지 않으므로 좌표 없이 오는 경우가 보통이다.
+     *
+     * 마지막 정렬이 중요하다. **분류를 번갈아** 내보낸다(각 분류의 1번끼리, 다음은 2번끼리).
+     * 리뷰·별점이 사실상 없어서 관심 분류끼리는 점수가 완전히 동점이 되고, 그러면 최종
+     * 순서가 DB 가 행을 돌려주는 순서에 좌우된다. 실제로 그 상태에서 공예(id 34685)가
+     * 맛집(id 2288)에 밀려 한 건도 안 올라왔다 — 사용자가 공예를 골랐는데도. 번갈아
+     * 내보내면 분류마다 앞자리를 얻고, 같은 관심사면 매번 같은 결과가 나온다.
+     *
+     * 안쪽에서 id 와 순번만 고르고 바깥에서 행을 가져온다. 창 함수가 만든 rn 열이 엔티티
+     * 매핑에 섞이지 않게 하려는 것이다. 운영 데이터(33,906건)에서 68ms, 쿼리 한 번이다.
+     *
+     * @param categories  고른 분류. 빈 목록은 바인딩이 깨지므로 부르는 쪽이 한 칸은 채운다.
+     * @param regionRegex "부산|제주" 처럼 이어 붙인 관심 지역. 없으면 null.
+     */
+    @Query(value = """
+            select v2.* from venues v2
+            join (
+              select t.id, t.rn, t.category from (
+                select v.id, v.category, row_number() over (
+                    partition by v.category
+                    order by case when cast(:regionRegex as text) is not null
+                                   and v.address ~ cast(:regionRegex as text) then 0 else 1 end,
+                             case when v.image_url is null or v.image_url = '' then 1 else 0 end,
+                             case when cast(:lat as numeric) is null then 0
+                                  else (v.lat - cast(:lat as numeric)) * (v.lat - cast(:lat as numeric))
+                                     + (v.lng - cast(:lng as numeric)) * (v.lng - cast(:lng as numeric)) * 0.656
+                             end,
+                             v.id) rn
+                from venues v
+                where v.status = 'ACTIVE' and v.visibility = 'PUBLIC') t
+              where t.rn <= case when t.category in (:categories) then :liked else :other end) s
+              on s.id = v2.id
+            order by s.rn, s.category
+            """, nativeQuery = true)
+    List<Venue> findFeedCandidates(@Param("categories") java.util.Collection<String> categories,
+                                   @Param("regionRegex") String regionRegex,
+                                   @Param("lat") BigDecimal lat,
+                                   @Param("lng") BigDecimal lng,
+                                   @Param("liked") int liked,
+                                   @Param("other") int other);
 }

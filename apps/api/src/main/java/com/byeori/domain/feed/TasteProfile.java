@@ -63,4 +63,22 @@ public class TasteProfile {
     }
 
     public Set<String> topCategories() { return weights.keySet(); }
+
+    /**
+     * 관심 지역을 정규식 하나로 이어 붙인 것("부산|제주"). 고른 지역이 없으면 null.
+     *
+     * 지역을 후보 쿼리에서 걸러내지 않고 정렬에만 쓰기 때문에 이 꼴이 필요하다. 걸러내면
+     * 그 지역에 공예가 4건뿐일 때 칸이 비는데, 정렬로 두면 모자란 칸이 전국에서 채워진다.
+     *
+     * 값은 InterestCatalog 의 닫힌 목록에서만 오지만, 한글·영숫자 아닌 글자를 떼어낸다 —
+     * 정규식 메타문자가 섞여 들 길을 막는다. 순서를 고정해 같은 관심사면 같은 식이 된다.
+     */
+    public String regionRegex() {
+        String joined = regions.stream()
+                .map(r -> r.replaceAll("[^0-9A-Za-z가-힣]", ""))
+                .filter(r -> !r.isBlank())
+                .sorted()
+                .collect(java.util.stream.Collectors.joining("|"));
+        return joined.isBlank() ? null : joined;
+    }
 }

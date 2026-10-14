@@ -237,7 +237,12 @@ export function useSaveInterestsMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: Interests) => saveMyInterests(body),
-    onSuccess: (saved) => qc.setQueryData(['my-interests'], saved),
+    onSuccess: (saved) => {
+      qc.setQueryData(['my-interests'], saved);
+      // 추천은 관심사항으로 점수를 매긴다. 비우지 않으면 staleTime(60초) 동안 옛 추천이
+      // 보여, 방금 고친 것이 반영되지 않은 것처럼 보인다.
+      qc.invalidateQueries({ queryKey: ['feed'] });
+    },
   });
 }
 
