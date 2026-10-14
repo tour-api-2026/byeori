@@ -80,7 +80,7 @@ public class TourApiClient {
             return parseItems(body);
         } catch (Exception e) {
             log.warn("TourAPI areaBasedList 실패 regn={} signgu={} type={} page={}: {}",
-                    lDongRegnCd, lDongSignguCd, contentTypeId, page, e.getMessage());
+                    lDongRegnCd, lDongSignguCd, contentTypeId, page, TourApiError.reasonOf(e));
             return List.of();
         }
     }
@@ -122,9 +122,12 @@ public class TourApiClient {
             }
             return out;
         } catch (Exception e) {
+            // 사유를 예외 메시지에 담는다. 이게 sync_logs 에 남아, 잠깐 끊긴 것과
+            // 인증키가 죽은 것을 나중에 구별할 수 있게 한다.
+            String reason = TourApiError.reasonOf(e);
             log.warn("TourAPI syncList 실패 type={} since={} page={}: {}",
-                    contentTypeId, modifiedTime, page, e.getMessage());
-            throw new IllegalStateException("동기화 목록 조회 실패", e);
+                    contentTypeId, modifiedTime, page, reason);
+            throw new IllegalStateException("동기화 목록 조회 실패: " + reason, e);
         }
     }
 
@@ -152,7 +155,7 @@ public class TourApiClient {
             return parseFestivals(body);
         } catch (Exception e) {
             log.warn("TourAPI searchFestival 실패 regn={} signgu={} page={}: {}",
-                    lDongRegnCd, lDongSignguCd, page, e.getMessage());
+                    lDongRegnCd, lDongSignguCd, page, TourApiError.reasonOf(e));
             return List.of();
         }
     }
@@ -179,7 +182,7 @@ public class TourApiClient {
             }
             return out;
         } catch (Exception e) {
-            log.warn("TourAPI ldongCode2 실패 parent={}: {}", parentRegnCd, e.getMessage());
+            log.warn("TourAPI ldongCode2 실패 parent={}: {}", parentRegnCd, TourApiError.reasonOf(e));
             return List.of();
         }
     }
@@ -283,9 +286,21 @@ public class TourApiClient {
         return URLEncoder.encode(props.getTourApiKey(), StandardCharsets.UTF_8);
     }
 
+    /**
+     * 응답에서 item 들을 꺼낸다.
+     *
+     * 전에는 XML 로 오면(본문이 '<' 로 시작) 그냥 빈 목록을 돌려줬다. 그런데 게이트웨이는
+     * 실패를 XML 로 알려 준다 — 그래서 인증키가 죽은 응답이 '항목 0건'과 구별되지 않고,
+     * 동기화가 성공 0건으로 조용히 끝났다. 사유가 적혀 있으면 들고 올라간다.
+     */
     private List<JsonNode> items(String json) throws Exception {
         List<JsonNode> out = new ArrayList<>();
-        if (json == null || json.isBlank() || json.trim().startsWith("<")) return out;
+        if (json == null || json.isBlank()) return out;
+        if (json.trim().startsWith("<")) {
+            String reason = TourApiError.reasonOf(json);
+            if (reason != null) throw new IllegalStateException(reason);
+            return out;
+        }
         JsonNode items = om.readTree(json).path("response").path("body").path("items").path("item");
         if (items.isArray()) items.forEach(out::add);
         else if (items.isObject()) out.add(items);
