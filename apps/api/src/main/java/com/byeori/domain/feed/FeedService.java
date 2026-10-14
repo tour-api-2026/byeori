@@ -131,10 +131,11 @@ public class FeedService {
     // ── 2~3. 후보와 점수 ─────────────────────────────
 
     private List<FeedItem> scoreVenues(TasteProfile taste, Set<Long> exclude, Double lat, Double lng) {
-        List<Venue> candidates = lat != null && lng != null
-                ? venueRepo.searchNear(null, null, null, BigDecimal.valueOf(lat), BigDecimal.valueOf(lng),
-                        PageRequest.of(0, props.getCandidatePerKind())).getContent()
-                : venueRepo.search(null, null, null, PageRequest.of(0, props.getCandidatePerKind())).getContent();
+        List<Venue> candidates = venueRepo.findFeedCandidates(
+                likedCategories(taste), taste.regionRegex(),
+                lat == null ? null : BigDecimal.valueOf(lat),
+                lng == null ? null : BigDecimal.valueOf(lng),
+                props.getCandidateLikedCategory(), props.getCandidateOtherCategory());
 
         List<FeedItem> out = new ArrayList<>();
         for (Venue v : candidates) {
@@ -152,6 +153,18 @@ public class FeedService {
                     venueReason(taste, v, match, dist, lat, lng), score));
         }
         return out;
+    }
+
+    /**
+     * 후보 칸을 더 받을 분류.
+     *
+     * 빈 목록은 'in ()' 이 되어 바인딩이 깨지므로 어느 분류와도 같지 않은 값 하나를
+     * 넣는다. 그러면 모든 분류가 '나머지' 몫만 받아, 관심사를 고르지 않은 사람에게는
+     * 분류가 골고루 섞인 후보가 간다 — 전에는 그 사람도 문화 198건을 받았다.
+     */
+    private Set<String> likedCategories(TasteProfile taste) {
+        Set<String> liked = taste.topCategories();
+        return liked.isEmpty() ? Set.of("") : liked;
     }
 
     private List<FeedItem> scorePerformances(TasteProfile taste, Double lat, Double lng) {

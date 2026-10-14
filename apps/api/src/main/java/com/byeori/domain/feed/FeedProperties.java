@@ -18,8 +18,20 @@ public class FeedProperties {
     private double imminence = 0.20;
     private double popularity = 0.15;
 
-    /** 점수를 매기기 전에 추릴 후보 수. 늘리면 더 고르지만 느려진다. */
+    /** 점수를 매기기 전에 추릴 후보 수. 늘리면 더 고르지만 느려진다. 행사 쪽에 쓴다. */
     private int candidatePerKind = 200;
+
+    /**
+     * 장소 후보를 분류마다 몇 칸씩 뽑을지. 고른 분류와 나머지를 다르게 준다.
+     *
+     * 한 쿼리로 합쳐 뽑으면 낮은 id 를 가진 분류가 칸을 다 가져간다 — 음식·공예를 고른
+     * 사람에게 맛집 168 · 카페 32 가 나오고 공예·전통시장은 0건이었다. 그래서 분류별로
+     * 창을 나눈다. 나머지 분류에도 몫을 남기는 이유는 발견이다.
+     *
+     * 기본값으로 고른 분류 4개면 4×50 + 나머지 4×12 = 237 건이 후보가 된다.
+     */
+    private int candidateLikedCategory = 50;
+    private int candidateOtherCategory = 12;
 
     /** 같은 분류가 연속으로 이만큼 나오면 다음 것을 뒤로 민다. */
     private int sameCategoryRun = 2;
@@ -37,6 +49,10 @@ public class FeedProperties {
     public void setPopularity(double v) { this.popularity = v; }
     public int getCandidatePerKind() { return candidatePerKind; }
     public void setCandidatePerKind(int v) { this.candidatePerKind = v; }
+    public int getCandidateLikedCategory() { return candidateLikedCategory; }
+    public void setCandidateLikedCategory(int v) { this.candidateLikedCategory = v; }
+    public int getCandidateOtherCategory() { return candidateOtherCategory; }
+    public void setCandidateOtherCategory(int v) { this.candidateOtherCategory = v; }
     public int getSameCategoryRun() { return sameCategoryRun; }
     public void setSameCategoryRun(int v) { this.sameCategoryRun = v; }
     public int getSameTypeRun() { return sameTypeRun; }
