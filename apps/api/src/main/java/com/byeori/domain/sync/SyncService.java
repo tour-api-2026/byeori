@@ -7,6 +7,7 @@ import com.byeori.domain.venue.VenueRepository;
 import com.byeori.global.external.KopisClient;
 import com.byeori.global.external.SeoulEventClient;
 import com.byeori.global.external.SyncProperties;
+import com.byeori.global.external.TourApiError;
 import com.byeori.global.external.TourApiClient;
 import com.byeori.global.external.dto.KopisItem;
 import com.byeori.global.external.dto.SeoulEventItem;
@@ -108,8 +109,17 @@ public class SyncService {
             return changed + hidden;
         } catch (Exception e) {
             // 커서를 전진시키지 않아 다음 회차가 이 구간을 다시 가져간다.
+            String reason = TourApiError.reasonOf(e);
             run.failed(e.getMessage());
-            log.warn("증분 동기화 실패: {}", e.getMessage());
+            if (TourApiError.needsHuman(reason)) {
+                // 다음 회차에 저절로 낫지 않는다. 2026-09-21 부터 24일간 매일 이 자리에서
+                // 실패했는데 warn 한 줄이라 묻혔다 — 사람이 손대야 하는 것은 오류로 알린다.
+                log.error("증분 동기화가 인증 단계에서 막혔다: {} — 공공데이터포털에서 "
+                        + "TOURAPI_KEY 의 활용신청 상태와 활용기간을 확인해야 한다. "
+                        + "다시 돌려도 같은 결과다.", reason);
+            } else {
+                log.warn("증분 동기화 실패: {}", reason);
+            }
             return changed + hidden;
         }
     }
