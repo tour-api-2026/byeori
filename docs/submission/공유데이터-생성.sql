@@ -4,8 +4,12 @@
 -- 한 테이블로 뽑는다. 제출 제한이 파일 1개 · 10MB 라서 CSV 하나로 끝낸다
 -- (실측 12,271행 1.8MB).
 --
---   docker exec byeori-postgres psql -U byeori -d byeori -f /dev/stdin \
+--   docker exec -i byeori-postgres psql -U byeori -d byeori \
 --     < docs/submission/공유데이터-생성.sql > 벼리_공유데이터_행사통합.csv
+--
+-- psql 의 \copy 가 아니라 서버측 COPY ... TO STDOUT 을 쓴다. \copy 는 메타명령이라
+-- **한 줄이어야** 하는데, 이 질의는 길어서 여러 줄로 두는 편이 읽기에 낫다.
+-- COPY ... TO STDOUT 은 결과를 접속으로 흘려보내므로 수퍼유저 권한이 필요 없다.
 --
 -- 담는 것은 **우리가 만든 값**이고, 원본은 공공 식별자로 가리킨다. 남의 데이터를
 -- 통째로 되돌려 주는 것이 아니라, 거기에 더한 것을 돌려주는 모양이어야 한다.
@@ -17,7 +21,7 @@
 --
 -- 비공개·사용자 생성 장소(source='USER')는 뺀다. 공개할 수 없는 것이고, 애초에
 -- 공공데이터에서 온 것이 아니다.
-\copy (
+copy (
 select
   p.source                                            as 출처,
   coalesce(p.tour_content_id, p.kopis_id, p.seoul_id) as 출처_고유id,
