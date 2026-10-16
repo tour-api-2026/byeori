@@ -176,7 +176,7 @@ class RouteFallbackTest {
     }
 
     @Test
-    @DisplayName("카카오가 빈 경로를 주어도 터지지 않는다 — result_code 0 에 좌표가 없을 때가 있다")
+    @DisplayName("카카오가 빈 경로를 주어도 터지지 않고, 지어낸 직선은 저장하지 않는다")
     void 카카오_빈_경로() {
         // mode=DRIVE 라 OSRM 은 아예 묻지 않는다. 빈 좌표열만으로 터지는지를 본다.
         when(mobilityClient.directions(anyList(), anyString())).thenReturn(driveRoute(List.of()));
@@ -186,6 +186,10 @@ class RouteFallbackTest {
         assertThat(res.legs()).hasSize(3);
         assertThat(res.legs()).allMatch(l -> "DRIVE".equals(l.mode()));
         assertThat(res.path()).hasSize(4);   // 구간마다 직선 두 점, 이음점은 한 번만
+        // 수단은 DRIVE 로 멀쩡해 보이지만 선은 우리가 지어낸 직선이다. 저장하면 그 루트는
+        // 방문지를 고치기 전까지 영원히 직선을 받는다 — 장애가 캐시에 눌러앉는 것과 같다.
+        verify(routeSaver, never()).store(anyLong(), anyString(), anyString(),
+                anyInt(), anyInt(), anyString(), anyString());
     }
 
     @Test

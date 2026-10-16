@@ -191,6 +191,9 @@ public class ItineraryService {
         // 기다리는데, 구간마다 다시 물으면 5구간 루트가 20초를 잡아먹는다. 한 번 빗나가면
         // 남은 구간은 묻지 않고 바로 자동차로 간다.
         boolean osrmDown = false;
+        // 좌표를 직선으로 메운 구간 수. 수단 이름은 WALK/DRIVE 로 멀쩡해 보이지만 지도에
+        // 그려지는 선은 우리가 지어낸 직선이다. 이것도 저장하면 안 된다.
+        int fakedPaths = 0;
 
         for (int i = 0; i < coords.size() - 1; i++) {
             double[] a = coords.get(i), b = coords.get(i + 1);   // [경도, 위도]
@@ -217,6 +220,7 @@ public class ItineraryService {
             // 주는 때가 있는데, null 만 걸러내면 뒤의 subList(1, 0) 에서 터져 루트 전체가 500 이 된다.
             if (legPath == null || legPath.isEmpty()) {   // 둘 다 실패 — 직선으로 잇는다
                 legPath = List.of(new double[]{a[1], a[0]}, new double[]{b[1], b[0]});
+                fakedPaths++;
             }
 
             RouteLeg leg = legOrFallback(walk, driveSummary, straight, legWanted);
@@ -233,10 +237,16 @@ public class ItineraryService {
         // 두면, 방문지를 고치지 않는 한 그 루트는 OSRM 이 돌아온 뒤에도 영원히 직선을 준다.
         // 사용자는 이유를 알 길이 없다. 저장을 건너뛰면 장애 동안만 매번 다시 계산하고,
         // OSRM 이 살아나는 순간 저절로 낫는다.
+        //
+        // 온전하지 않은 세 가지를 모두 센다. 수단 이름이 STRAIGHT 인 구간(둘 다 실패),
+        // 차단기가 걸린 요청(도보를 물어보지도 못했다), 그리고 **수단은 멀쩡한데 좌표만
+        // 지어낸 구간**이다. 셋째가 가장 눈에 안 띈다 — 공급자가 200 과 요약은 주면서 좌표를
+        // 비워 보내면 DRIVE 라고 적힌 직선이 캐시에 눌러앉는다.
         long straightLegs = legs.stream().filter(l -> STRAIGHT.equals(l.mode())).count();
-        if (osrmDown || straightLegs > 0) {
-            log.info("경로가 온전하지 않아 저장하지 않는다 itinerary={} mode={} osrm다운={} 직선구간={}/{}",
-                    id, wanted, osrmDown, straightLegs, legs.size());
+        if (osrmDown || straightLegs > 0 || fakedPaths > 0) {
+            log.info("경로가 온전하지 않아 저장하지 않는다 itinerary={} mode={}"
+                            + " osrm다운={} 직선구간={}/{} 직선좌표={}",
+                    id, wanted, osrmDown, straightLegs, legs.size(), fakedPaths);
         } else {
             save(id, wanted, hash, totalM, totalS, path, legs);
         }
