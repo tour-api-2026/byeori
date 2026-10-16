@@ -139,17 +139,32 @@ export function mapScript(segColors: string[]): string {
   };
   // 검색 해제 시에도 지도를 움직이지 않는다(움직이면 idle → 재조회가 또 돈다).
   window.clearKakao = function(){ clearArr(kakaoOv); kakaoData=[]; };
-  // 여행 경로: polyline(도로 경로선) + 번호 마커. data={path:[[lat,lng]...], stops:[{order,lat,lng}...]}
+  // 여행 경로: 서버가 계산한 보행/도로 경로선 + 번호 마커.
+  // data={path:[[lat,lng]...], stops:[{order,lat,lng}...], legs:[{mode}...]}
   window.drawRoute = function(data){
     if(!ready){ pendingRoute=data; return; }
     window.clearRoute();
     clearArr(venueOv); clearArr(kakaoOv); // 경로 모드에선 다른 핀 정리
-    // 도로 경로(data.path)는 쓰지 않고, 장소(stops)를 방문 순서대로 직선으로 연결한다.
     var stops=(data.stops||[]).slice().sort(function(a,b){ return a.order-b.order; });
-    var stopLL=stops.map(function(s){ return new kakao.maps.LatLng(s.lat, s.lng); });
-    for(var i=0;i<stopLL.length-1;i++){
-      var seg=new kakao.maps.Polyline({path:[stopLL[i],stopLL[i+1]],strokeWeight:4,strokeColor:segColor(i),strokeOpacity:0.9,strokeStyle:'solid'});
-      seg.setMap(map); routeLines.push(seg);
+    var path=data.path||[];
+    // 전에는 path 를 받아놓고 버린 뒤 방문지를 직선으로 이었다. 이제 실제 경로를 그린다.
+    // path 는 구간들을 이어붙인 한 줄이고 구간 경계 인덱스는 응답에 없어 나눌 수 없다.
+    // 그래서 한 줄로 그리되, 전부 걷는 경로만 실선, 타는 구간이 섞이면 점선으로 구분한다.
+    if(path.length>1){
+      var legs=data.legs||[];
+      var walkOnly = legs.length>0 && legs.every(function(l){ return l.mode==='WALK'; });
+      var ll=path.map(function(p){ return new kakao.maps.LatLng(p[0],p[1]); });
+      var line=new kakao.maps.Polyline({path:ll,strokeWeight:5,strokeColor:segColor(0),
+        strokeOpacity:0.9,strokeStyle: walkOnly ? 'solid' : 'shortdash'});
+      line.setMap(map); routeLines.push(line);
+    } else {
+      // 경로가 없으면 방문지를 직선으로 잇는다 — 빈 지도보다 낫다.
+      var sl=stops.map(function(s){ return new kakao.maps.LatLng(s.lat,s.lng); });
+      for(var i=0;i<sl.length-1;i++){
+        var seg=new kakao.maps.Polyline({path:[sl[i],sl[i+1]],strokeWeight:4,
+          strokeColor:segColor(i),strokeOpacity:0.7,strokeStyle:'shortdash'});
+        seg.setMap(map); routeLines.push(seg);
+      }
     }
     stops.forEach(function(s,i){
       var pos=new kakao.maps.LatLng(s.lat,s.lng);
@@ -159,7 +174,8 @@ export function mapScript(segColors: string[]): string {
       ov.setMap(map); routeOv.push(ov);
     });
     var b=new kakao.maps.LatLngBounds();
-    stopLL.forEach(function(ll){ b.extend(ll); });
+    (path.length>1?path:stops.map(function(s){return [s.lat,s.lng];}))
+      .forEach(function(p){ b.extend(new kakao.maps.LatLng(p[0],p[1])); });
     if(routeOv.length) map.setBounds(b);
   };
   window.clearRoute = function(){
