@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.byeori.global.external.OsrmClient.WalkResult;
 import com.byeori.global.external.dto.OsrmRoute;
+import com.sun.net.httpserver.HttpServer;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -98,5 +102,100 @@ class OsrmClientTest {
                 .walk(List.of(new double[]{126.9770, 37.5796}));
         assertThat(r.route()).isNull();
         assertThat(r.serverFailed()).isFalse();
+    }
+
+    // ── 상태 코드 ─────────────────────────────
+    //
+    // 여기가 함정이었다. OSRM 은 경로를 못 찾은 것도 **400** 으로 알리는데, RestClient 는
+    // 기본으로 4xx 에서 던진다. 그래서 응답 본문을 읽는 parse() 까지 가지도 못하고
+    // 전부 "서버 장애"가 되어, 못 걷는 구간 하나가 남은 구간을 모두 차로 보냈다.
+    // 아래 두 묶음은 상태 코드를 거치는 길을 본다 — JSON 만 넣어 보는 테스트로는 못 잡았다.
+
+    @Test
+    @DisplayName("400 NoRoute·NoSegment 는 그 구간을 못 걷는다는 사실이다 — 장애가 아니다")
+    void 상태_400_경로_없음() {
+        assertThat(OsrmClient.classify(400, "{\"code\":\"NoRoute\",\"message\":\"...\"}")
+                .serverFailed()).isFalse();
+        assertThat(OsrmClient.classify(400, "{\"code\":\"NoSegment\",\"message\":\"...\"}")
+                .serverFailed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("그 밖의 400 은 우리가 잘못 물은 것이다 — 차단기와 경고를 남긴다")
+    void 상태_400_우리_잘못() {
+        // 실제로 받아 본 코드들이다. 좌표가 범위를 넘으면 InvalidValue, 좌표가 하나면
+        // InvalidOptions 가 온다. 지형 탓이 아니라 우리 쪽 버그다.
+        assertThat(OsrmClient.classify(400, "{\"code\":\"InvalidQuery\"}").serverFailed()).isTrue();
+        assertThat(OsrmClient.classify(400, "{\"code\":\"InvalidValue\"}").serverFailed()).isTrue();
+        assertThat(OsrmClient.classify(400, "{\"code\":\"InvalidOptions\"}").serverFailed()).isTrue();
+        assertThat(OsrmClient.classify(400, "{\"code\":\"TooBig\"}").serverFailed()).isTrue();
+    }
+
+    @Test
+    @DisplayName("5xx·읽을 수 없는 오류 본문은 장애다")
+    void 상태_5xx() {
+        assertThat(OsrmClient.classify(503, "").serverFailed()).isTrue();
+        assertThat(OsrmClient.classify(500, "not json").serverFailed()).isTrue();
+        assertThat(OsrmClient.classify(502, null).serverFailed()).isTrue();
+    }
+
+    @Test
+    @DisplayName("200 은 본문을 읽는다")
+    void 상태_200() {
+        assertThat(OsrmClient.classify(200, OK).route()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("walk 가 400 을 예외로 흘리지 않는다 — 실제 상태 코드를 받아 본다")
+    void walk_400_응답() throws Exception {
+        // RestClient 는 기본으로 4xx 에서 던진다. 그 던짐을 막았는지는 상태 코드가 붙은
+        // 실제 응답을 통과시켜야 알 수 있어, JDK 내장 서버를 띄운다(의존성 추가 없음).
+        try (Stub stub = Stub.serving(400, "{\"code\":\"NoRoute\",\"message\":\"...\"}")) {
+            WalkResult r = new OsrmClient(stub.baseUrl()).walk(
+                    List.of(new double[]{126.9770, 37.5796}, new double[]{126.9947, 37.5745}));
+            assertThat(r.route()).isNull();
+            assertThat(r.serverFailed()).isFalse();   // 그 구간만 차로 넘기면 된다
+        }
+    }
+
+    @Test
+    @DisplayName("walk 는 500 을 장애로 받는다")
+    void walk_500_응답() throws Exception {
+        try (Stub stub = Stub.serving(500, "{\"code\":\"Error\"}")) {
+            assertThat(new OsrmClient(stub.baseUrl()).walk(
+                    List.of(new double[]{126.9770, 37.5796}, new double[]{126.9947, 37.5745}))
+                    .serverFailed()).isTrue();
+        }
+    }
+
+    @Test
+    @DisplayName("walk 는 200 응답을 그대로 읽는다")
+    void walk_200_응답() throws Exception {
+        try (Stub stub = Stub.serving(200, OK)) {
+            OsrmRoute route = new OsrmClient(stub.baseUrl()).walk(
+                    List.of(new double[]{126.9770, 37.5796}, new double[]{126.9947, 37.5745})).route();
+            assertThat(route).isNotNull();
+            assertThat(route.distance()).isEqualTo(2749);
+        }
+    }
+
+    /** 상태 코드가 붙은 응답 하나를 돌려주는 임시 서버. */
+    private record Stub(HttpServer server) implements AutoCloseable {
+
+        static Stub serving(int status, String body) throws Exception {
+            HttpServer s = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            s.createContext("/", exchange -> {
+                exchange.getResponseHeaders().add("Content-Type", "application/json");
+                exchange.sendResponseHeaders(status, bytes.length);
+                try (OutputStream out = exchange.getResponseBody()) { out.write(bytes); }
+            });
+            s.start();
+            return new Stub(s);
+        }
+
+        String baseUrl() { return "http://127.0.0.1:" + server.getAddress().getPort(); }
+
+        @Override public void close() { server.stop(0); }
     }
 }

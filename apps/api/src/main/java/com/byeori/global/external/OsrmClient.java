@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.StringJoiner;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -45,7 +47,8 @@ public class OsrmClient {
      * 도보 경로를 물어본 결과.
      *
      * null 하나로는 두 가지를 구분할 수 없어서 둔다. OSRM 에 닿지 못한 것(타임아웃·연결
-     * 거부)과, 닿았는데 **그 구간에 걸어갈 길이 없는 것**(제주↔육지처럼 `code != "Ok"`)은
+     * 거부)과, 닿았는데 **그 구간에 걸어갈 길이 없는 것**(NoRoute·NoSegment — OSRM 은
+     * 이것도 400 으로 준다)은
      * 전혀 다른 일이다. 앞쪽은 남은 구간을 묻지 말아야 하고(차단기), 뒤쪽은 그 구간만
      * 차로 넘기면 끝이다 — 섞어 세면 걸어서 갈 수 없는 구간 하나 때문에 뒤 구간이 전부
      * 차로 가고, 그 결과는 저장도 못 해 매번 외부 호출을 다시 한다.
@@ -73,14 +76,49 @@ public class OsrmClient {
             // 그 좌표열은 응답·jsonb 칼럼·웹뷰 LatLng 루프를 그대로 통과한다.
             // mode=WALK 로 긴 구간을 물으면 full 은 수만 점이 될 수 있다.
             String url = baseUrl + "/route/v1/foot/" + sj + "?overview=simplified&geometries=geojson";
-            return parse(http.get().uri(url).retrieve().body(String.class));
+            // 4xx 를 예외로 받지 않는다. OSRM 은 경로를 못 찾을 때도 **400** 으로 답하는데,
+            // 기본 설정은 4xx 에서 던지므로 그 답이 아래 catch 로 떨어져 전부 장애가 된다 —
+            // 걸어서 갈 수 없는 구간 하나가 남은 구간을 모두 차로 보내 버린다. 상태를
+            // 직접 보고 가른다.
+            ResponseEntity<String> res = http.get().uri(url).retrieve()
+                    .onStatus(HttpStatusCode::isError, (request, response) -> { })
+                    .toEntity(String.class);
+            return classify(res.getStatusCode().value(), res.getBody());
         } catch (Exception e) {
             log.warn("OSRM 도보 경로 실패 ({}좌표): {}", points.size(), e.getMessage());
             return WalkResult.FAILED;
         }
     }
 
-    /** 응답 해석. 못 읽어도 터뜨리지 않는다. */
+    /**
+     * 상태 코드와 본문으로 결과를 가른다.
+     *
+     * OSRM 은 경로를 못 찾은 것도 400 으로 알린다. 그중 NoRoute(갈 길이 없다)와
+     * NoSegment(좌표 근처에 길이 없다)만 "이 구간은 못 걷는다"는 사실이고, 나머지
+     * (InvalidQuery·InvalidOptions·InvalidValue·TooBig…)는 **우리가 잘못 물은 것**이다.
+     * 뒤쪽은 지형이 아니라 우리 쪽 버그라, 차단기와 경고 로그가 남아야 한다.
+     *
+     * 패키지 공개로 둔 이유는 테스트가 실제 상태 코드를 넣어 보기 위해서다.
+     */
+    static WalkResult classify(int status, String body) {
+        if (status >= 200 && status < 300) return parse(body);
+        String code = readCode(body);
+        if ("NoRoute".equals(code) || "NoSegment".equals(code)) return WalkResult.NO_ROUTE;
+        log.warn("OSRM 이 질의를 거절했다 status={} code={}", status, code);
+        return WalkResult.FAILED;
+    }
+
+    /** 오류 본문에서 code 만 꺼낸다. 못 읽으면 null — 그때는 우리 쪽 문제로 본다. */
+    private static String readCode(String body) {
+        if (body == null || body.isBlank()) return null;
+        try {
+            return OM.readTree(body).path("code").asText(null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 200 응답 해석. 못 읽어도 터뜨리지 않는다. */
     static WalkResult parse(String json) {
         if (json == null || json.isBlank()) return WalkResult.FAILED;
         try {
