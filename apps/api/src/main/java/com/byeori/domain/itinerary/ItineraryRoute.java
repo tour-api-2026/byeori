@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import lombok.Getter;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -68,15 +69,18 @@ public class ItineraryRoute {
      *
      * 좌표를 소수점 6자리로 끊어 잇는다. 그보다 잘게 보면 저장 과정의 반올림 차이로
      * 같은 루트가 다른 해시가 되어, 바뀐 것이 없는데도 매번 다시 계산한다.
+     *
+     * Locale.ROOT 를 고정한다. 기본 로케일이 쉼표 소수점(de, fr, ru)이면 문자열이 달라져
+     * 저장본이 오류 없이 전부 빗나가기 때문이다.
      */
     public static String hashOf(List<double[]> latLngs) {
         StringBuilder sb = new StringBuilder();
-        for (double[] p : latLngs) sb.append(String.format("%.6f,%.6f;", p[0], p[1]));
+        for (double[] p : latLngs) sb.append(String.format(Locale.ROOT, "%.6f,%.6f;", p[0], p[1]));
         try {
             byte[] d = MessageDigest.getInstance("SHA-256")
                     .digest(sb.toString().getBytes(StandardCharsets.UTF_8));
             StringBuilder hex = new StringBuilder();
-            for (int i = 0; i < 16; i++) hex.append(String.format("%02x", d[i]));
+            for (int i = 0; i < 16; i++) hex.append(String.format(Locale.ROOT, "%02x", d[i]));
             return hex.toString();
         } catch (Exception e) {
             throw new IllegalStateException("SHA-256 을 쓸 수 없다", e);

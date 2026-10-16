@@ -3,6 +3,7 @@ package com.byeori.domain.itinerary;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -43,5 +44,21 @@ class ItineraryRouteStoreTest {
     @DisplayName("빈 목록도 터지지 않는다")
     void 빈_목록() {
         assertThat(ItineraryRoute.hashOf(List.of())).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("기본 로케일이 소수점에 쉼표를 쓰는 곳이어도 같은 해시 — 캐시가 조용히 죽지 않는다")
+    void 로케일과_무관() {
+        List<double[]> a = List.of(new double[]{37.5, 127.0}, new double[]{37.6, 127.1});
+        Locale original = Locale.getDefault();
+        String expected = ItineraryRoute.hashOf(a);
+        try {
+            // 독일어권은 37,500000 처럼 쉼표를 쓴다. 해시가 달라지면 저장된 경로가 매번
+            // 빗나가는데 오류도 로그도 없어, 이 테스트가 아니면 알아챌 길이 없다.
+            Locale.setDefault(Locale.GERMANY);
+            assertThat(ItineraryRoute.hashOf(a)).isEqualTo(expected);
+        } finally {
+            Locale.setDefault(original);
+        }
     }
 }

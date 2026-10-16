@@ -74,6 +74,14 @@ class ItineraryRoutePersistenceTest {
         // jsonb 는 공백·키 순서를 정규화해 돌려줄 수 있어 문자열 동치가 아니라 JSON 동치로 본다.
         assertThat(json(r.getPath())).isEqualTo(json(PATH));
         assertThat(json(r.getLegs())).isEqualTo(json(LEGS));
+
+        // 같은 매핑으로 쓰고 읽으니 위 비교만으로는 문자열이 JSON 스칼라("\"[[...]]\"")로
+        // 들어갔는지 알 수 없다. DB 가 보는 실제 모양이 배열인지 SQL 로 확인한다.
+        Object[] types = (Object[]) em.createNativeQuery(
+                "select jsonb_typeof(path), jsonb_typeof(legs) from itinerary_routes "
+                        + "where itinerary_id = :i and mode = :m")
+                .setParameter("i", itineraryId).setParameter("m", "WALK").getSingleResult();
+        assertThat(types).containsExactly("array", "array");
     }
 
     @Test
