@@ -27,10 +27,12 @@ import org.springframework.web.client.RestClient;
 @Slf4j
 public class OsrmClient {
 
+    private static final ObjectMapper OM = new ObjectMapper();
+
     private final String baseUrl;
-    /** 화면이 기다리는 호출이라 짧게 끊고 자동차 경로로 넘어가는 편이 낫다. */
     private final RestClient http;
 
+    /** 화면이 기다리는 호출이라 짧게 끊고 자동차 경로로 넘어가는 편이 낫다. */
     public OsrmClient(@Value("${byeori.route.osrm-url:http://osrm:5000}") String baseUrl) {
         this.baseUrl = baseUrl;
         SimpleClientHttpRequestFactory f = new SimpleClientHttpRequestFactory();
@@ -39,15 +41,13 @@ public class OsrmClient {
         this.http = RestClient.builder().requestFactory(f).build();
     }
 
-    private static final ObjectMapper OM = new ObjectMapper();
-
     /** points 는 [경도, 위도] 순서. 실패하면 null. */
     public OsrmRoute walk(List<double[]> points) {
         if (points == null || points.size() < 2) return null;
-        StringJoiner sj = new StringJoiner(";");
-        for (double[] p : points) sj.add(p[0] + "," + p[1]);
-        String url = baseUrl + "/route/v1/foot/" + sj + "?overview=full&geometries=geojson";
         try {
+            StringJoiner sj = new StringJoiner(";");
+            for (double[] p : points) sj.add(p[0] + "," + p[1]);
+            String url = baseUrl + "/route/v1/foot/" + sj + "?overview=full&geometries=geojson";
             return parse(http.get().uri(url).retrieve().body(String.class));
         } catch (Exception e) {
             log.warn("OSRM 도보 경로 실패 ({}좌표): {}", points.size(), e.getMessage());

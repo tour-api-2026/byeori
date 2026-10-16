@@ -3,6 +3,8 @@ package com.byeori.global.external;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.byeori.global.external.dto.OsrmRoute;
+import java.util.Arrays;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -49,5 +51,19 @@ class OsrmClientTest {
         assertThat(OsrmClient.parse("")).isNull();
         assertThat(OsrmClient.parse("not json")).isNull();
         assertThat(OsrmClient.parse("{\"code\":\"Ok\",\"routes\":[]}")).isNull();
+    }
+
+    @Test
+    @DisplayName("walk: 좌표 원소가 null 이어도 던지지 않고 null 을 준다 (네트워크 호출 전에 실패)")
+    void walk_null_좌표() {
+        List<double[]> points = Arrays.asList(new double[]{126.9770, 37.5796}, null);
+        assertThat(new OsrmClient("http://127.0.0.1:1").walk(points)).isNull();
+    }
+
+    @Test
+    @DisplayName("walk: 원소 길이가 2 미만이어도 던지지 않고 null 을 준다 (네트워크 호출 전에 실패)")
+    void walk_짧은_좌표() {
+        List<double[]> points = List.of(new double[]{126.9770, 37.5796}, new double[]{1.0});
+        assertThat(new OsrmClient("http://127.0.0.1:1").walk(points)).isNull();
     }
 }
