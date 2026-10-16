@@ -33,6 +33,24 @@ IMG=ghcr.io/project-osrm/osrm-backend:v26.10.0-amd64-debian   # 기존 데이터
 PBF=south-korea-latest.osm.pbf
 mkdir -p "$DIR"
 
+# ⓪ 쓸 수 없는 산출물이 있으면 **아무것도 멈추기 전에** 멈춘다.
+#
+# 컨테이너를 호스트 사용자로 돌리기 전에 만든 데이터는 root 소유 644 로 남아 있다.
+# 그 상태로 재빌드를 시작하면 osrm-extract 가 기존 파일을 비우지 못해 실패하는데,
+# 그때는 이미 서빙 중인 컨테이너를 멈춘 뒤다 — 도보 경로가 통째로 내려앉는다.
+# 지우지도, 몰래 chown 하지도 않는다. 운영자가 보고 결정할 일이다.
+BLOCKED="$(find "$DIR" -maxdepth 1 -type f ! -writable -printf '%f\n' 2>/dev/null | sort)"
+if [ -n "$BLOCKED" ]; then
+  echo "중단: $DIR 에 이 사용자가 덮어쓸 수 없는 파일이 있다." >&2
+  echo "$BLOCKED" | sed 's/^/  - /' >&2
+  echo "" >&2
+  echo "재빌드를 시작하면 extract 가 이 파일들을 비우지 못해 실패하는데, 그때는 이미" >&2
+  echo "osrm 컨테이너를 멈춘 뒤다. 그래서 멈추기 전에 끊는다(지금 서빙은 그대로다)." >&2
+  echo "소유권을 넘긴 뒤 다시 실행한다:" >&2
+  echo "  sudo chown -R \"\$(id -u):\$(id -g)\" $DIR" >&2
+  exit 1
+fi
+
 echo "① 내려받기 (약 276MB)"
 # -f: HTTP 오류 응답 본문을 데이터로 저장하지 않는다. 임시 파일에 받고 성공해야 교체한다.
 curl -fsSL -o "$DIR/$PBF.tmp" https://download.geofabrik.de/asia/south-korea-latest.osm.pbf
