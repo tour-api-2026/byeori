@@ -70,12 +70,18 @@ public class ItineraryRoute {
      * 좌표를 소수점 6자리로 끊어 잇는다. 그보다 잘게 보면 저장 과정의 반올림 차이로
      * 같은 루트가 다른 해시가 되어, 바뀐 것이 없는데도 매번 다시 계산한다.
      *
+     * 도보 기준값(walkThresholdM)도 넣는다. 이 값을 바꾸면 같은 방문지라도 구간별 수단이
+     * 달라지는데, 좌표만 보면 저장본이 그대로 맞아떨어져서 이미 캐시가 있는 사용자에게는
+     * 설정을 바꾼 효과가 영원히 나타나지 않는다. 빌드 없이 돌려 볼 수 있는 손잡이가
+     * 아무 일도 하지 않게 되는 셈이다.
+     *
      * Locale.ROOT 를 고정한다. 기본 로케일이 쉼표 소수점(de, fr, ru)이면 문자열이 달라져
      * 저장본이 오류 없이 전부 빗나가기 때문이다.
      */
-    public static String hashOf(List<double[]> latLngs) {
+    public static String hashOf(List<double[]> latLngs, int walkThresholdM) {
         StringBuilder sb = new StringBuilder();
         for (double[] p : latLngs) sb.append(String.format(Locale.ROOT, "%.6f,%.6f;", p[0], p[1]));
+        sb.append("t").append(walkThresholdM);
         try {
             byte[] d = MessageDigest.getInstance("SHA-256")
                     .digest(sb.toString().getBytes(StandardCharsets.UTF_8));

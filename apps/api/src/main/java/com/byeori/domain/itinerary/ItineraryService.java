@@ -31,9 +31,7 @@ import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.NoTransactionException;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 @Service
 @Slf4j
@@ -48,6 +46,7 @@ public class ItineraryService {
     private final KakaoMobilityClient mobilityClient;
     private final OsrmClient osrmClient;
     private final ItineraryRouteRepository routeRepo;
+    private final ItineraryRouteSaver routeSaver;
     private final RouteProperties props;
     private final ObjectMapper om = new ObjectMapper();
 
@@ -56,7 +55,7 @@ public class ItineraryService {
                             VenueRepository venueRepo, PerformanceRepository performanceRepo,
                             KakaoMobilityClient mobilityClient,
                             OsrmClient osrmClient, ItineraryRouteRepository routeRepo,
-                            RouteProperties props) {
+                            ItineraryRouteSaver routeSaver, RouteProperties props) {
         this.repo = repo;
         this.itemRepo = itemRepo;
         this.courseItemRepo = courseItemRepo;
@@ -65,6 +64,7 @@ public class ItineraryService {
         this.mobilityClient = mobilityClient;
         this.osrmClient = osrmClient;
         this.routeRepo = routeRepo;
+        this.routeSaver = routeSaver;
         this.props = props;
     }
 
@@ -139,9 +139,9 @@ public class ItineraryService {
     @Transactional
     public RouteResponse route(Long userId, Long id, String mode) {
         own(userId, id);
-        if (!mobilityClient.enabled()) {
-            throw new BadRequestException("ROUTE_UNAVAILABLE", "길찾기 키가 설정되지 않았습니다.");
-        }
+        // 카카오 키가 없다고 미리 막지 않는다. directions 가 스스로 null 을 주므로 구간마다
+        // 알아서 내려가고, 도보로 충분한 루트는 키 없이도 온전히 나온다. 막아 두면 그 루트가
+        // 400 이 되고 mode=WALK 가 카카오 키 없이는 불가능해진다.
         List<RouteStop> stops = new ArrayList<>();
         List<double[]> coords = new ArrayList<>(); // [경도, 위도] 순서(카카오 요청용)
         int order = 0;
@@ -175,15 +175,15 @@ public class ItineraryService {
                 ? mode : RouteModePlanner.AUTO;
 
         // 저장해 둔 것이 아직 맞으면 그대로 쓴다. 외부 호출이 한 번도 없다.
+        int threshold = props.getWalkThresholdM();
         List<double[]> latLngs = coords.stream().map(c -> new double[]{c[1], c[0]}).toList();
-        String hash = ItineraryRoute.hashOf(latLngs);
+        String hash = ItineraryRoute.hashOf(latLngs, threshold);
         ItineraryRoute saved = routeRepo.findByItineraryIdAndMode(id, wanted).orElse(null);
         if (saved != null && saved.matches(hash)) {
             RouteResponse cached = fromSaved(saved, wanted, stops);
             if (cached != null) return cached;   // 못 읽으면 아래로 내려가 다시 계산한다
         }
 
-        int threshold = props.getWalkThresholdM();
         List<RouteLeg> legs = new ArrayList<>();
         List<double[]> path = new ArrayList<>();
         int totalM = 0, totalS = 0;
@@ -213,11 +213,13 @@ public class ItineraryService {
                     legPath = kr.path().stream().map(p -> new double[]{p[1], p[0]}).toList();
                 }
             }
-            if (legPath == null) {   // 둘 다 실패 — 직선으로 잇는다
+            // 비어 있는 경로도 실패다. 카카오는 길을 못 찾아도 result_code 0 에 빈 좌표열을
+            // 주는 때가 있는데, null 만 걸러내면 뒤의 subList(1, 0) 에서 터져 루트 전체가 500 이 된다.
+            if (legPath == null || legPath.isEmpty()) {   // 둘 다 실패 — 직선으로 잇는다
                 legPath = List.of(new double[]{a[1], a[0]}, new double[]{b[1], b[0]});
             }
 
-            RouteLeg leg = legOrFallback(walk, driveSummary, straight);
+            RouteLeg leg = legOrFallback(walk, driveSummary, straight, legWanted);
             legs.add(leg);
             totalM += leg.distance();
             totalS += leg.duration();
@@ -225,58 +227,66 @@ public class ItineraryService {
             path.addAll(i == 0 ? legPath : legPath.subList(1, legPath.size()));
         }
 
-        save(id, wanted, hash, totalM, totalS, path, legs);
+        // 온전하지 않은 결과는 저장하지 않는다.
+        //
+        // matches() 는 좌표 해시만 본다. OSRM 이 멈춰 있는 동안 계산한 직선·차 경로를 넣어
+        // 두면, 방문지를 고치지 않는 한 그 루트는 OSRM 이 돌아온 뒤에도 영원히 직선을 준다.
+        // 사용자는 이유를 알 길이 없다. 저장을 건너뛰면 장애 동안만 매번 다시 계산하고,
+        // OSRM 이 살아나는 순간 저절로 낫는다.
+        long straightLegs = legs.stream().filter(l -> STRAIGHT.equals(l.mode())).count();
+        if (osrmDown || straightLegs > 0) {
+            log.info("경로가 온전하지 않아 저장하지 않는다 itinerary={} mode={} osrm다운={} 직선구간={}/{}",
+                    id, wanted, osrmDown, straightLegs, legs.size());
+        } else {
+            save(id, wanted, hash, totalM, totalS, path, legs);
+        }
         return new RouteResponse(totalM, totalS, wanted, stops, legs, path);
     }
 
+    /** 직선으로 내려갔을 때의 수단 이름. 거리·시간이 어림값이라는 표시이기도 하다. */
+    static final String STRAIGHT = "STRAIGHT";
+
     /** 걷는 속도(m/s). 직선으로 내려갈 때 시간을 어림하는 데만 쓴다. 약 5km/h. */
     private static final double WALK_MPS = 1.4;
+
+    /** 시내 차 속도(m/s). 약 30km/h — 신호와 정체를 포함한 어림값이다. */
+    private static final double DRIVE_MPS = 8.3;
 
     /**
      * 한 구간을 어떻게든 채운다.
      *
      * OSRM 이 죽어도, 카카오가 실패해도 루트 화면은 떠야 한다. 마지막에는 직선이라도
      * 준다 — 방문 순서와 대략의 거리는 그것만으로도 쓸모가 있다.
+     *
+     * 직선으로 내려갈 때는 **그 구간에 뭘 하려 했는지**에 맞춰 시간을 어림한다. 6km 짜리
+     * 차 구간을 걷는 속도로 적으면 "71분"이 되는데, 숫자가 빈 화면보다 나쁘다.
      */
-    static RouteLeg legOrFallback(OsrmRoute walk, int[] driveSummary, double straightM) {
-        if (walk != null) return new RouteLeg(walk.distance(), walk.duration(), "WALK");
-        if (driveSummary != null) return new RouteLeg(driveSummary[0], driveSummary[1], "DRIVE");
-        return new RouteLeg((int) straightM, (int) (straightM / WALK_MPS), "STRAIGHT");
+    static RouteLeg legOrFallback(OsrmRoute walk, int[] driveSummary, double straightM,
+                                  String legWanted) {
+        if (walk != null) return new RouteLeg(walk.distance(), walk.duration(), RouteModePlanner.WALK);
+        if (driveSummary != null) {
+            return new RouteLeg(driveSummary[0], driveSummary[1], RouteModePlanner.DRIVE);
+        }
+        double mps = RouteModePlanner.DRIVE.equals(legWanted) ? DRIVE_MPS : WALK_MPS;
+        return new RouteLeg((int) straightM, (int) (straightM / mps), STRAIGHT);
     }
 
     /**
      * 계산한 경로를 저장한다. 저장에 실패해도 경로는 돌려준다 — 다음 요청에 다시 계산될 뿐이다.
      *
-     * 같은 루트를 동시에 열면 둘 다 저장본을 못 찾고 둘 다 넣으려 해서 한쪽이 기본키 충돌을
-     * 본다. 같은 입력이면 같은 결과이므로 지는 쪽은 잃을 것이 없다. 그래서 바로 flush 해
-     * 충돌을 이 자리에서 잡는다 — 커밋 때 터지면 이미 손을 떠나 500 이 된다.
+     * 쓰기는 ItineraryRouteSaver 의 별도 트랜잭션에서 한다. 동시 저장 충돌이든 교착이든,
+     * 실패가 이 요청의 트랜잭션을 오염시키지 않아야 손에 든 경로를 그대로 돌려줄 수 있다.
      */
     private void save(Long id, String mode, String hash, int m, int s,
                       List<double[]> path, List<RouteLeg> legs) {
         try {
             String pj = om.writeValueAsString(path), lj = om.writeValueAsString(legs);
-            ItineraryRoute saved = routeRepo.findByItineraryIdAndMode(id, mode).orElse(null);
-            if (saved != null) {
-                saved.update(hash, m, s, pj, lj);   // 이미 있는 줄은 덮어쓴다
-                return;
-            }
-            routeRepo.saveAndFlush(new ItineraryRoute(id, mode, hash, m, s, pj, lj));
+            routeSaver.store(id, mode, hash, m, s, pj, lj);
         } catch (DataIntegrityViolationException e) {
-            // 경쟁에서 졌다. 실패한 INSERT 로 트랜잭션은 더 못 쓰니 롤백으로 끝내라고 알린다.
-            // 그냥 커밋을 시도하면 UnexpectedRollbackException 이 나 응답이 500 이 된다.
-            markRollbackOnly();
+            // 경쟁에서 졌다 — 이긴 쪽이 같은 내용을 넣었으니 잃을 것이 없다.
             log.debug("경로 저장이 경쟁에서 졌다(같은 결과가 이미 있다) itinerary={} mode={}", id, mode);
         } catch (Exception e) {
             log.warn("경로 저장 실패 itinerary={} mode={}: {}", id, mode, e.getMessage());
-        }
-    }
-
-    /** 롤백으로 끝내라고 지금 트랜잭션에 알린다. 트랜잭션 밖이면 알릴 곳도 없다. */
-    private static void markRollbackOnly() {
-        try {
-            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-        } catch (NoTransactionException ignored) {
-            // 트랜잭션 없이 불린 경우(테스트 등). 할 일이 없다.
         }
     }
 

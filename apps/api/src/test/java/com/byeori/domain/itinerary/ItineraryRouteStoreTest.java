@@ -20,7 +20,7 @@ class ItineraryRouteStoreTest {
     void 같은_입력() {
         List<double[]> a = List.of(new double[]{37.5, 127.0}, new double[]{37.6, 127.1});
         List<double[]> b = List.of(new double[]{37.5, 127.0}, new double[]{37.6, 127.1});
-        assertThat(ItineraryRoute.hashOf(a)).isEqualTo(ItineraryRoute.hashOf(b));
+        assertThat(ItineraryRoute.hashOf(a, 1000)).isEqualTo(ItineraryRoute.hashOf(b, 1000));
     }
 
     @Test
@@ -28,7 +28,7 @@ class ItineraryRouteStoreTest {
     void 순서가_바뀌면() {
         List<double[]> a = List.of(new double[]{37.5, 127.0}, new double[]{37.6, 127.1});
         List<double[]> b = List.of(new double[]{37.6, 127.1}, new double[]{37.5, 127.0});
-        assertThat(ItineraryRoute.hashOf(a)).isNotEqualTo(ItineraryRoute.hashOf(b));
+        assertThat(ItineraryRoute.hashOf(a, 1000)).isNotEqualTo(ItineraryRoute.hashOf(b, 1000));
     }
 
     @Test
@@ -37,13 +37,13 @@ class ItineraryRouteStoreTest {
         List<double[]> a = List.of(new double[]{37.5, 127.0}, new double[]{37.6, 127.1});
         List<double[]> b = List.of(new double[]{37.5, 127.0}, new double[]{37.6, 127.1},
                                    new double[]{37.7, 127.2});
-        assertThat(ItineraryRoute.hashOf(a)).isNotEqualTo(ItineraryRoute.hashOf(b));
+        assertThat(ItineraryRoute.hashOf(a, 1000)).isNotEqualTo(ItineraryRoute.hashOf(b, 1000));
     }
 
     @Test
     @DisplayName("빈 목록도 터지지 않는다")
     void 빈_목록() {
-        assertThat(ItineraryRoute.hashOf(List.of())).isNotBlank();
+        assertThat(ItineraryRoute.hashOf(List.of(), 1000)).isNotBlank();
     }
 
     @Test
@@ -51,14 +51,24 @@ class ItineraryRouteStoreTest {
     void 로케일과_무관() {
         List<double[]> a = List.of(new double[]{37.5, 127.0}, new double[]{37.6, 127.1});
         Locale original = Locale.getDefault();
-        String expected = ItineraryRoute.hashOf(a);
+        String expected = ItineraryRoute.hashOf(a, 1000);
         try {
             // 독일어권은 37,500000 처럼 쉼표를 쓴다. 해시가 달라지면 저장된 경로가 매번
             // 빗나가는데 오류도 로그도 없어, 이 테스트가 아니면 알아챌 길이 없다.
             Locale.setDefault(Locale.GERMANY);
-            assertThat(ItineraryRoute.hashOf(a)).isEqualTo(expected);
+            assertThat(ItineraryRoute.hashOf(a, 1000)).isEqualTo(expected);
         } finally {
             Locale.setDefault(original);
         }
+    }
+
+    @Test
+    @DisplayName("기준값이 바뀌면 다른 해시 — 설정만 바꿔도 캐시가 비켜 준다")
+    void 기준값이_바뀌면() {
+        List<double[]> a = List.of(new double[]{37.5, 127.0}, new double[]{37.6, 127.1});
+        // 도보 기준값을 바꾸면 같은 방문지라도 구간별 수단이 달라진다. 좌표만 보면
+        // 저장본이 그대로 맞아떨어져서, 이미 캐시가 있는 사용자에게는 설정을 바꾼 효과가
+        // 영원히 나타나지 않는다.
+        assertThat(ItineraryRoute.hashOf(a, 1000)).isNotEqualTo(ItineraryRoute.hashOf(a, 500));
     }
 }
