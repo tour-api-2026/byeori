@@ -82,7 +82,12 @@ public final class ItineraryDtos {
             int order, String targetType, Long targetId, String name, double lat, double lng) {}
 
     /** 구간별 거리·시간과 이동 수단. mode 는 WALK | DRIVE | STRAIGHT. */
-    public record RouteLeg(int distance, int duration, String mode) {}
+    /**
+     * points 는 이 구간이 전체 path 에서 차지하는 점의 수다. 첫 구간은 제 경로 전부, 이후 구간은
+     * 앞 구간과 겹치는 첫 점을 뺀 만큼이다. 합이 path 길이와 같으므로 지도가 구간별로 자를 수 있다.
+     * 이 필드가 생기기 전에 저장된 행은 0 으로 읽힌다 — 0 이하면 자를 수 없다는 뜻이다.
+     */
+    public record RouteLeg(int distance, int duration, String mode, int points) {}
 
     /**
      * 경로 응답.

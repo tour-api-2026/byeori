@@ -62,6 +62,7 @@ export type RouteLeg = {
   distance: number;            // 구간 거리(m)
   duration: number;            // 구간 시간(초)
   mode: 'WALK' | 'DRIVE' | 'STRAIGHT';
+  points: number;              // 전체 path 에서 이 구간이 차지하는 점 수(이음점은 앞 구간에만 센다)
 };
 export type ItineraryRoute = {
   distance: number;            // 총 거리(m)

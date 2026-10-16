@@ -219,6 +219,34 @@ class RouteFallbackTest {
     }
 
     @Test
+    @DisplayName("섞인 경로에서 구간별 점의 합은 path 길이와 같다 — 지도가 구간별로 자를 수 있어야 한다")
+    void 점_수의_합_섞인_경로() {
+        // 첫 구간은 걷고, 그 뒤 OSRM 이 빗나가 나머지는 차로 간다.
+        when(osrmClient.walk(anyList())).thenReturn(walkRoute(), (OsrmRoute) null);
+        when(mobilityClient.directions(anyList(), anyString())).thenReturn(driveRoute(
+                List.of(new double[]{126.9800, 37.5630}, new double[]{126.9800, 37.5660},
+                        new double[]{126.9800, 37.5690})));
+
+        RouteResponse res = service.route(7L, 1L, "AUTO");
+
+        assertThat(res.legs()).extracting(l -> l.mode()).containsExactly("WALK", "DRIVE", "DRIVE");
+        assertThat(res.legs()).extracting(l -> l.points()).containsExactly(2, 2, 2);
+        assertThat(res.legs().stream().mapToInt(l -> l.points()).sum()).isEqualTo(res.path().size());
+    }
+
+    @Test
+    @DisplayName("직선으로 메운 경로도 구간별 점의 합이 path 길이와 같다")
+    void 점_수의_합_직선() {
+        when(osrmClient.walk(anyList())).thenReturn(null);
+        when(mobilityClient.directions(anyList(), anyString())).thenReturn(null);
+
+        RouteResponse res = service.route(7L, 1L, "AUTO");
+
+        assertThat(res.legs()).extracting(l -> l.points()).containsExactly(2, 1, 1);
+        assertThat(res.legs().stream().mapToInt(l -> l.points()).sum()).isEqualTo(res.path().size());
+    }
+
+    @Test
     @DisplayName("카카오 키가 없어도 걷는 루트는 나온다 — 미리 막지 않는다")
     void 카카오_키가_없어도() {
         when(mobilityClient.enabled()).thenReturn(false);

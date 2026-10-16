@@ -148,10 +148,27 @@ export function mapScript(segColors: string[]): string {
     var stops=(data.stops||[]).slice().sort(function(a,b){ return a.order-b.order; });
     var path=data.path||[];
     // 전에는 path 를 받아놓고 버린 뒤 방문지를 직선으로 이었다. 이제 실제 경로를 그린다.
-    // path 는 구간들을 이어붙인 한 줄이고 구간 경계 인덱스는 응답에 없어 나눌 수 없다.
-    // 그래서 한 줄로 그리되, 전부 걷는 경로만 실선, 타는 구간이 섞이면 점선으로 구분한다.
-    if(path.length>1){
-      var legs=data.legs||[];
+    // path 는 구간들을 이어붙인 한 줄이고 legs[].points 가 구간별 점 수다. 걷는 구간은
+    // 실선, 타는(또는 직선으로 메운) 구간은 점선으로 따로 그려 어디를 걷는지 보이게 한다.
+    // 구간 경계를 믿을 수 없으면(옛 캐시 행은 points 가 0, 합이 안 맞는 경우) 일부만
+    // 그리느니 한 줄로 그린다: 전부 걷는 경로만 실선, 섞이면 점선.
+    var legs=data.legs||[];
+    var sliceable = path.length>1 && legs.length>0 && legs.every(function(l){ return l.points>0; })
+      && legs.reduce(function(n,l){ return n+l.points; },0)===path.length;
+    if(sliceable){
+      var from=0;
+      legs.forEach(function(l,i){
+        // 이음점은 앞 구간 마지막 점과 같다. 두 선 모두에 넣어 틈 없이 이어 붙인다.
+        var start = i===0 ? 0 : from-1;
+        var end = from+l.points;
+        var seg=path.slice(start,end).map(function(p){ return new kakao.maps.LatLng(p[0],p[1]); });
+        from=end;
+        if(seg.length<2) return;
+        var ln=new kakao.maps.Polyline({path:seg,strokeWeight:5,strokeColor:segColor(i),
+          strokeOpacity:0.9,strokeStyle: l.mode==='WALK' ? 'solid' : 'shortdash'});
+        ln.setMap(map); routeLines.push(ln);
+      });
+    } else if(path.length>1){
       var walkOnly = legs.length>0 && legs.every(function(l){ return l.mode==='WALK'; });
       var ll=path.map(function(p){ return new kakao.maps.LatLng(p[0],p[1]); });
       var line=new kakao.maps.Polyline({path:ll,strokeWeight:5,strokeColor:segColor(0),

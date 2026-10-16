@@ -223,12 +223,15 @@ public class ItineraryService {
                 fakedPaths++;
             }
 
-            RouteLeg leg = legOrFallback(walk, driveSummary, straight, legWanted);
+            RouteLeg built = legOrFallback(walk, driveSummary, straight, legWanted);
+            // 구간이 이어지는 지점은 한 번만 넣는다
+            List<double[]> added = i == 0 ? legPath : legPath.subList(1, legPath.size());
+            path.addAll(added);
+            // 넣은 점의 수는 여기서야 안다. 지도가 path 를 구간별로 자를 수 있게 적어 둔다.
+            RouteLeg leg = new RouteLeg(built.distance(), built.duration(), built.mode(), added.size());
             legs.add(leg);
             totalM += leg.distance();
             totalS += leg.duration();
-            // 구간이 이어지는 지점은 한 번만 넣는다
-            path.addAll(i == 0 ? legPath : legPath.subList(1, legPath.size()));
         }
 
         // 온전하지 않은 결과는 저장하지 않는다.
@@ -273,12 +276,12 @@ public class ItineraryService {
      */
     static RouteLeg legOrFallback(OsrmRoute walk, int[] driveSummary, double straightM,
                                   String legWanted) {
-        if (walk != null) return new RouteLeg(walk.distance(), walk.duration(), RouteModePlanner.WALK);
+        if (walk != null) return new RouteLeg(walk.distance(), walk.duration(), RouteModePlanner.WALK, 0);
         if (driveSummary != null) {
-            return new RouteLeg(driveSummary[0], driveSummary[1], RouteModePlanner.DRIVE);
+            return new RouteLeg(driveSummary[0], driveSummary[1], RouteModePlanner.DRIVE, 0);
         }
         double mps = RouteModePlanner.DRIVE.equals(legWanted) ? DRIVE_MPS : WALK_MPS;
-        return new RouteLeg((int) straightM, (int) (straightM / mps), STRAIGHT);
+        return new RouteLeg((int) straightM, (int) (straightM / mps), STRAIGHT, 0);
     }
 
     /**
