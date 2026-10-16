@@ -15,7 +15,7 @@ create table itinerary_routes (
     distance_m   int         not null,
     duration_s   int         not null,
     path         jsonb       not null,              -- [[위도, 경도], ...]
-    legs         jsonb       not null,              -- [{distance, duration, mode}, ...]
+    legs         jsonb       not null,              -- [{distance, duration, mode, points}, ...]
     computed_at  timestamp   not null default now(),
     primary key (itinerary_id, mode)
 );
