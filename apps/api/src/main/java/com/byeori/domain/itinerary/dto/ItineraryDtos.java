@@ -81,17 +81,18 @@ public final class ItineraryDtos {
     public record RouteStop(
             int order, String targetType, Long targetId, String name, double lat, double lng) {}
 
-    /** 구간(경유지 간) 거리·시간. */
-    public record RouteLeg(int distance, int duration) {}
+    /** 구간별 거리·시간과 이동 수단. mode 는 WALK | DRIVE | STRAIGHT. */
+    public record RouteLeg(int distance, int duration, String mode) {}
 
     /**
      * 경로 응답.
      * - distance: 총 거리(m), duration: 총 소요시간(초)
+     * - mode: 요청한 모드(AUTO|WALK|DRIVE). 구간별 실제 수단은 legs[].mode 를 본다.
      * - stops: 좌표가 있어 경로에 포함된 방문지(순서대로)
-     * - legs: 구간별 거리/시간
+     * - legs: 구간별 거리/시간/수단
      * - path: 지도에 그릴 polyline 좌표열, 각 원소 [위도(lat), 경도(lng)]
      */
     public record RouteResponse(
-            int distance, int duration, String priority,
+            int distance, int duration, String mode,
             List<RouteStop> stops, List<RouteLeg> legs, List<double[]> path) {}
 }

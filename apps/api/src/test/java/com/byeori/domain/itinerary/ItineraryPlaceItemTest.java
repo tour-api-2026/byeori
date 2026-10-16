@@ -40,7 +40,7 @@ class ItineraryPlaceItemTest {
 
     @BeforeEach
     void setUp() {
-        service = new ItineraryService(repo, itemRepo, null, venueRepo, null, null);
+        service = new ItineraryService(repo, itemRepo, null, venueRepo, null, null, null, null, null);
         Itinerary mine = new Itinerary(7L, "내 루트", DAY, DAY, "CUSTOM", null);
         ReflectionTestUtils.setField(mine, "id", 1L);
         when(repo.findById(1L)).thenReturn(Optional.of(mine));

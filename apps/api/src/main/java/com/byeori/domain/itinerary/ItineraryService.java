@@ -13,7 +13,11 @@ import com.byeori.global.exception.BadRequestException;
 import com.byeori.global.exception.NotFoundException;
 import com.byeori.global.external.KakaoLocalClient;
 import com.byeori.global.external.KakaoMobilityClient;
+import com.byeori.global.external.OsrmClient;
 import com.byeori.global.external.dto.KakaoRoute;
+import com.byeori.global.external.dto.OsrmRoute;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.util.Base64;
@@ -24,10 +28,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.NoTransactionException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 @Service
+@Slf4j
 @Transactional(readOnly = true)
 public class ItineraryService {
 
@@ -37,17 +46,26 @@ public class ItineraryService {
     private final VenueRepository venueRepo;
     private final PerformanceRepository performanceRepo;
     private final KakaoMobilityClient mobilityClient;
+    private final OsrmClient osrmClient;
+    private final ItineraryRouteRepository routeRepo;
+    private final RouteProperties props;
+    private final ObjectMapper om = new ObjectMapper();
 
     public ItineraryService(ItineraryRepository repo, ItineraryItemRepository itemRepo,
                             CuratedCourseItemRepository courseItemRepo,
                             VenueRepository venueRepo, PerformanceRepository performanceRepo,
-                            KakaoMobilityClient mobilityClient) {
+                            KakaoMobilityClient mobilityClient,
+                            OsrmClient osrmClient, ItineraryRouteRepository routeRepo,
+                            RouteProperties props) {
         this.repo = repo;
         this.itemRepo = itemRepo;
         this.courseItemRepo = courseItemRepo;
         this.venueRepo = venueRepo;
         this.performanceRepo = performanceRepo;
         this.mobilityClient = mobilityClient;
+        this.osrmClient = osrmClient;
+        this.routeRepo = routeRepo;
+        this.props = props;
     }
 
     /** 공유 토큰 생성용. SecureRandom 은 스레드 안전해서 하나를 돌려 쓴다. */
@@ -112,10 +130,14 @@ public class ItineraryService {
     }
 
     /**
-     * 여행 일지의 방문지들을 순서대로 잇는 도로 경로 계산(카카오모빌리티).
-     * 좌표 없는 항목은 건너뛰고, 좌표 있는 방문지가 2곳 이상일 때만 경로를 반환.
+     * 여행 일지의 방문지들을 순서대로 잇는 경로. 구간마다 걷거나 탄다.
+     *
+     * 좌표 없는 항목은 건너뛰고, 좌표 있는 방문지가 2곳 이상일 때만 경로를 준다.
+     * 읽기처럼 보이지만 계산한 경로를 저장해 두므로 쓰기 트랜잭션이 필요하다 —
+     * 클래스 기본값(readOnly)을 그대로 쓰면 저장이 조용히 사라진다.
      */
-    public RouteResponse route(Long userId, Long id, String priority) {
+    @Transactional
+    public RouteResponse route(Long userId, Long id, String mode) {
         own(userId, id);
         if (!mobilityClient.enabled()) {
             throw new BadRequestException("ROUTE_UNAVAILABLE", "길찾기 키가 설정되지 않았습니다.");
@@ -147,15 +169,128 @@ public class ItineraryService {
         if (coords.size() < 2) {
             throw new BadRequestException("ROUTE_TOO_FEW_POINTS", "경로를 그리려면 좌표가 있는 방문지가 2곳 이상이어야 합니다.");
         }
-        String pr = priority == null || priority.isBlank() ? "RECOMMEND" : priority;
-        KakaoRoute r = mobilityClient.directions(coords, pr);
-        if (r == null) {
-            throw new BadRequestException("ROUTE_FAILED", "경로를 계산하지 못했습니다. 잠시 후 다시 시도해주세요.");
+
+        // 모르는 값은 AUTO 로 본다 — 경로 보기는 읽기 동작이라 오타로 400 을 주지 않는다.
+        String wanted = RouteModePlanner.WALK.equals(mode) || RouteModePlanner.DRIVE.equals(mode)
+                ? mode : RouteModePlanner.AUTO;
+
+        // 저장해 둔 것이 아직 맞으면 그대로 쓴다. 외부 호출이 한 번도 없다.
+        List<double[]> latLngs = coords.stream().map(c -> new double[]{c[1], c[0]}).toList();
+        String hash = ItineraryRoute.hashOf(latLngs);
+        ItineraryRoute saved = routeRepo.findByItineraryIdAndMode(id, wanted).orElse(null);
+        if (saved != null && saved.matches(hash)) {
+            RouteResponse cached = fromSaved(saved, wanted, stops);
+            if (cached != null) return cached;   // 못 읽으면 아래로 내려가 다시 계산한다
         }
-        // path: [경도,위도] → [위도,경도] (지도 LatLng 순서)
-        List<double[]> path = r.path().stream().map(p -> new double[]{p[1], p[0]}).toList();
-        List<RouteLeg> legs = r.legs().stream().map(l -> new RouteLeg(l[0], l[1])).toList();
-        return new RouteResponse(r.distance(), r.duration(), pr, stops, legs, path);
+
+        int threshold = props.getWalkThresholdM();
+        List<RouteLeg> legs = new ArrayList<>();
+        List<double[]> path = new ArrayList<>();
+        int totalM = 0, totalS = 0;
+        // 요청 하나 안에서만 쓰는 차단기. OSRM 이 죽은 게 아니라 멈춰 있으면 한 번에 4초를
+        // 기다리는데, 구간마다 다시 물으면 5구간 루트가 20초를 잡아먹는다. 한 번 빗나가면
+        // 남은 구간은 묻지 않고 바로 자동차로 간다.
+        boolean osrmDown = false;
+
+        for (int i = 0; i < coords.size() - 1; i++) {
+            double[] a = coords.get(i), b = coords.get(i + 1);   // [경도, 위도]
+            double straight = RouteModePlanner.distanceMeters(a[1], a[0], b[1], b[0]);
+            String legWanted = RouteModePlanner.legMode(wanted, straight, threshold);
+
+            OsrmRoute walk = null;
+            int[] driveSummary = null;
+            List<double[]> legPath = null;
+
+            if (RouteModePlanner.WALK.equals(legWanted) && !osrmDown) {
+                walk = osrmClient.walk(List.of(a, b));
+                if (walk != null) legPath = walk.path();
+                else osrmDown = true;
+            }
+            if (walk == null) {   // 도보를 안 고를 수도, 실패했을 수도 있다
+                KakaoRoute kr = mobilityClient.directions(List.of(a, b), "RECOMMEND");
+                if (kr != null) {
+                    driveSummary = new int[]{kr.distance(), kr.duration()};
+                    legPath = kr.path().stream().map(p -> new double[]{p[1], p[0]}).toList();
+                }
+            }
+            if (legPath == null) {   // 둘 다 실패 — 직선으로 잇는다
+                legPath = List.of(new double[]{a[1], a[0]}, new double[]{b[1], b[0]});
+            }
+
+            RouteLeg leg = legOrFallback(walk, driveSummary, straight);
+            legs.add(leg);
+            totalM += leg.distance();
+            totalS += leg.duration();
+            // 구간이 이어지는 지점은 한 번만 넣는다
+            path.addAll(i == 0 ? legPath : legPath.subList(1, legPath.size()));
+        }
+
+        save(id, wanted, hash, totalM, totalS, path, legs);
+        return new RouteResponse(totalM, totalS, wanted, stops, legs, path);
+    }
+
+    /** 걷는 속도(m/s). 직선으로 내려갈 때 시간을 어림하는 데만 쓴다. 약 5km/h. */
+    private static final double WALK_MPS = 1.4;
+
+    /**
+     * 한 구간을 어떻게든 채운다.
+     *
+     * OSRM 이 죽어도, 카카오가 실패해도 루트 화면은 떠야 한다. 마지막에는 직선이라도
+     * 준다 — 방문 순서와 대략의 거리는 그것만으로도 쓸모가 있다.
+     */
+    static RouteLeg legOrFallback(OsrmRoute walk, int[] driveSummary, double straightM) {
+        if (walk != null) return new RouteLeg(walk.distance(), walk.duration(), "WALK");
+        if (driveSummary != null) return new RouteLeg(driveSummary[0], driveSummary[1], "DRIVE");
+        return new RouteLeg((int) straightM, (int) (straightM / WALK_MPS), "STRAIGHT");
+    }
+
+    /**
+     * 계산한 경로를 저장한다. 저장에 실패해도 경로는 돌려준다 — 다음 요청에 다시 계산될 뿐이다.
+     *
+     * 같은 루트를 동시에 열면 둘 다 저장본을 못 찾고 둘 다 넣으려 해서 한쪽이 기본키 충돌을
+     * 본다. 같은 입력이면 같은 결과이므로 지는 쪽은 잃을 것이 없다. 그래서 바로 flush 해
+     * 충돌을 이 자리에서 잡는다 — 커밋 때 터지면 이미 손을 떠나 500 이 된다.
+     */
+    private void save(Long id, String mode, String hash, int m, int s,
+                      List<double[]> path, List<RouteLeg> legs) {
+        try {
+            String pj = om.writeValueAsString(path), lj = om.writeValueAsString(legs);
+            ItineraryRoute saved = routeRepo.findByItineraryIdAndMode(id, mode).orElse(null);
+            if (saved != null) {
+                saved.update(hash, m, s, pj, lj);   // 이미 있는 줄은 덮어쓴다
+                return;
+            }
+            routeRepo.saveAndFlush(new ItineraryRoute(id, mode, hash, m, s, pj, lj));
+        } catch (DataIntegrityViolationException e) {
+            // 경쟁에서 졌다. 실패한 INSERT 로 트랜잭션은 더 못 쓰니 롤백으로 끝내라고 알린다.
+            // 그냥 커밋을 시도하면 UnexpectedRollbackException 이 나 응답이 500 이 된다.
+            markRollbackOnly();
+            log.debug("경로 저장이 경쟁에서 졌다(같은 결과가 이미 있다) itinerary={} mode={}", id, mode);
+        } catch (Exception e) {
+            log.warn("경로 저장 실패 itinerary={} mode={}: {}", id, mode, e.getMessage());
+        }
+    }
+
+    /** 롤백으로 끝내라고 지금 트랜잭션에 알린다. 트랜잭션 밖이면 알릴 곳도 없다. */
+    private static void markRollbackOnly() {
+        try {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+        } catch (NoTransactionException ignored) {
+            // 트랜잭션 없이 불린 경우(테스트 등). 할 일이 없다.
+        }
+    }
+
+    /** 저장해 둔 것을 응답 모양으로 되돌린다. 못 읽으면 null 을 주어 다시 계산하게 한다. */
+    private RouteResponse fromSaved(ItineraryRoute r, String mode, List<RouteStop> stops) {
+        try {
+            List<double[]> path = om.readValue(r.getPath(), new TypeReference<List<double[]>>() {});
+            List<RouteLeg> legs = om.readValue(r.getLegs(), new TypeReference<List<RouteLeg>>() {});
+            return new RouteResponse(r.getDistanceM(), r.getDurationS(), mode, stops, legs, path);
+        } catch (Exception e) {
+            log.warn("저장된 경로를 읽지 못했다 itinerary={} mode={}: {}",
+                    r.getItineraryId(), mode, e.getMessage());
+            return null;
+        }
     }
 
     @Transactional
