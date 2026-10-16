@@ -11,9 +11,24 @@
 # 그 파일을 덮어쓰면 SIGBUS 로 죽거나 섞인 데이터를 서빙할 수 있기 때문이다.
 # 멈춰 있는 동안 도보 경로는 자동차 경로로 대체된다. 이는 예상된 동작이다.
 set -euo pipefail
+STOPPED=0
+on_exit() {                   # 실패로 끝났을 때만 복구 방법을 알린다
+  local rc=$?
+  [ "$rc" -eq 0 ] && return
+  echo "" >&2
+  echo "재빌드가 실패했다(종료 코드 $rc)." >&2
+  if [ "$STOPPED" = 1 ]; then
+    echo "osrm 이 정지된 상태다. 도보 경로는 지금 자동차 경로로 대체되고 있다." >&2
+    echo "기존 데이터로 되돌리려면: docker compose -f $COMPOSE up -d osrm" >&2
+    echo "(partition/customize 단계에서 실패했다면 산출물이 섞였을 수 있으니 재빌드부터 한다.)" >&2
+  fi
+}
+trap on_exit EXIT
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 COMPOSE="$ROOT/infra/docker-compose.yml"
-DIR="${1:-/home/hidi/osrm-data}"
+# 산출물 위치. infra/docker-compose.yml 의 osrm 볼륨 마운트와 반드시 같아야 한다.
+# 다른 곳에 만들면 재기동된 서버는 예전 데이터를 계속 서빙한다.
+DIR=/home/hidi/osrm-data
 IMG=ghcr.io/project-osrm/osrm-backend:v26.10.0-amd64-debian   # 기존 데이터를 만든 버전. 올리면 포맷이 바뀔 수 있다.
 PBF=south-korea-latest.osm.pbf
 mkdir -p "$DIR"
@@ -25,6 +40,7 @@ mv "$DIR/$PBF.tmp" "$DIR/$PBF"
 
 echo "② osrm 컨테이너 정지"
 docker compose -f "$COMPOSE" stop osrm
+STOPPED=1
 
 run() {                       # 한 단계를 한도 안에서 돌린다
   echo "③ $1"
