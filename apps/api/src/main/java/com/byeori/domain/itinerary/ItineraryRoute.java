@@ -40,7 +40,17 @@ public class ItineraryRoute {
     @Column(name = "distance_m") private int distanceM;
     @Column(name = "duration_s") private int durationS;
 
+    /** [[위도, 경도], ...] */
     @JdbcTypeCode(SqlTypes.JSON) private String path;
+
+    /**
+     * [{distance, duration, mode, points}, ...] — 구간별 거리·시간·이동 수단·점의 수.
+     *
+     * points 가 늘어난 뒤에도 V27 의 칼럼 주석은 셋만 적고 있다. **V27 은 이미 적용된
+     * 마이그레이션이라 고칠 수 없다** — Flyway 체크섬은 주석까지 포함하고 validate 가
+     * 기본으로 돌아서, 한 글자만 바꿔도 다음 기동이 체크섬 불일치로 실패한다.
+     * 그래서 모양 설명은 고칠 수 있는 이쪽에 둔다(필드별 뜻은 RouteLeg javadoc 참고).
+     */
     @JdbcTypeCode(SqlTypes.JSON) private String legs;
 
     private LocalDateTime computedAt;
