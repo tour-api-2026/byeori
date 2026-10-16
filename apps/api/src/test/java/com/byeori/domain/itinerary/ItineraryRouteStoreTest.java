@@ -2,10 +2,13 @@ package com.byeori.domain.itinerary;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * 저장된 경로를 언제 다시 쓰고 언제 버리는가.
@@ -70,5 +73,43 @@ class ItineraryRouteStoreTest {
         // 저장본이 그대로 맞아떨어져서, 이미 캐시가 있는 사용자에게는 설정을 바꾼 효과가
         // 영원히 나타나지 않는다.
         assertThat(ItineraryRoute.hashOf(a, 1000)).isNotEqualTo(ItineraryRoute.hashOf(a, 500));
+    }
+
+    // ── 나이 ─────────────────────────────
+
+    private static ItineraryRoute row(String hash) {
+        return new ItineraryRoute(1L, "AUTO", hash, 960, 720, "[]", "[]");
+    }
+
+    @Test
+    @DisplayName("방금 계산한 줄은 해시가 맞으면 그대로 쓴다")
+    void 신선한_줄() {
+        assertThat(row("h").matches("h", Duration.ofDays(7))).isTrue();
+    }
+
+    @Test
+    @DisplayName("보관 기간을 넘긴 줄은 쓰지 않는다 — 모양은 그대로여도 차 시간은 그때의 교통량이다")
+    void 오래된_줄() {
+        ItineraryRoute r = row("h");
+        ReflectionTestUtils.setField(r, "computedAt", LocalDateTime.now().minusDays(8));
+        assertThat(r.matches("h", Duration.ofDays(7))).isFalse();
+        // 기간 안이면 같은 줄이 멀쩡히 쓰인다 — 나이 때문에 전부 버리는 게 아니다.
+        assertThat(r.matches("h", Duration.ofDays(30))).isTrue();
+    }
+
+    @Test
+    @DisplayName("해시가 틀리면 아무리 새것이어도 쓰지 않는다")
+    void 해시가_먼저() {
+        assertThat(row("h").matches("다른해시", Duration.ofDays(7))).isFalse();
+    }
+
+    @Test
+    @DisplayName("계산 시각이 비어 있으면 오래된 것으로 본다 — 모르는 값을 믿지 않는다")
+    void 시각이_없으면() {
+        ItineraryRoute r = row("h");
+        ReflectionTestUtils.setField(r, "computedAt", null);
+        assertThat(r.matches("h", Duration.ofDays(7))).isFalse();
+        // 나이를 묻지 않겠다고 하면(null) 해시만 본다.
+        assertThat(r.matches("h", null)).isTrue();
     }
 }

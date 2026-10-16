@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -62,7 +63,21 @@ public class ItineraryRoute {
         this.computedAt = LocalDateTime.now();
     }
 
-    public boolean matches(String hash) { return stopsHash != null && stopsHash.equals(hash); }
+    /**
+     * 저장해 둔 이 줄을 그대로 써도 되는가.
+     *
+     * 해시만 보면 안 된다. 좌표열이 그대로면 경로의 **모양**은 변하지 않지만, 자동차
+     * 구간의 duration 은 카카오가 그 시각의 교통량으로 준 값이다. 출근길에 계산한
+     * "25분"이 해시가 맞는 한 영원히 나오면 숫자가 거짓말이 된다. 그래서 나이도 본다.
+     *
+     * computedAt 이 비어 있으면(있을 수 없지만) 오래된 것으로 보고 다시 계산하게 둔다 —
+     * 모르는 값을 믿는 쪽이 위험하다.
+     */
+    public boolean matches(String hash, Duration maxAge) {
+        if (stopsHash == null || !stopsHash.equals(hash)) return false;
+        if (maxAge == null) return true;
+        return computedAt != null && computedAt.isAfter(LocalDateTime.now().minus(maxAge));
+    }
 
     /**
      * 방문지 좌표열의 지문.

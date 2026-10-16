@@ -14,6 +14,7 @@ import com.byeori.global.exception.NotFoundException;
 import com.byeori.global.external.KakaoLocalClient;
 import com.byeori.global.external.KakaoMobilityClient;
 import com.byeori.global.external.OsrmClient;
+import com.byeori.global.external.OsrmClient.WalkResult;
 import com.byeori.global.external.dto.KakaoRoute;
 import com.byeori.global.external.dto.OsrmRoute;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -21,11 +22,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -143,7 +146,8 @@ public class ItineraryService {
         // 알아서 내려가고, 도보로 충분한 루트는 키 없이도 온전히 나온다. 막아 두면 그 루트가
         // 400 이 되고 mode=WALK 가 카카오 키 없이는 불가능해진다.
         List<RouteStop> stops = new ArrayList<>();
-        List<double[]> coords = new ArrayList<>(); // [경도, 위도] 순서(카카오 요청용)
+        // [경도, 위도] 순서. 카카오·OSRM 요청과 저장본 해시가 모두 이 목록을 쓴다.
+        List<double[]> coords = new ArrayList<>();
         int order = 0;
         for (ItineraryItem item : itemRepo.findByItineraryIdOrderByVisitDateAscSortOrderAsc(id)) {
             BigDecimal lat, lng;
@@ -170,16 +174,21 @@ public class ItineraryService {
             throw new BadRequestException("ROUTE_TOO_FEW_POINTS", "경로를 그리려면 좌표가 있는 방문지가 2곳 이상이어야 합니다.");
         }
 
-        // 모르는 값은 AUTO 로 본다 — 경로 보기는 읽기 동작이라 오타로 400 을 주지 않는다.
-        String wanted = RouteModePlanner.WALK.equals(mode) || RouteModePlanner.DRIVE.equals(mode)
-                ? mode : RouteModePlanner.AUTO;
+        // 대소문자는 가리지 않는다 — ?mode=walk 가 조용히 AUTO 가 되면 사용자는 칩을
+        // 눌렀는데 아무 일도 안 일어난 것처럼 보인다. 모르는 값은 AUTO 로 본다.
+        // 경로 보기는 읽기 동작이라 오타로 400 을 주는 것보다 그럴듯한 답이 낫다.
+        String asked = mode == null ? null : mode.trim().toUpperCase(Locale.ROOT);
+        String wanted = RouteModePlanner.WALK.equals(asked) || RouteModePlanner.DRIVE.equals(asked)
+                ? asked : RouteModePlanner.AUTO;
 
         // 저장해 둔 것이 아직 맞으면 그대로 쓴다. 외부 호출이 한 번도 없다.
         int threshold = props.getWalkThresholdM();
         List<double[]> latLngs = coords.stream().map(c -> new double[]{c[1], c[0]}).toList();
         String hash = ItineraryRoute.hashOf(latLngs, threshold);
         ItineraryRoute saved = routeRepo.findByItineraryIdAndMode(id, wanted).orElse(null);
-        if (saved != null && saved.matches(hash)) {
+        // 해시가 맞아도 오래된 줄은 쓰지 않는다. 모양은 그대로여도 자동차 구간의 시간은
+        // 그때의 교통량이라, 한 번 계산한 "25분"이 계속 나오면 숫자가 거짓말이 된다.
+        if (saved != null && saved.matches(hash, Duration.ofDays(props.getCacheMaxAgeDays()))) {
             RouteResponse cached = fromSaved(saved, wanted, stops);
             if (cached != null) return cached;   // 못 읽으면 아래로 내려가 다시 계산한다
         }
@@ -204,10 +213,19 @@ public class ItineraryService {
             int[] driveSummary = null;
             List<double[]> legPath = null;
 
-            if (RouteModePlanner.WALK.equals(legWanted) && !osrmDown) {
-                walk = osrmClient.walk(List.of(a, b));
+            // mode=WALK 는 거리를 묻지 않고 걷겠다는 뜻이지만, 상한은 둔다 — 서울→부산을
+            // 도보로 물으면 좌표가 수만 점이 되어 응답·jsonb·웹뷰를 모두 통과한다.
+            // 상한을 넘는 구간은 다른 먼 구간처럼 차로 간다.
+            boolean tooFarToWalk = straight > props.getWalkMaxM();
+            if (RouteModePlanner.WALK.equals(legWanted) && !osrmDown && !tooFarToWalk) {
+                WalkResult walked = osrmClient.walk(List.of(a, b));
+                walk = walked.route();
                 if (walk != null) legPath = walk.path();
-                else osrmDown = true;
+                // 차단기는 **OSRM 에 닿지 못했을 때만** 건다. 걸어서 갈 수 없는 구간
+                // (제주↔육지)은 장애가 아니라 정상 답이다 — 그 구간만 차로 넘기고 남은
+                // 구간은 계속 물어본다. 섞어 세면 그 하나 때문에 전체가 차로 가고,
+                // 그 결과는 저장도 못 해 열 때마다 외부 호출을 다시 한다.
+                else if (walked.serverFailed()) osrmDown = true;
             }
             if (walk == null) {   // 도보를 안 고를 수도, 실패했을 수도 있다
                 KakaoRoute kr = mobilityClient.directions(List.of(a, b), "RECOMMEND");
@@ -241,15 +259,19 @@ public class ItineraryService {
         // 사용자는 이유를 알 길이 없다. 저장을 건너뛰면 장애 동안만 매번 다시 계산하고,
         // OSRM 이 살아나는 순간 저절로 낫는다.
         //
-        // 온전하지 않은 세 가지를 모두 센다. 수단 이름이 STRAIGHT 인 구간(둘 다 실패),
-        // 차단기가 걸린 요청(도보를 물어보지도 못했다), 그리고 **수단은 멀쩡한데 좌표만
-        // 지어낸 구간**이다. 셋째가 가장 눈에 안 띈다 — 공급자가 200 과 요약은 주면서 좌표를
-        // 비워 보내면 DRIVE 라고 적힌 직선이 캐시에 눌러앉는다.
+        // 온전하지 않은 네 가지를 모두 센다. 수단 이름이 STRAIGHT 인 구간(둘 다 실패),
+        // 차단기가 걸린 요청(도보를 물어보지도 못했다), **수단은 멀쩡한데 좌표만 지어낸
+        // 구간**, 그리고 **점이 0인 구간**이다. 셋째·넷째가 가장 눈에 안 띈다 — 공급자가
+        // 200 과 요약은 주면서 좌표를 비워 보내면 DRIVE 라고 적힌 직선이 캐시에 눌러앉고,
+        // 공급자가 좌표를 한 점만 주면 이음점을 덜어낸 뒤 points 가 0 이 된다. 지도는
+        // points 가 0 이하면 자를 수 없다고 보아 구간 구분 없이 한 줄로 그린다 —
+        // 저장해 버리면 그 루트에서는 걷는 구간과 타는 구간의 구분이 영원히 사라진다.
         long straightLegs = legs.stream().filter(l -> STRAIGHT.equals(l.mode())).count();
-        if (osrmDown || straightLegs > 0 || fakedPaths > 0) {
+        long pointlessLegs = legs.stream().filter(l -> l.points() <= 0).count();
+        if (osrmDown || straightLegs > 0 || fakedPaths > 0 || pointlessLegs > 0) {
             log.info("경로가 온전하지 않아 저장하지 않는다 itinerary={} mode={}"
-                            + " osrm다운={} 직선구간={}/{} 직선좌표={}",
-                    id, wanted, osrmDown, straightLegs, legs.size(), fakedPaths);
+                            + " osrm다운={} 직선구간={}/{} 직선좌표={} 점없는구간={}",
+                    id, wanted, osrmDown, straightLegs, legs.size(), fakedPaths, pointlessLegs);
         } else {
             save(id, wanted, hash, totalM, totalS, path, legs);
         }
@@ -272,7 +294,7 @@ public class ItineraryService {
      * 준다 — 방문 순서와 대략의 거리는 그것만으로도 쓸모가 있다.
      *
      * 직선으로 내려갈 때는 **그 구간에 뭘 하려 했는지**에 맞춰 시간을 어림한다. 6km 짜리
-     * 차 구간을 걷는 속도로 적으면 "71분"이 되는데, 숫자가 빈 화면보다 나쁘다.
+     * 차 구간을 걷는 속도로 적으면 "73분"이 되는데, 숫자가 빈 화면보다 나쁘다.
      */
     static RouteLeg legOrFallback(OsrmRoute walk, int[] driveSummary, double straightM,
                                   String legWanted) {
