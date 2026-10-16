@@ -2,21 +2,34 @@
 # 도보 경로용 OSRM 데이터를 만든다. OSM 은 매일 갱신되므로 분기에 한 번쯤 돌린다.
 #
 # ⚠️ 돌리는 동안 Gradle·웹 빌드·로컬 API 를 띄우지 말 것.
-#    extract 가 5.5GB 를 쓴다. 이 기기는 메모리가 바닥나면 커널이 아무 프로세스나
-#    죽이고(전에 java 가 당했다), 그러면 postgres 나 운영 API 가 간다.
-#    --memory 한도를 거는 이유가 그것이다 — 터져도 이 컨테이너만 죽는다.
+#    extract 는 메모리 한도 5500m 에 스왑 2.5GB(memory-swap 8g)까지 쓴다.
+#    이 기기는 메모리가 바닥나면 커널이 아무 프로세스나 죽이고(전에 java 가 당했다),
+#    그러면 postgres 나 운영 API 가 간다. 한도를 거는 이유는 터져도 이 컨테이너만
+#    죽게 하려는 것이다.
+#
+# 재빌드 중에는 osrm 컨테이너를 멈춘다. 서버가 .osrm 파일을 mmap 한 채로 두고
+# 그 파일을 덮어쓰면 SIGBUS 로 죽거나 섞인 데이터를 서빙할 수 있기 때문이다.
+# 멈춰 있는 동안 도보 경로는 자동차 경로로 대체된다. 이는 예상된 동작이다.
 set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+COMPOSE="$ROOT/infra/docker-compose.yml"
 DIR="${1:-/home/hidi/osrm-data}"
-IMG=ghcr.io/project-osrm/osrm-backend
+IMG=ghcr.io/project-osrm/osrm-backend:v26.10.0-amd64-debian   # 기존 데이터를 만든 버전. 올리면 포맷이 바뀔 수 있다.
 PBF=south-korea-latest.osm.pbf
 mkdir -p "$DIR"
 
 echo "① 내려받기 (약 276MB)"
-curl -sL -o "$DIR/$PBF" https://download.geofabrik.de/asia/south-korea-latest.osm.pbf
+# -f: HTTP 오류 응답 본문을 데이터로 저장하지 않는다. 임시 파일에 받고 성공해야 교체한다.
+curl -fsSL -o "$DIR/$PBF.tmp" https://download.geofabrik.de/asia/south-korea-latest.osm.pbf
+mv "$DIR/$PBF.tmp" "$DIR/$PBF"
+
+echo "② osrm 컨테이너 정지"
+docker compose -f "$COMPOSE" stop osrm
 
 run() {                       # 한 단계를 한도 안에서 돌린다
-  echo "② $1"
-  docker run --rm --memory=5500m --memory-swap=8g -v "$DIR:/data" "$IMG" "$@"
+  echo "③ $1"
+  # 컨테이너를 호스트 사용자로 돌려 산출물이 root 소유가 되지 않게 한다.
+  docker run --rm --user "$(id -u):$(id -g)" --memory=5500m --memory-swap=8g -v "$DIR:/data" "$IMG" "$@"
 }
 # extract 는 실측 5,474MB 를 쓴다. 4GB·5GB 한도에서는 OOM 으로 죽었고,
 # 스왑을 열어 주어야 통과한다.
@@ -24,5 +37,7 @@ run osrm-extract -p /opt/foot.lua "/data/$PBF"
 run osrm-partition "/data/south-korea-latest.osrm"
 run osrm-customize "/data/south-korea-latest.osrm"
 
+echo "④ osrm 컨테이너 재기동"
+docker compose -f "$COMPOSE" up -d --force-recreate osrm
+
 echo "완료: $(du -sh "$DIR" | cut -f1)"
-echo "컨테이너 재기동: cd infra && docker compose up -d --force-recreate osrm"
