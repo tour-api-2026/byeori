@@ -55,6 +55,24 @@ services:
       - default          # postgres 접근
       - seoulride-net    # 공용 nginx가 byeori-api:8080 으로 프록시
 
+  # 도보 경로 계산(OSRM). 카카오모빌리티는 자동차 경로만 주므로 걷는 길은 여기서 온다.
+  # 포트를 호스트에 열지 않는다 — postgres 와 같은 원칙(외부는 nginx 443만).
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend
+    container_name: byeori-osrm
+    restart: unless-stopped
+    # 인자 순서 주의: --mmap 과 --disable-feature-dataset 은 값을 받는 옵션이라
+    # 데이터 경로를 맨 뒤에 두면 그것을 값으로 먹고 죽는다.
+    # --mmap 1 이 핵심 — 없으면 전국 데이터가 1.8GB 상주한다(있으면 11.6MB).
+    command: >
+      osrm-routed --algorithm mld --mmap 1 --threads 4
+      /data/south-korea-latest.osrm --disable-feature-dataset=ROUTE_STEPS
+    volumes:
+      - /home/hidi/osrm-data:/data
+    mem_limit: 512m
+    networks:
+      - default
+
 networks:
   default:
   seoulride-net:
