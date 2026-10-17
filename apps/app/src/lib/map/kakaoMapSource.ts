@@ -38,6 +38,8 @@ export function mapScript(segColors: string[]): string {
   function segColor(i){ return ROUTE_COLORS[((i%ROUTE_COLORS.length)+ROUTE_COLORS.length)%ROUTE_COLORS.length]; }
   var map, venueOv=[], kakaoOv=[], ready=false, pending=null, places=null, kakaoData=[], lastList=[];
   var routeLines=[], routeOv=[], pendingRoute=null;
+  // 마지막으로 지도를 맞춘 경로의 지문. 같은 경로를 다시 그릴 때는 지도를 건드리지 않는다.
+  var fittedKey=null;
   function sel(id){ post({type:'select', id:id}); }
   function selK(i){ post({type:'selectKakao', place:kakaoData[i]}); }
   window.sel = sel; window.selK = selK;
@@ -190,15 +192,26 @@ export function mapScript(segColors: string[]): string {
       var ov=new kakao.maps.CustomOverlay({position:pos,content:html,yAnchor:1});
       ov.setMap(map); routeOv.push(ov);
     });
-    var b=new kakao.maps.LatLngBounds();
-    (path.length>1?path:stops.map(function(s){return [s.lat,s.lng];}))
-      .forEach(function(p){ b.extend(new kakao.maps.LatLng(p[0],p[1])); });
-    if(routeOv.length) map.setBounds(b);
+    // 지도를 맞추는 것은 **경로가 바뀌었을 때 한 번뿐**이다.
+    // 전에는 drawRoute 가 불릴 때마다 맞췄는데, 지도를 움직이면 idle 이 뜨고 그것이
+    // React 상태를 바꿔 drawRoute 가 다시 주입된다. 그러면 사용자가 민 지도가 곧바로
+    // 경로 범위로 튕겨 돌아와, 확대도 이동도 안 되는 것처럼 보였다.
+    var key=stops.map(function(s){ return s.order+':'+s.lat+','+s.lng; }).join('|')+'#'+path.length;
+    if(routeOv.length && key!==fittedKey){
+      var b=new kakao.maps.LatLngBounds();
+      (path.length>1?path:stops.map(function(s){return [s.lat,s.lng];}))
+        .forEach(function(p){ b.extend(new kakao.maps.LatLng(p[0],p[1])); });
+      map.setBounds(b);
+      fittedKey=key;
+    }
   };
   window.clearRoute = function(){
     routeLines.forEach(function(l){ l.setMap(null); }); routeLines=[];
     clearArr(routeOv);
   };
+  // 경로 모드를 벗어났다 돌아오면 다시 맞춰야 한다. clearRoute 는 되그릴 때도 불리므로
+  // 거기서 지우면 안 되고, 모드를 벗어날 때만 부른다.
+  window.forgetRouteFit = function(){ fittedKey=null; };
   // 현재 위치로 지도 중심 이동 + 내 위치 점 표시(RN에서 좌표 주입).
   window.moveTo = function(lat,lng,level){
     if(!map) return;

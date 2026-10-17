@@ -303,7 +303,8 @@ export default function MapScreen() {
       }
     } else {
       webRef.current.injectJavaScript(
-        `window.clearRoute(); window.setMarkers(${markerPayload}); true;`,
+        `window.clearRoute(); window.forgetRouteFit && window.forgetRouteFit();`
+          + ` window.setMarkers(${markerPayload}); true;`,
       );
     }
   }, [ready, routeMode, routeQuery.data, markerPayload]);
@@ -317,6 +318,10 @@ export default function MapScreen() {
       }
       if (msg.type === "error") setMapError(String(msg.msg));
       if (msg.type === "idle") {
+        // 경로 모드에서는 주변 장소를 조회하지 않으므로(useNearbyVenuesQuery 가 꺼진다)
+        // view 를 갱신할 이유가 없다. 갱신하면 상태가 바뀌어 다시 그려지고, 그 과정에서
+        // drawRoute 가 다시 주입돼 지도가 경로 범위로 튕겨 돌아갔다.
+        if (routeMode) return;
         const r = Math.min(Math.max(Number(msg.radius) || 3000, 500), 20000);
         setView({
           lat: Math.round(Number(msg.lat) * 1000) / 1000,
