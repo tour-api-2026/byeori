@@ -55,6 +55,36 @@ services:
       - default          # postgres 접근
       - seoulride-net    # 공용 nginx가 byeori-api:8080 으로 프록시
 
+  # 도보 경로 계산(OSRM). 카카오모빌리티는 자동차 경로만 주므로 걷는 길은 여기서 온다.
+  # 이 서비스는 호스트 포트를 전혀 게시하지 않는다. 내부망 osrm:5000 으로만 접근한다.
+  osrm:
+    # 기존 데이터를 만든 버전에 고정한다. 올리면 .osrm 포맷이 바뀔 수 있다.
+    image: ghcr.io/project-osrm/osrm-backend:v26.10.0-amd64-debian
+    container_name: byeori-osrm
+    restart: unless-stopped
+    # 인자 순서 주의: --mmap 과 --disable-feature-dataset 은 값을 받는 옵션이라
+    # 데이터 경로를 맨 뒤에 두면 그것을 값으로 먹고 죽는다.
+    # --mmap 1 이 핵심 — 없으면 전국 데이터가 1.8GB 상주한다(있으면 11.6MB).
+    command: >
+      osrm-routed --algorithm mld --mmap 1 --threads 4
+      /data/south-korea-latest.osrm --disable-feature-dataset=ROUTE_STEPS
+    volumes:
+      - /home/hidi/osrm-data:/data
+    mem_limit: 512m
+    # 데이터(/home/hidi/osrm-data)가 없으면 osrm-routed 는 바로 죽고, restart 정책 아래서
+    # 조용히 재시작만 반복한다. 포트를 열지 않으니 밖에서 확인할 길도 없다.
+    # api 에 depends_on 을 걸지는 않는다 — OSRM 이 없어도 자동차 경로로 내려가면 되고,
+    # 걸어 두면 이쪽이 아플 때 API 까지 못 뜬다. 상태만 보이게 한다(docker compose ps).
+    healthcheck:
+      # 이 이미지에는 curl·wget 이 없다. bash 의 /dev/tcp 로 5000 포트만 두드린다.
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/5000'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - default
+
 networks:
   default:
   seoulride-net:

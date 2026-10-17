@@ -58,8 +58,10 @@ export default function MapScreen() {
     ? Number(params.itineraryId)
     : undefined;
   const routeMode = !!itineraryId && !Number.isNaN(itineraryId);
+  const [routeModeSel, setRouteModeSel] = useState<'AUTO' | 'WALK' | 'DRIVE'>('AUTO');
   const routeQuery = useItineraryRouteQuery(
     routeMode ? (itineraryId as number) : 0,
+    routeModeSel,
   );
   // 경로 보기 '닫기' → '내 루트'로 복귀(내 주변에 머무르지 않도록).
   // 탭 포커스 해제 시 useFocusEffect가 itineraryId를 정리하므로 파라미터는 자동 초기화.
@@ -295,6 +297,7 @@ export default function MapScreen() {
         const payload = JSON.stringify({
           path: routeQuery.data.path,
           stops: routeQuery.data.stops,
+          legs: routeQuery.data.legs,
         });
         webRef.current.injectJavaScript(`window.drawRoute(${payload}); true;`);
       }
@@ -414,6 +417,20 @@ export default function MapScreen() {
                 경로를 불러오지 못했어요
               </Text>
             )}
+            <View style={styles.routeModes}>
+              {([['AUTO', '자동'], ['WALK', '걷기'], ['DRIVE', '차']] as const).map(([v, label]) => (
+                <Pressable
+                  key={v}
+                  hitSlop={6}
+                  onPress={() => setRouteModeSel(v)}
+                  style={[styles.routeModeChip, routeModeSel === v && styles.routeModeChipOn]}
+                >
+                  <Text style={[styles.routeModeText, routeModeSel === v && styles.routeModeTextOn]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
           <Pressable
             hitSlop={8}
@@ -708,6 +725,22 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semibold,
     fontWeight: "600",
   },
+  // 배너(primary 바탕) 안의 칩: 닫기 버튼과 같은 반투명 흰색, 선택되면 흰 바탕으로 뒤집는다.
+  routeModes: { flexDirection: "row", gap: 6, marginTop: 6 },
+  routeModeChip: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  routeModeChipOn: { backgroundColor: colors.white },
+  routeModeText: {
+    color: colors.white,
+    fontSize: 12,
+    fontFamily: fonts.semibold,
+    fontWeight: "600",
+  },
+  routeModeTextOn: { color: colors.primary },
   resultHint: {
     fontSize: 12,
     color: colors.textSub,

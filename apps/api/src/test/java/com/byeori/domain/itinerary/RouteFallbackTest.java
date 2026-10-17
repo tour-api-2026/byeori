@@ -1,0 +1,368 @@
+package com.byeori.domain.itinerary;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.byeori.domain.itinerary.dto.ItineraryDtos.RouteLeg;
+import com.byeori.domain.itinerary.dto.ItineraryDtos.RouteResponse;
+import com.byeori.domain.venue.Venue;
+import com.byeori.domain.venue.VenueRepository;
+import com.byeori.global.external.KakaoMobilityClient;
+import com.byeori.global.external.OsrmClient;
+import com.byeori.global.external.OsrmClient.WalkResult;
+import com.byeori.global.external.dto.KakaoRoute;
+import com.byeori.global.external.dto.OsrmRoute;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.util.ReflectionTestUtils;
+
+/**
+ * 한 구간을 어떻게든 채운다.
+ *
+ * OSRM 컨테이너가 죽어도, 카카오가 쿼터를 다 써도, 루트 화면은 떠야 한다.
+ * 지금보다 나빠지는 경우가 있으면 안 된다.
+ */
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
+class RouteFallbackTest {
+
+    @Test
+    @DisplayName("도보가 실패하면 자동차로 내려간다")
+    void 도보_실패() {
+        RouteLeg leg = ItineraryService.legOrFallback(
+                null,                   // OSRM 실패
+                new int[]{1500, 300},   // 카카오 성공
+                1200, "WALK");
+        assertThat(leg.mode()).isEqualTo("DRIVE");
+        assertThat(leg.distance()).isEqualTo(1500);
+    }
+
+    @Test
+    @DisplayName("둘 다 실패하면 직선이라도 준다 — 빈 화면보다 낫다")
+    void 둘_다_실패() {
+        RouteLeg leg = ItineraryService.legOrFallback(null, null, 1200, "WALK");
+        assertThat(leg.mode()).isEqualTo("STRAIGHT");
+        assertThat(leg.distance()).isEqualTo(1200);   // 직선거리
+        assertThat(leg.duration()).isPositive();       // 걷는 속도로 어림한다
+    }
+
+    @Test
+    @DisplayName("차로 가려던 구간은 차 속도로 어림한다 — 6km 를 73분으로 적지 않는다")
+    void 직선은_의도한_속도로() {
+        RouteLeg drive = ItineraryService.legOrFallback(null, null, 6000, "DRIVE");
+        RouteLeg walk = ItineraryService.legOrFallback(null, null, 6000, "WALK");
+        assertThat(drive.mode()).isEqualTo("STRAIGHT");
+        assertThat(drive.duration()).isLessThan(walk.duration());
+        // 시내 30km/h 어림 — 10~20분 사이에 들어와야 사람이 보고 납득한다.
+        assertThat(drive.duration()).isBetween(600, 1200);
+    }
+
+    // ── 구간별 계산 전체 ─────────────────────────────
+
+    static final LocalDate DAY = LocalDate.of(2026, 10, 20);
+
+    @Mock ItineraryRepository repo;
+    @Mock ItineraryItemRepository itemRepo;
+    @Mock VenueRepository venueRepo;
+    @Mock KakaoMobilityClient mobilityClient;
+    @Mock OsrmClient osrmClient;
+    @Mock ItineraryRouteRepository routeRepo;
+    @Mock ItineraryRouteSaver routeSaver;
+
+    ItineraryService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new ItineraryService(repo, itemRepo, null, venueRepo, null,
+                mobilityClient, osrmClient, routeRepo, routeSaver, new RouteProperties());
+
+        Itinerary mine = new Itinerary(7L, "걷는 루트", DAY, DAY, "CUSTOM", null);
+        ReflectionTestUtils.setField(mine, "id", 1L);
+        when(repo.findById(1L)).thenReturn(Optional.of(mine));
+
+        // 300m 쯤씩 떨어진 네 곳 — AUTO 면 모든 구간이 도보로 뽑힌다(기준 1000m).
+        List<ItineraryItem> items = new ArrayList<>();
+        double[] lats = {37.5600, 37.5630, 37.5660, 37.5690};
+        for (int i = 0; i < lats.length; i++) {
+            long venueId = 500L + i;
+            Venue v = Venue.privatePlace(7L, String.valueOf(venueId), "장소" + i, null,
+                    BigDecimal.valueOf(lats[i]), BigDecimal.valueOf(126.9800), "FOOD", null);
+            ReflectionTestUtils.setField(v, "id", venueId);
+            when(venueRepo.findById(venueId)).thenReturn(Optional.of(v));
+            items.add(new ItineraryItem(1L, null, venueId, DAY, i, null, null));
+        }
+        when(itemRepo.findByItineraryIdOrderByVisitDateAscSortOrderAsc(1L)).thenReturn(items);
+        when(routeRepo.findByItineraryIdAndMode(anyLong(), anyString())).thenReturn(Optional.empty());
+    }
+
+    private static WalkResult walkRoute() {
+        return new WalkResult(new OsrmRoute(320, 240,
+                List.of(new double[]{37.5600, 126.9800}, new double[]{37.5630, 126.9800})), false);
+    }
+
+    private static KakaoRoute driveRoute(List<double[]> path) {
+        return new KakaoRoute(400, 90, path);
+    }
+
+    /** 방문지 좌표열(위도, 경도)과 그 해시 — 저장본을 손으로 만들 때 쓴다. */
+    private static final List<double[]> LAT_LNGS = List.of(
+            new double[]{37.5600, 126.9800}, new double[]{37.5630, 126.9800},
+            new double[]{37.5660, 126.9800}, new double[]{37.5690, 126.9800});
+
+    private static ItineraryRoute savedRoute(String mode) {
+        return new ItineraryRoute(1L, mode, ItineraryRoute.hashOf(LAT_LNGS, 1000), 960, 720,
+                "[[37.5600,126.9800],[37.5630,126.9800]]",
+                "[{\"distance\":320,\"duration\":240,\"mode\":\"WALK\",\"points\":2}]");
+    }
+
+    @Test
+    @DisplayName("OSRM 이 한 번 빗나가면 남은 구간은 묻지 않는다 — 멈춘 컨테이너가 요청을 몇 배로 늘리지 않게")
+    void 요청_안_차단기() {
+        // 멈춘 OSRM 은 구간마다 4초를 잡아먹는다. 세 구간이면 12초다. 그래서 한 번만 묻는다.
+        when(osrmClient.walk(anyList())).thenReturn(WalkResult.FAILED);
+        when(mobilityClient.directions(anyList(), anyString())).thenReturn(driveRoute(
+                List.of(new double[]{126.9800, 37.5600}, new double[]{126.9800, 37.5630})));
+
+        RouteResponse res = service.route(7L, 1L, "AUTO");
+
+        assertThat(res.legs()).hasSize(3);
+        assertThat(res.legs()).allMatch(l -> "DRIVE".equals(l.mode()));
+        verify(osrmClient, times(1)).walk(anyList());          // 세 구간인데 한 번만
+        verify(mobilityClient, times(3)).directions(anyList(), anyString());
+        assertThat(res.distance()).isEqualTo(1200);
+        // 차단기가 걸린 결과는 저장하지 않는다 — OSRM 이 살아나면 저절로 나아야 한다.
+        verify(routeSaver, never()).store(anyLong(), anyString(), anyString(),
+                anyInt(), anyInt(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("OSRM 이 살아 있으면 가까운 구간은 모두 걷고, 그 결과만 저장한다")
+    void 도보가_되면() {
+        when(osrmClient.walk(anyList())).thenReturn(walkRoute());
+
+        RouteResponse res = service.route(7L, 1L, "AUTO");
+
+        assertThat(res.legs()).allMatch(l -> "WALK".equals(l.mode()));
+        verify(osrmClient, times(3)).walk(anyList());
+        verify(mobilityClient, never()).directions(anyList(), anyString());
+        assertThat(res.mode()).isEqualTo("AUTO");
+        // 이어지는 지점은 한 번만 들어간다 — 구간마다 2점이면 4점이 된다.
+        assertThat(res.path()).hasSize(4);
+        verify(routeSaver, times(1)).store(anyLong(), anyString(), anyString(),
+                anyInt(), anyInt(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("직선으로 내려간 경로는 저장하지 않는다 — 장애가 캐시에 눌러앉으면 영원히 직선이 나온다")
+    void 직선은_저장하지_않는다() {
+        when(osrmClient.walk(anyList())).thenReturn(WalkResult.FAILED);
+        when(mobilityClient.directions(anyList(), anyString())).thenReturn(null);
+
+        RouteResponse res = service.route(7L, 1L, "AUTO");
+
+        assertThat(res.legs()).allMatch(l -> "STRAIGHT".equals(l.mode()));
+        verify(routeSaver, never()).store(anyLong(), anyString(), anyString(),
+                anyInt(), anyInt(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("카카오가 빈 경로를 주어도 터지지 않고, 지어낸 직선은 저장하지 않는다")
+    void 카카오_빈_경로() {
+        // mode=DRIVE 라 OSRM 은 아예 묻지 않는다. 빈 좌표열만으로 터지는지를 본다.
+        when(mobilityClient.directions(anyList(), anyString())).thenReturn(driveRoute(List.of()));
+
+        RouteResponse res = service.route(7L, 1L, "DRIVE");
+
+        assertThat(res.legs()).hasSize(3);
+        assertThat(res.legs()).allMatch(l -> "DRIVE".equals(l.mode()));
+        assertThat(res.path()).hasSize(4);   // 구간마다 직선 두 점, 이음점은 한 번만
+        // 수단은 DRIVE 로 멀쩡해 보이지만 선은 우리가 지어낸 직선이다. 저장하면 그 루트는
+        // 방문지를 고치기 전까지 영원히 직선을 받는다 — 장애가 캐시에 눌러앉는 것과 같다.
+        verify(routeSaver, never()).store(anyLong(), anyString(), anyString(),
+                anyInt(), anyInt(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("저장이 경쟁에서 져도 경로는 돌려준다")
+    void 저장_충돌() {
+        when(osrmClient.walk(anyList())).thenReturn(walkRoute());
+        // 다른 요청이 먼저 같은 줄을 넣은 상황. 같은 입력이면 같은 결과라 잃을 것이 없다.
+        doThrow(new DataIntegrityViolationException("duplicate key"))
+                .when(routeSaver).store(anyLong(), anyString(), anyString(),
+                        anyInt(), anyInt(), anyString(), anyString());
+
+        RouteResponse res = service.route(7L, 1L, "AUTO");
+
+        assertThat(res.legs()).hasSize(3);
+        assertThat(res.legs()).allMatch(l -> "WALK".equals(l.mode()));
+    }
+
+    @Test
+    @DisplayName("저장이 어떤 이유로 실패해도 경로는 돌려준다 — 교착·락 대기도 500 이 되면 안 된다")
+    void 저장_실패_일반() {
+        when(osrmClient.walk(anyList())).thenReturn(walkRoute());
+        doThrow(new org.springframework.dao.CannotAcquireLockException("deadlock detected"))
+                .when(routeSaver).store(anyLong(), anyString(), anyString(),
+                        anyInt(), anyInt(), anyString(), anyString());
+
+        assertThatCode(() -> service.route(7L, 1L, "AUTO")).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("섞인 경로에서 구간별 점의 합은 path 길이와 같다 — 지도가 구간별로 자를 수 있어야 한다")
+    void 점_수의_합_섞인_경로() {
+        // 첫 구간은 걷고, 그 뒤 OSRM 이 빗나가 나머지는 차로 간다.
+        when(osrmClient.walk(anyList())).thenReturn(walkRoute(), WalkResult.FAILED);
+        when(mobilityClient.directions(anyList(), anyString())).thenReturn(driveRoute(
+                List.of(new double[]{126.9800, 37.5630}, new double[]{126.9800, 37.5660},
+                        new double[]{126.9800, 37.5690})));
+
+        RouteResponse res = service.route(7L, 1L, "AUTO");
+
+        assertThat(res.legs()).extracting(l -> l.mode()).containsExactly("WALK", "DRIVE", "DRIVE");
+        assertThat(res.legs()).extracting(l -> l.points()).containsExactly(2, 2, 2);
+        assertThat(res.legs().stream().mapToInt(l -> l.points()).sum()).isEqualTo(res.path().size());
+    }
+
+    @Test
+    @DisplayName("직선으로 메운 경로도 구간별 점의 합이 path 길이와 같다")
+    void 점_수의_합_직선() {
+        when(osrmClient.walk(anyList())).thenReturn(WalkResult.FAILED);
+        when(mobilityClient.directions(anyList(), anyString())).thenReturn(null);
+
+        RouteResponse res = service.route(7L, 1L, "AUTO");
+
+        assertThat(res.legs()).extracting(l -> l.points()).containsExactly(2, 1, 1);
+        assertThat(res.legs().stream().mapToInt(l -> l.points()).sum()).isEqualTo(res.path().size());
+    }
+
+    @Test
+    @DisplayName("카카오 키가 없어도 걷는 루트는 나온다 — 미리 막지 않는다")
+    void 카카오_키가_없어도() {
+        when(mobilityClient.enabled()).thenReturn(false);
+        when(mobilityClient.directions(anyList(), anyString())).thenReturn(null);
+        when(osrmClient.walk(anyList())).thenReturn(walkRoute());
+
+        RouteResponse res = service.route(7L, 1L, "WALK");
+
+        assertThat(res.legs()).allMatch(l -> "WALK".equals(l.mode()));
+        verify(mobilityClient, never()).directions(any(), anyString());
+    }
+
+    @Test
+    @DisplayName("점이 0인 구간이 있으면 저장하지 않는다 — 저장되면 그 루트는 영원히 한 줄로 그려진다")
+    void 점_없는_구간은_저장하지_않는다() {
+        // 가운데 구간에서 공급자가 좌표를 한 점만 준다. 이음점을 덜어내면 남는 점이 없어
+        // points 가 0 이 되고, 지도는 points 가 0 이하면 자를 수 없다고 보아 걷는 구간과
+        // 타는 구간을 구분하지 않는다. 수단 이름은 WALK 로 멀쩡해 보이는 게 함정이다.
+        WalkResult onePoint = new WalkResult(
+                new OsrmRoute(300, 220, List.of(new double[]{37.5630, 126.9800})), false);
+        when(osrmClient.walk(anyList())).thenReturn(walkRoute(), onePoint, walkRoute());
+
+        RouteResponse res = service.route(7L, 1L, "AUTO");
+
+        assertThat(res.legs()).extracting(l -> l.points()).containsExactly(2, 0, 1);
+        verify(routeSaver, never()).store(anyLong(), anyString(), anyString(),
+                anyInt(), anyInt(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("걸어서 갈 수 없는 구간은 그 구간만 차로 넘긴다 — 남은 구간은 계속 걷고, 결과는 저장된다")
+    void 걸어서_갈_수_없는_구간() {
+        // 제주↔육지처럼 도보 경로가 없는 구간에 OSRM 은 code != "Ok" 로 답한다. 이것은
+        // 장애가 아니라 정상 답이다. 장애로 세면 그 구간 하나 때문에 뒤 구간이 전부 차로
+        // 가고, 그 결과는 저장도 못 해 열 때마다 외부 호출을 다시 한다.
+        when(osrmClient.walk(anyList()))
+                .thenReturn(WalkResult.NO_ROUTE, walkRoute(), walkRoute());
+        when(mobilityClient.directions(anyList(), anyString())).thenReturn(driveRoute(
+                List.of(new double[]{126.9800, 37.5600}, new double[]{126.9800, 37.5630})));
+
+        RouteResponse res = service.route(7L, 1L, "AUTO");
+
+        assertThat(res.legs()).extracting(l -> l.mode()).containsExactly("DRIVE", "WALK", "WALK");
+        verify(osrmClient, times(3)).walk(anyList());               // 차단기가 걸리지 않았다
+        verify(mobilityClient, times(1)).directions(anyList(), anyString());
+        verify(routeSaver, times(1)).store(anyLong(), anyString(), anyString(),
+                anyInt(), anyInt(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("mode=WALK 라도 너무 먼 구간은 묻지 않고 차로 간다 — 좌표 수만 점이 응답·DB·웹뷰를 지나가지 않게")
+    void 상한을_넘는_도보_구간() {
+        RouteProperties tight = new RouteProperties();
+        tight.setWalkMaxM(100);            // 300m 짜리 구간들이 상한을 넘는다
+        ItineraryService capped = new ItineraryService(repo, itemRepo, null, venueRepo, null,
+                mobilityClient, osrmClient, routeRepo, routeSaver, tight);
+        when(mobilityClient.directions(anyList(), anyString())).thenReturn(driveRoute(
+                List.of(new double[]{126.9800, 37.5600}, new double[]{126.9800, 37.5630})));
+
+        RouteResponse res = capped.route(7L, 1L, "WALK");
+
+        assertThat(res.legs()).allMatch(l -> "DRIVE".equals(l.mode()));
+        verify(osrmClient, never()).walk(anyList());
+        // 기본값은 50km 다 — 사람이 걸을 만한 구간은 그대로 걷는다.
+        assertThat(new RouteProperties().getWalkMaxM()).isEqualTo(50_000);
+    }
+
+    @Test
+    @DisplayName("저장본이 아직 신선하면 외부 호출 없이 그대로 쓴다")
+    void 저장본_재사용() {
+        when(routeRepo.findByItineraryIdAndMode(1L, "AUTO"))
+                .thenReturn(Optional.of(savedRoute("AUTO")));
+
+        RouteResponse res = service.route(7L, 1L, "AUTO");
+
+        assertThat(res.legs()).hasSize(1);          // 저장해 둔 모양 그대로(계산하면 3구간)
+        verify(osrmClient, never()).walk(anyList());
+        verify(mobilityClient, never()).directions(anyList(), anyString());
+    }
+
+    @Test
+    @DisplayName("오래된 저장본은 버리고 다시 계산한다 — 출근길에 잰 차 시간이 영원히 나오면 안 된다")
+    void 오래된_저장본() {
+        ItineraryRoute stale = savedRoute("AUTO");
+        // 방문지는 그대로라 해시는 맞는다. 모양은 변하지 않았지만 자동차 구간의 시간은
+        // 그때의 교통량이다. 기본 보관 기간은 7일이다.
+        ReflectionTestUtils.setField(stale, "computedAt", LocalDateTime.now().minusDays(8));
+        when(routeRepo.findByItineraryIdAndMode(1L, "AUTO")).thenReturn(Optional.of(stale));
+        when(osrmClient.walk(anyList())).thenReturn(walkRoute());
+
+        RouteResponse res = service.route(7L, 1L, "AUTO");
+
+        assertThat(res.legs()).hasSize(3);
+        verify(osrmClient, times(3)).walk(anyList());
+    }
+
+    @Test
+    @DisplayName("mode 는 대소문자를 가리지 않는다 — ?mode=walk 가 조용히 AUTO 가 되면 칩이 먹지 않는다")
+    void 모드_대소문자() {
+        when(osrmClient.walk(anyList())).thenReturn(walkRoute());
+
+        assertThat(service.route(7L, 1L, "walk").mode()).isEqualTo("WALK");
+        assertThat(service.route(7L, 1L, " drive ").mode()).isEqualTo("DRIVE");
+        assertThat(service.route(7L, 1L, "엉뚱한값").mode()).isEqualTo("AUTO");
+    }
+}

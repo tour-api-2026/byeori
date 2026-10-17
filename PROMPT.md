@@ -16,7 +16,7 @@
 1. DB=snake_case, Java=camelCase/PascalCase, **API JSON·쿼리=camelCase**. 응답은 `{success,data,error}` 봉투, 목록은 page 형식.
 2. 다형성(찜/리뷰/태그/코스/일지): DB는 `performance_id`/`venue_id` 2컬럼+CHECK, API는 `{targetType,targetId}`. `global/content/ContentType` 값객체에서 변환(없으면 생성).
 3. 리뷰 변경 시 대상 `avg_rating`·`review_count` **동기 재계산**.
-4. 스키마 변경은 새 Flyway 파일(`V3__...`, `V4__...`)로만. 기존 V1/V2 수정 금지.
+4. 스키마 변경은 새 Flyway 파일(`V3__...`, `V4__...`)로만. **이미 적용된 마이그레이션은 주석 한 글자도 고치지 말 것** — 체크섬에 주석이 포함되고 `validate` 가 기본이라 다음 기동이 체크섬 불일치로 실패한다(설명을 고치려면 엔티티·DTO 쪽에 적는다).
 5. 데모 인증은 stub: 헤더 `X-Demo-User-Id`(없으면 2번 사용자) 기준.
 6. 한 반복에 **한 항목**만 구현하고 즉시 검증·커밋(Conventional Commits, scope=api|app). 빌드/타입 깨진 채 끝내지 말 것.
 

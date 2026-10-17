@@ -81,17 +81,24 @@ public final class ItineraryDtos {
     public record RouteStop(
             int order, String targetType, Long targetId, String name, double lat, double lng) {}
 
-    /** 구간(경유지 간) 거리·시간. */
-    public record RouteLeg(int distance, int duration) {}
+    /**
+     * 구간별 거리·시간과 이동 수단. mode 는 WALK | DRIVE | STRAIGHT.
+     *
+     * points 는 이 구간이 전체 path 에서 차지하는 점의 수다. 첫 구간은 제 경로 전부, 이후 구간은
+     * 앞 구간과 겹치는 첫 점을 뺀 만큼이다. 합이 path 길이와 같으므로 지도가 구간별로 자를 수 있다.
+     * 이 필드가 생기기 전에 저장된 행은 0 으로 읽힌다 — 0 이하면 자를 수 없다는 뜻이다.
+     */
+    public record RouteLeg(int distance, int duration, String mode, int points) {}
 
     /**
      * 경로 응답.
      * - distance: 총 거리(m), duration: 총 소요시간(초)
+     * - mode: 요청한 모드(AUTO|WALK|DRIVE). 구간별 실제 수단은 legs[].mode 를 본다.
      * - stops: 좌표가 있어 경로에 포함된 방문지(순서대로)
-     * - legs: 구간별 거리/시간
+     * - legs: 구간별 거리/시간/수단
      * - path: 지도에 그릴 polyline 좌표열, 각 원소 [위도(lat), 경도(lng)]
      */
     public record RouteResponse(
-            int distance, int duration, String priority,
+            int distance, int duration, String mode,
             List<RouteStop> stops, List<RouteLeg> legs, List<double[]> path) {}
 }

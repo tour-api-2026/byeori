@@ -60,7 +60,7 @@
 | 데이터베이스 | PostgreSQL 16 |
 | 앱·웹 | React Native (Expo SDK 54) + expo-router — 같은 코드로 앱과 웹 배포 |
 | 상태 | TanStack Query + zustand |
-| 지도·길찾기 | 카카오맵 · 카카오모빌리티 |
+| 지도·길찾기 | 카카오맵 · 카카오모빌리티(자동차) · OSRM 자체 호스팅(도보) |
 | AI | OpenAI (structured outputs) |
 | 인프라 | Docker Compose · nginx(443만 외부 노출) · 단일 VM |
 
@@ -102,6 +102,28 @@ docker compose logs -f api
 ```
 
 > ⚠️ **`--remove-orphans` 를 쓰지 마세요.** 이 compose는 프로젝트명이 `infra`라, 같은 이름을 쓰는 다른 스택(nginx·certbot)과 공유됩니다. orphan 정리를 하면 그쪽 컨테이너가 지워집니다.
+
+### 도보 경로용 OSRM — 새 기기에서는 먼저 데이터를 만들어야 합니다
+
+compose 에는 PostgreSQL·API 와 함께 **`osrm`** 컨테이너가 들어 있습니다. 카카오모빌리티는 보행자 길찾기를 주지 않아, 가까운 구간(직선 1km 이내)의 도보 경로는 OpenStreetMap 데이터를 올린 이 컨테이너가 계산합니다. 포트는 외부에 열지 않고 내부망 `osrm:5000` 으로만 부릅니다.
+
+이 컨테이너는 `/home/hidi/osrm-data` 를 바인드 마운트해 읽습니다. **데이터가 없으면 `restart: unless-stopped` 아래서 재시작만 반복합니다.** 새 기기에서는 `docker compose up -d` 보다 먼저 전처리를 돌리세요.
+
+```bash
+./scripts/build-osrm.sh        # pbf 내려받기 → extract(foot) → partition → customize
+docker compose -f infra/docker-compose.yml ps osrm   # healthy 인지 확인
+```
+
+| | |
+|---|---|
+| 내려받기 | `south-korea-latest.osm.pbf` 약 276MB |
+| 시간 | 전체 7~8분 |
+| 최대 메모리 | extract 단계에서 **5.5GB**(스왑 필요) — 돌리는 동안 Gradle·웹 빌드를 띄우지 마세요 |
+| 산출물 | 약 2.9GB (상시 메모리는 `--mmap 1` 로 11.6MB) |
+
+돌리지 않아도 **루트 화면은 실패하지 않습니다.** 도보 경로를 못 받으면 구간마다 카카오 자동차 경로로, 그것도 안 되면 직선으로 내려갑니다(거리·시간은 어림값이 됩니다). 즉 OSRM 이 없으면 기능이 꺼지는 게 아니라 정확도가 떨어집니다.
+
+OSM 데이터는 매일 갱신되므로 분기에 한 번쯤 다시 돌립니다. 예전 데이터가 root 소유로 남아 있으면 스크립트가 **서빙 중인 컨테이너를 멈추기 전에** 중단하고 `chown` 방법을 알려 줍니다.
 
 앱·웹은 Expo로 실행합니다.
 

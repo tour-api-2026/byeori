@@ -52,12 +52,12 @@ public class ItineraryController {
         return ApiResponse.ok(service.getShared(token));
     }
 
-    /** 방문지들을 순서대로 잇는 도로 경로(polyline·거리·시간). priority=RECOMMEND|TIME|DISTANCE */
+    /** 저장해 둔 경로가 아직 맞으면 그대로 준다. mode: AUTO(기본)|WALK|DRIVE. */
     @GetMapping("/itineraries/{id}/route")
     public ApiResponse<RouteResponse> route(@AuthenticationPrincipal Long userId,
                                             @PathVariable("id") Long id,
-                                            @RequestParam(name = "priority", defaultValue = "RECOMMEND") String priority) {
-        return ApiResponse.ok(service.route(userId, id, priority));
+                                            @RequestParam(name = "mode", defaultValue = "AUTO") String mode) {
+        return ApiResponse.ok(service.route(userId, id, mode));
     }
 
     @PatchMapping("/itineraries/{id}")

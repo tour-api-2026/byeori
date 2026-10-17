@@ -255,8 +255,9 @@ export function useSharedItineraryQuery(token: string) {
   });
 }
 
-export function useItineraryRouteQuery(id: number, priority = 'RECOMMEND') {
-  return useQuery({ queryKey: ['itinerary', id, 'route', priority], queryFn: () => fetchItineraryRoute(id, priority), enabled: !!id });
+export function useItineraryRouteQuery(id: number, mode = 'AUTO') {
+  // 모드가 바뀌면 경로도 달라지므로 키에 넣어 다시 받는다.
+  return useQuery({ queryKey: ['itinerary', id, 'route', mode], queryFn: () => fetchItineraryRoute(id, mode), enabled: !!id });
 }
 export function useCreateItineraryMutation() {
   const qc = useQueryClient();

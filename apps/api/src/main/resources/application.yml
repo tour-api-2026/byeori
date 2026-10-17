@@ -25,6 +25,11 @@ byeori:
     tourapi-key: ${TOURAPI_KEY:}
     kopis-key: ${KOPIS_KEY:}
     seoul-key: ${SEOUL_OPEN_API_KEY:}   # 서울 열린데이터광장 (전통 테마 문화행사)
+  route:
+    # 도보 경로 서버. 도커 내부망 이름이라 로컬 실행 시에는 127.0.0.1:5000 으로 덮는다.
+    osrm-url: ${OSRM_URL:http://osrm:5000}
+    # 이 거리(직선, m) 이내면 걷는 것으로 본다. 실제 루트 구간의 중앙값이 706m 다.
+    walk-threshold-m: ${WALK_THRESHOLD_M:1000}
   auth:
     jwt-secret: ${JWT_SECRET:}   # 필수. 미설정 시 JwtTokenProvider가 부팅 실패시킴(하드코딩 폴백 금지).
     kakao-rest-key: ${KAKAO_REST_KEY:}

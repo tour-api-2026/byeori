@@ -58,13 +58,18 @@ export function fetchSharedItinerary(token: string): Promise<SharedItinerary> {
 export type RouteStop = {
   order: number; targetType: 'VENUE' | 'PERFORMANCE'; targetId: number; name: string | null; lat: number; lng: number;
 };
-export type RouteLeg = { distance: number; duration: number };
+export type RouteLeg = {
+  distance: number;            // 구간 거리(m)
+  duration: number;            // 구간 시간(초)
+  mode: 'WALK' | 'DRIVE' | 'STRAIGHT';
+  points: number;              // 전체 path 에서 이 구간이 차지하는 점 수(이음점은 앞 구간에만 센다)
+};
 export type ItineraryRoute = {
   distance: number;            // 총 거리(m)
   duration: number;            // 총 소요시간(초)
-  priority: string;
+  mode: string;                // 요청한 모드(AUTO|WALK|DRIVE)
   stops: RouteStop[];          // 경로에 포함된 방문지(순서대로)
-  legs: RouteLeg[];            // 구간별 거리/시간
+  legs: RouteLeg[];            // 구간별 거리/시간/이동수단
   path: [number, number][];    // polyline 좌표열 [위도, 경도]
 };
 
@@ -116,8 +121,8 @@ export function deleteItineraryItem(id: number, itemId: number): Promise<void> {
   return unwrap<void>(api.delete<ApiEnvelope<void>>(`/itineraries/${id}/items/${itemId}`));
 }
 
-export function fetchItineraryRoute(id: number, priority = 'RECOMMEND'): Promise<ItineraryRoute> {
-  return unwrap<ItineraryRoute>(api.get<ApiEnvelope<ItineraryRoute>>(`/itineraries/${id}/route`, { params: { priority } }));
+export function fetchItineraryRoute(id: number, mode = 'AUTO'): Promise<ItineraryRoute> {
+  return unwrap<ItineraryRoute>(api.get<ApiEnvelope<ItineraryRoute>>(`/itineraries/${id}/route`, { params: { mode } }));
 }
 
 /** 카카오에서 찾은 장소(벼리 DB 밖). 서버 PlaceController.PlaceResult 와 같다. */
