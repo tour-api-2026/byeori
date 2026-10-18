@@ -20,6 +20,9 @@ public final class ItineraryDtos {
             Integer sortOrder, String plannedTime, String memo) {}
 
     /** lat/lng 는 장소 추가 창이 "이 루트 주변"을 보여주는 기준점으로 쓴다. */
+    /** 목록 카드에 한 줄로 찍히는 방문지. 카드는 번호와 이름만 쓴다. */
+    public record SummaryStop(Long id, String name) {}
+
     public record ItemResponse(
             Long id, String targetType, Long targetId, String name, String imageUrl,
             LocalDate visitDate, int sortOrder, String plannedTime, String memo, Double lat, Double lng) {}
@@ -29,10 +32,20 @@ public final class ItineraryDtos {
             String kakaoPlaceId, String name, String address, String category, String phone,
             Double lat, Double lng, LocalDate visitDate, Integer sortOrder) {}
 
+    /**
+     * 목록용 요약.
+     *
+     * stops 는 카드에 보여줄 앞 몇 곳이다. 전에는 목록이 개수만 주고 카드마다 상세를 따로
+     * 받아 왔다 — 루트가 다섯이면 요청이 여섯 번이고, 제목은 먼저 뜨는데 방문지 줄만 뒤늦게
+     * 나타났다. 서버는 어차피 개수를 세느라 항목을 전부 읽으므로, 앞쪽을 함께 실어 보내면
+     * 추가 조회 없이 화면이 한 번에 완성된다. 전체 개수는 itemCount 가 그대로 알려 준다.
+     */
     public record Summary(
-            Long id, String title, LocalDate startDate, LocalDate endDate, String sourceType, int itemCount) {
-        public static Summary from(Itinerary i, int itemCount) {
-            return new Summary(i.getId(), i.getTitle(), i.getStartDate(), i.getEndDate(), i.getSourceType(), itemCount);
+            Long id, String title, LocalDate startDate, LocalDate endDate, String sourceType,
+            int itemCount, List<SummaryStop> stops) {
+        public static Summary from(Itinerary i, int itemCount, List<SummaryStop> stops) {
+            return new Summary(i.getId(), i.getTitle(), i.getStartDate(), i.getEndDate(), i.getSourceType(),
+                    itemCount, stops);
         }
     }
 
