@@ -74,10 +74,32 @@ public class ItineraryService {
     /** 공유 토큰 생성용. SecureRandom 은 스레드 안전해서 하나를 돌려 쓴다. */
     private static final SecureRandom TOKEN_RANDOM = new SecureRandom();
 
+    /** 목록 카드가 보여주는 방문지 수. 더 보내도 카드가 잘라 버린다. */
+    private static final int SUMMARY_STOPS = 5;
+
     public List<Summary> listMine(Long userId) {
         return repo.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(i -> Summary.from(i, itemRepo.findByItineraryIdOrderByVisitDateAscSortOrderAsc(i.getId()).size()))
+                .map(i -> {
+                    // 개수를 세려면 어차피 다 읽어야 한다. 앞쪽을 함께 보내면 카드가 상세를
+                    // 따로 받지 않아도 되고, 제목과 방문지 줄이 같이 뜬다.
+                    List<ItineraryItem> items = itemRepo.findByItineraryIdOrderByVisitDateAscSortOrderAsc(i.getId());
+                    List<SummaryStop> stops = items.stream().limit(SUMMARY_STOPS)
+                            .map(it -> new SummaryStop(it.getId(), nameOf(it)))
+                            .toList();
+                    return Summary.from(i, items.size(), stops);
+                })
                 .toList();
+    }
+
+    /** 항목의 표시 이름. 장소면 장소 이름, 공연이면 공연 제목. 지워졌으면 null. */
+    private String nameOf(ItineraryItem item) {
+        if (item.getVenueId() != null) {
+            return venueRepo.findById(item.getVenueId()).map(Venue::getName).orElse(null);
+        }
+        if (item.getPerformanceId() != null) {
+            return performanceRepo.findById(item.getPerformanceId()).map(Performance::getTitle).orElse(null);
+        }
+        return null;
     }
 
     public Detail get(Long userId, Long id) {

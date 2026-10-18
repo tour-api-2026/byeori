@@ -1,7 +1,17 @@
 import { api, unwrap, ApiEnvelope } from './client';
 
+/** 목록 카드에 한 줄로 찍히는 방문지. 번호와 이름만 쓴다. */
+export type SummaryStop = { id: number; name: string | null };
+
+/**
+ * 목록용 요약.
+ *
+ * stops 는 카드가 보여줄 앞 몇 곳이다. 전에는 카드마다 상세를 따로 받아 와서, 제목은
+ * 먼저 뜨는데 방문지 줄만 뒤늦게 나타났다. 전체 개수는 itemCount 를 본다.
+ */
 export type ItinerarySummary = {
-  id: number; title: string; startDate: string; endDate: string; sourceType: string; itemCount: number;
+  id: number; title: string; startDate: string; endDate: string; sourceType: string;
+  itemCount: number; stops: SummaryStop[];
 };
 
 export type ItineraryItem = {

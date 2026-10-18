@@ -17,7 +17,7 @@ import LoginRequired from "@/components/LoginRequired";
 import { Refresh } from "@/components/Refresh";
 import { useTabBarHeight } from "@/components/TabBar";
 import { ItinerarySummary, shareItinerary } from "@/lib/api/itineraries";
-import { useAiStatusQuery, useItineraryQuery, useMyItinerariesQuery } from "@/lib/hooks/queries";
+import { useAiStatusQuery, useMyItinerariesQuery } from "@/lib/hooks/queries";
 import { useAuthStore } from "@/lib/store/authStore";
 import { colors, fonts, radius, shadow, space } from "@/lib/theme";
 import { segmentColor } from "@/lib/routeColors";
@@ -167,8 +167,9 @@ export default function RoutesScreen() {
 
 function Featured({ summary }: { summary: ItinerarySummary }) {
   const router = useRouter();
-  const { data } = useItineraryQuery(summary.id);
-  const stops = (data?.items ?? []).slice(0, 3);
+  // 목록이 앞 몇 곳을 함께 준다 — 상단 카드가 상세를 따로 받으면 제목·기간은 먼저 뜨고
+  // 1-2-3 방문지 줄만 뒤늦게 나타난다.
+  const stops = (summary.stops ?? []).slice(0, 3);
   const d = dayLabel(summary.startDate, summary.endDate);
 
   return (
@@ -217,8 +218,9 @@ function Featured({ summary }: { summary: ItinerarySummary }) {
 
 function RouteCard({ summary }: { summary: ItinerarySummary }) {
   const router = useRouter();
-  const { data } = useItineraryQuery(summary.id);
-  const stops = data?.items ?? [];
+  // 목록이 앞 몇 곳을 함께 준다. 카드마다 상세를 또 받으면 제목만 먼저 뜨고 방문지 줄이
+  // 뒤늦게 나타난다(루트 다섯이면 요청 여섯 번). 전체 개수는 summary.itemCount 를 본다.
+  const stops = summary.stops ?? [];
   const past = isPastTrip(summary); // 지난 여행은 물빠진 색으로 흐리게
 
   const [shareState, setShareState] = useState<"idle" | "working" | "copied" | "failed">("idle");
@@ -311,7 +313,7 @@ function RouteCard({ summary }: { summary: ItinerarySummary }) {
           <Text style={styles.stopEmpty}>아직 담은 장소가 없어요</Text>
         )}
         <View style={styles.cardActions}>
-          {stops.length >= 2 && (
+          {summary.itemCount >= 2 && (
             <Pressable
               style={styles.routeBtn}
               onPress={() =>
