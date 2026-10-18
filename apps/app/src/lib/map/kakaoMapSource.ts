@@ -23,9 +23,7 @@ export const MAP_CSS = `  html,body,#map{margin:0;padding:0;width:100%;height:10
   .pinK{display:inline-block;min-width:24px;height:24px;line-height:24px;text-align:center;border-radius:999px;
        background:#3177D5;color:#fff;font-size:12px;font-weight:800;border:2px solid #fff;
        box-shadow:0 2px 6px rgba(0,0,0,.3);font-family:-apple-system,system-ui,sans-serif}
-  .pinR{display:inline-block;min-width:26px;height:26px;line-height:26px;text-align:center;border-radius:999px;
-       background:#263176;color:#fff;font-size:13px;font-weight:800;border:2px solid #fff;
-       box-shadow:0 2px 6px rgba(0,0,0,.35);font-family:-apple-system,system-ui,sans-serif}`;
+  /* 경로 번호는 Marker(SVG 그림)로 그린다 — numberPin 참고 */`;
 
 /**
  * 지도 본체 스크립트. window.setMarkers / moveTo / drawRoute / clearRoute /
@@ -141,6 +139,25 @@ export function mapScript(segColors: string[]): string {
   };
   // 검색 해제 시에도 지도를 움직이지 않는다(움직이면 idle → 재조회가 또 돈다).
   window.clearKakao = function(){ clearArr(kakaoOv); kakaoData=[]; };
+  /**
+   * 방문 순서 번호 마커.
+   *
+   * CustomOverlay 가 아니라 Marker 를 쓴다. 카카오는 화면 밖으로 나간 CustomOverlay 의
+   * DOM 을 떼어내고, 지도가 멈출 때(idle)에만 다시 붙인다. 그래서 지도를 끄는 동안에는
+   * 새로 들어오는 번호가 안 보이다가 손을 떼야 나타났다. Marker 는 화면 밖에 있어도
+   * DOM 에 남아 지도와 함께 움직인다(따로 띄운 지도로 재 봤다: 오버레이 1→0→1, 마커 1→1→1).
+   *
+   * 번호와 색이 칸마다 달라 그림을 미리 둘 수 없으므로 SVG 를 그 자리에서 만든다.
+   * 패키지는 더하지 않는다 — package.json 이 바뀌면 OTA 가 기존 앱에 닿지 못한다.
+   */
+  function numberPin(no, color){
+    var svg='<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30">'
+      +'<circle cx="15" cy="15" r="12" fill="'+color+'" stroke="#fff" stroke-width="2"/>'
+      +'<text x="15" y="20" text-anchor="middle" font-family="-apple-system,system-ui,sans-serif"'
+      +' font-size="13" font-weight="800" fill="#fff">'+no+'</text></svg>';
+    return new kakao.maps.MarkerImage('data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg),
+      new kakao.maps.Size(30,30), {offset:new kakao.maps.Point(15,15)});
+  }
   // 여행 경로: 서버가 계산한 보행/도로 경로선 + 번호 마커.
   // data={path:[[lat,lng]...], stops:[{order,lat,lng}...], legs:[{mode}...]}
   window.drawRoute = function(data){
@@ -186,11 +203,9 @@ export function mapScript(segColors: string[]): string {
       }
     }
     stops.forEach(function(s,i){
-      var pos=new kakao.maps.LatLng(s.lat,s.lng);
-      var c=segColor(i);
-      var html='<div class="pinR" style="background:'+c+'">'+(s.order+1)+'</div>';
-      var ov=new kakao.maps.CustomOverlay({position:pos,content:html,yAnchor:1});
-      ov.setMap(map); routeOv.push(ov);
+      var mk=new kakao.maps.Marker({position:new kakao.maps.LatLng(s.lat,s.lng),
+        image:numberPin(s.order+1, segColor(i)), zIndex:5});
+      mk.setMap(map); routeOv.push(mk);
     });
     // 지도를 맞추는 것은 **경로가 바뀌었을 때 한 번뿐**이다.
     // 전에는 drawRoute 가 불릴 때마다 맞췄는데, 지도를 움직이면 idle 이 뜨고 그것이
