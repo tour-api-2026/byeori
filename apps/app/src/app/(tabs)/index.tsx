@@ -18,15 +18,17 @@ import { useFeedQuery, useNearbyVenuesQuery, usePerformancesQuery, useVenuesQuer
 import { useAuthStore } from '@/lib/store/authStore';
 import { useRecentStore } from '@/lib/store/recentStore';
 import { REGIONS, regionSpot } from '@/lib/regions';
+import { ALL, HOME_KEYWORDS } from '@/lib/categories';
+import { useT } from '@/lib/i18n';
+import { categoryLabel, regionLabel } from '@/lib/i18n/labels';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
-
-const KEYWORDS = ['전체', '문화', '카페', '체험', '맛집'];
 
 export default function HomeScreen() {
   const router = useRouter();
+  const t = useT();
   const tabH = useTabBarHeight();
-  const [keyword, setKeyword] = useState('전체');
-  const [region, setRegion] = useState('전체');
+  const [keyword, setKeyword] = useState<string>(ALL);
+  const [region, setRegion] = useState<string>(ALL);
 
   // 배너 — 앱 성격에 맞게 전통 행사를 먼저 걸고, 진행 중인 게 없을 때만 일반 공연으로 대체.
   const bannerTrad = usePerformancesQuery({ state: 'ONGOING', traditional: true, size: 5 });
@@ -36,7 +38,7 @@ export default function HomeScreen() {
   const tradOngoing = usePerformancesQuery({ traditional: true, state: 'ONGOING', size: 10 });
   const tradUpcoming = usePerformancesQuery({ traditional: true, state: 'UPCOMING', size: 10 });
   const traditional = tradOngoing.data?.content.length ? tradOngoing : tradUpcoming;
-  const keyworded = useVenuesQuery({ category: keyword === '전체' ? undefined : keyword, size: 6 });
+  const keyworded = useVenuesQuery({ category: keyword === ALL ? undefined : keyword, size: 6 });
   const all = useVenuesQuery({ size: 50 });
 
   const top = banner.data?.content?.[0];
@@ -102,26 +104,26 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingBottom: tabH + 24 }}
         refreshControl={<Refresh />}>
         {/* 헤더 (중앙 타이틀) */}
-        <View style={styles.header}><Text style={styles.title}>벼리</Text></View>
+        <View style={styles.header}><Text style={styles.title}>{t('home.title')}</Text></View>
 
         {/* 검색창 — 카카오 장소 검색(내 주변 지도)로 이동 */}
         {/* 검색은 탭이 아니라 탭 위에 쌓는 화면으로 띄운다 — 뒤로가기가 홈으로 돌아온다.
             전에는 '내 주변' 탭으로 보냈는데, 탭에서는 뒤로가기가 앱을 닫았다. */}
         <Pressable style={styles.search} onPress={() => router.push('/search')}>
           <Ionicons name="search" size={18} color={colors.accent} />
-          <Text style={styles.searchText}>장소·주소로 검색해보세요</Text>
+          <Text style={styles.searchText}>{t('home.search')}</Text>
         </Pressable>
 
         {/* 오늘의 추천 (히어로) */}
         <View style={styles.section}>
-          <SectionHeader title="오늘의 추천" />
+          <SectionHeader title={t('home.today')} />
           {top ? (
             <Pressable style={styles.hero} onPress={() => router.push(`/performances/${top.id}`)}>
               <Image source={sized(top.posterImageUrl, 760, 380)} style={styles.heroImg} contentFit="cover" transition={250} cachePolicy="memory-disk" />
               <View style={styles.heroOverlay}>
                 <Text style={styles.heroTitle} numberOfLines={1}>{top.title}</Text>
-                <Text style={styles.heroSub} numberOfLines={1}>{top.genre ?? '추천 행사'} · 지금 만나보세요</Text>
-                <View style={styles.heroBtn}><Text style={styles.heroBtnText}>보러가기</Text></View>
+                <Text style={styles.heroSub} numberOfLines={1}>{t('home.hero.sub', { genre: top.genre ?? t('home.hero.genreFallback') })}</Text>
+                <View style={styles.heroBtn}><Text style={styles.heroBtnText}>{t('home.hero.cta')}</Text></View>
               </View>
             </Pressable>
           ) : <Loading />}
@@ -136,45 +138,45 @@ export default function HomeScreen() {
         */}
         {signedIn && (feed.isLoading || (feed.data?.length ?? 0) > 0) && (
           <View style={styles.section}>
-            <SectionHeader title="맞춤 추천" />
+            <SectionHeader title={t('home.forYou')} />
             {feed.data?.length ? <FeedCarousel items={feed.data} /> : <Loading />}
           </View>
         )}
 
         {/* 전통 테마 행사 */}
         <View style={styles.section}>
-          <SectionHeader title="전통 테마 행사" onMore={() => router.push('/performances/traditional')} />
+          <SectionHeader title={t('home.traditional')} onMore={() => router.push('/performances/traditional')} />
           {traditional.isLoading
             ? <Loading />
             : (traditionalItems.length
               ? <PerformanceCarousel items={traditionalItems} />
-              : <Text style={styles.empty}>진행 중인 전통 행사가 아직 없어요</Text>)}
+              : <Text style={styles.empty}>{t('home.traditional.empty')}</Text>)}
         </View>
 
         {/* 키워드로 탐색 */}
         <View style={styles.section}>
-          <SectionHeader title="키워드로 탐색" onMore={() => router.push('/search')} />
-          <Chips items={KEYWORDS} value={keyword} onChange={setKeyword} />
+          <SectionHeader title={t('home.keyword')} onMore={() => router.push('/search')} />
+          <Chips items={[...HOME_KEYWORDS]} value={keyword} onChange={setKeyword} label={categoryLabel} />
           {keyworded.isLoading
             ? <Loading />
             : (keyworded.data?.content.length
               ? <Grid venues={keyworded.data.content} />
-              : <Text style={styles.empty}>해당 키워드의 장소가 아직 없어요</Text>)}
+              : <Text style={styles.empty}>{t('home.keyword.empty')}</Text>)}
         </View>
 
         {/* 지역으로 탐색 */}
         <View style={styles.section}>
-          <SectionHeader title="지역으로 탐색" onMore={() => router.push('/search')} />
-          <Chips items={[...REGIONS]} value={region} onChange={setRegion} />
+          <SectionHeader title={t('home.region')} onMore={() => router.push('/search')} />
+          <Chips items={[...REGIONS]} value={region} onChange={setRegion} label={regionLabel} />
           {regionVenues.length
             ? <Grid venues={regionVenues} />
-            : <Text style={styles.empty}>해당 지역의 장소가 아직 없어요</Text>}
+            : <Text style={styles.empty}>{t('home.region.empty')}</Text>}
         </View>
 
         {/* 최근 본 장소 — 아직 본 게 없으면 섹션째 숨긴다(빈 칸이 남지 않게) */}
         {recent.length > 0 && (
           <View style={styles.section}>
-            <SectionHeader title="최근 본 장소" onMore={() => router.push('/search')} />
+            <SectionHeader title={t('home.recent')} onMore={() => router.push('/search')} />
             <Grid venues={recent} />
           </View>
         )}
@@ -191,10 +193,13 @@ function Grid({ venues }: { venues: VenueCardItem[] }) {
   );
 }
 
-function Chips({ items, value, onChange }: { items: string[]; value: string; onChange: (s: string) => void }) {
+// 칩은 값(한국어, API 가 거르는 문자열)을 넘기고 라벨만 번역해 보인다.
+type Labeler = (t: ReturnType<typeof useT>, value: string) => string;
+function Chips({ items, value, onChange, label }: { items: string[]; value: string; onChange: (s: string) => void; label: Labeler }) {
+  const t = useT();
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chips}>
-      {items.map((k) => <Chip key={k} label={k} selected={k === value} onPress={() => onChange(k)} />)}
+      {items.map((k) => <Chip key={k} label={label(t, k)} selected={k === value} onPress={() => onChange(k)} />)}
     </ScrollView>
   );
 }

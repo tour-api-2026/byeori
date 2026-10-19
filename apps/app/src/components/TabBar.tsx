@@ -3,6 +3,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useT } from '@/lib/i18n';
 import { colors, fonts } from '@/lib/theme';
 
 // Figma 리디자인 v2 하단 네비게이션 바.
@@ -19,19 +20,20 @@ export function useTabBarHeight() {
   return BAR_H + insets.bottom;
 }
 
-type TabConfig = { label: string; center?: boolean; icon?: (color: string, size: number) => ReactNode };
+type TabConfig = { labelKey: string; center?: boolean; icon?: (color: string, size: number) => ReactNode };
 
 const TABS: Record<string, TabConfig> = {
-  map: { label: '내 주변', icon: (c, s) => <Feather name="map-pin" size={s} color={c} /> },
-  explore: { label: '루트 탐색', icon: (c, s) => <MaterialCommunityIcons name="routes" size={s} color={c} /> },
-  index: { label: '홈', center: true },
-  routes: { label: '내 루트', icon: (c, s) => <Feather name="flag" size={s} color={c} /> },
-  profile: { label: '마이', icon: (c, s) => <Feather name="user" size={s} color={c} /> },
+  map: { labelKey: 'tabbar.map', icon: (c, s) => <Feather name="map-pin" size={s} color={c} /> },
+  explore: { labelKey: 'tabbar.explore', icon: (c, s) => <MaterialCommunityIcons name="routes" size={s} color={c} /> },
+  index: { labelKey: 'tabbar.home', center: true },
+  routes: { labelKey: 'tabbar.routes', icon: (c, s) => <Feather name="flag" size={s} color={c} /> },
+  profile: { labelKey: 'tabbar.profile', icon: (c, s) => <Feather name="user" size={s} color={c} /> },
 };
 // 화면 좌→우 배치 순서(가운데 index가 돌출 홈).
 const ORDER = ['map', 'explore', 'index', 'routes', 'profile'];
 
 export function TabBar({ state, navigation }: BottomTabBarProps) {
+  const t = useT();
   const insets = useSafeAreaInsets();
   const routeByName = Object.fromEntries(state.routes.map((r) => [r.name, r]));
   const activeName = state.routes[state.index]?.name;
@@ -61,7 +63,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
                 onPress={onPress}
                 accessibilityRole="button"
                 accessibilityState={{ selected: focused }}
-                accessibilityLabel={cfg.label}>
+                accessibilityLabel={t(cfg.labelKey)}>
                 <View style={styles.centerCircle}>
                   <Ionicons name="home" size={24} color={colors.white} />
                 </View>
@@ -77,9 +79,9 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
               onPress={onPress}
               accessibilityRole="button"
               accessibilityState={{ selected: focused }}
-              accessibilityLabel={cfg.label}>
+              accessibilityLabel={t(cfg.labelKey)}>
               {cfg.icon?.(color, 22)}
-              <Text style={[styles.label, { color }]}>{cfg.label}</Text>
+              <Text style={[styles.label, { color }]}>{t(cfg.labelKey)}</Text>
             </Pressable>
           );
         })}

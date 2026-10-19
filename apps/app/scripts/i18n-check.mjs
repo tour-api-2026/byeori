@@ -120,16 +120,31 @@ ok('message 만 있고 code 가 없으면 message',
 ok('아는 코드는 message 보다 사전이 이긴다',
    errorTextIn('ko', { code: 'ITINERARY_NOT_FOUND', message: '한국어' }) === '없는 루트');
 
+// BY_CODE 의 값이 ko 사전에 실제로 있는 키인지. 오타가 나면 사용자에게 키 문자열이
+// 그대로(`error.itinerary.notFoundd`) 보이는데, 아무도 눈치채지 못한다.
+const byCodeSrc = errSrc.slice(errSrc.indexOf('const BY_CODE'));
+const byCodeBody = byCodeSrc.slice(0, byCodeSrc.indexOf('};'));
+const byCodeVals = [...byCodeBody.matchAll(/^\s*'[^']+':\s*'([^']+)'/gm)].map((m) => m[1]);
+ok('BY_CODE 를 읽었다', byCodeVals.length > 0, `${byCodeVals.length}개`);
+const dangling = byCodeVals.filter((k) => !keys.ko.has(k));
+ok('BY_CODE 의 값이 모두 ko 사전에 있다', dangling.length === 0, dangling.join(', '));
+
 // ── 3. 번역을 마친 화면에 한국어가 남아 있지 않은지 ───────────
 // 화면을 옮길 때마다 아래 목록에 더한다. 목록에 없는 파일은 보지 않는다.
 const DONE = [
-  // 'src/app/(tabs)/routes.tsx',
+  'src/app/(tabs)/index.tsx',
+  'src/app/(tabs)/map.tsx',
+  'src/app/(tabs)/explore.tsx',
+  'src/app/(tabs)/routes.tsx',
+  'src/app/(tabs)/profile.tsx',
+  'src/components/TabBar.tsx',
 ];
 const HANGUL_LITERAL = /(['"`])[^'"`\n]*[가-힣][^'"`\n]*\1/g;
 for (const rel of DONE) {
   const src = readFileSync(join(ROOT, rel), 'utf8');
   // 주석 줄은 한국어로 쓴다 — 번역 대상이 아니다.
-  const code = src.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+  // 여러 줄 /* … */ 블록(JSX 의 {/* … */} 포함)은 줄머리가 `*` 가 아닌 안쪽 줄까지 통째로 지운다.
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
   const hits = [...code.matchAll(HANGUL_LITERAL)].map((m) => m[0]);
   ok(`${rel} 에 한국어 리터럴이 없다`, hits.length === 0, hits.slice(0, 3).join(' | '));
 }

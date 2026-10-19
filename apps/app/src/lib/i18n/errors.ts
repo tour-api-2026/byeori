@@ -15,6 +15,8 @@ const BY_CODE: Record<string, string> = {
   'ITINERARY_NOT_FOUND': 'error.itinerary.notFound',
   'ITINERARY_FORBIDDEN': 'error.itinerary.forbidden',
   'ROUTE_TOO_FEW_POINTS': 'error.route.tooFewPoints',
+  // 로그아웃 상태의 요청이 가장 흔히 맞는 코드다.
+  'UNAUTHORIZED': 'error.unauthorized',
 };
 
 /**

@@ -5,18 +5,20 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from '
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTabBarHeight } from '@/components/TabBar';
 import { useCoursesQuery } from '@/lib/hooks/queries';
+import { useT } from '@/lib/i18n';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 // 루트 탐색 — 큐레이션 추천 코스(루트) 목록. 탭하면 코스 상세로 이동.
 export default function ExploreScreen() {
   const router = useRouter();
+  const t = useT();
   const tabH = useTabBarHeight();
   const { data, isLoading } = useCoursesQuery();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>루트 탐색</Text>
+        <Text style={styles.title}>{t('explore.title')}</Text>
       </View>
       {isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
@@ -26,7 +28,7 @@ export default function ExploreScreen() {
           data={data ?? []}
           keyExtractor={(c) => String(c.id)}
           contentContainerStyle={[styles.list, { paddingBottom: tabH + space.lg }]}
-          ListEmptyComponent={<Text style={styles.empty}>추천 루트가 아직 없어요</Text>}
+          ListEmptyComponent={<Text style={styles.empty}>{t('explore.empty')}</Text>}
           renderItem={({ item }) => (
             <Pressable style={styles.card} onPress={() => router.push(`/course/${item.id}`)}>
               {item.coverImageUrl ? (
@@ -44,7 +46,7 @@ export default function ExploreScreen() {
                     {item.description}
                   </Text>
                 ) : null}
-                {item.durationHours ? <Text style={styles.meta}>약 {item.durationHours}시간</Text> : null}
+                {item.durationHours ? <Text style={styles.meta}>{t('explore.hours', { n: item.durationHours })}</Text> : null}
               </View>
             </Pressable>
           )}

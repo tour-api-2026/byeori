@@ -14,6 +14,15 @@ export const CATEGORIES = [
   '전체', '문화', '체험', '맛집', '카페', '전통시장', '공예', '한옥스테이', '한복',
 ] as const;
 
+/**
+ * '전체' 칩의 값. 필터를 걸지 않는다는 뜻이라 API 에는 보내지 않는다.
+ * 화면 파일에 한국어 리터럴을 두지 않으려고 이름을 붙여 뒀다(i18n-check 가 본다).
+ */
+export const ALL = '전체';
+
+/** 홈의 키워드 칩. 값은 카테고리와 같은 한국어다. */
+export const HOME_KEYWORDS = ['전체', '문화', '카페', '체험', '맛집'] as const;
+
 /** 한국 본토·제주를 덮는 좌표 범위. */
 const KOREA = { minLat: 33, maxLat: 38.7, minLng: 124.5, maxLng: 132 };
 

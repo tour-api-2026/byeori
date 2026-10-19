@@ -21,7 +21,9 @@ import { Chip } from "@/components/Chip";
 import { useTabBarHeight } from "@/components/TabBar";
 import { Rating } from "@/components/Rating";
 import { Venue } from "@/lib/api/types";
-import { CATEGORIES, inKorea } from "@/lib/categories";
+import { ALL, CATEGORIES, inKorea } from "@/lib/categories";
+import { useT } from "@/lib/i18n";
+import { categoryLabel } from "@/lib/i18n/labels";
 import { distanceMeters, formatDistance } from "@/lib/geo";
 import { sized } from "@/lib/img";
 import { useNearbyVenuesQuery, useVenuesQuery } from "@/lib/hooks/queries";
@@ -46,6 +48,7 @@ type KakaoPlace = {
 
 export default function MapScreen() {
   const router = useRouter();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const tabH = useTabBarHeight(); // 떠 있는 탭바 높이 — 하단 UI(카드·현재위치 버튼)를 그만큼 올린다.
   // 경로 보기는 탭 위에 쌓는 화면(route/[id])으로 옮겼다 — 뒤로가기가 앱을 닫지 않고,
@@ -58,7 +61,7 @@ export default function MapScreen() {
       router.replace(`/route/${legacy}`);
     }
   }, [params.itineraryId, router]);
-  const [cat, setCat] = useState("전체");
+  const [cat, setCat] = useState<string>(ALL);
   const [hanbokOnly, setHanbokOnly] = useState(false);
   const [selected, setSelected] = useState<Venue | null>(null);
   const [selectedKakao, setSelectedKakao] = useState<KakaoPlace | null>(null);
@@ -81,7 +84,7 @@ export default function MapScreen() {
   // 지도 화면은 보고 있는 영역만 공사 OpenAPI로 실시간 조회한다.
   const nearby = useNearbyVenuesQuery(
     view
-      ? { lat: view.lat, lng: view.lng, radius: view.radius, category: cat === "전체" ? undefined : cat }
+      ? { lat: view.lat, lng: view.lng, radius: view.radius, category: cat === ALL ? undefined : cat }
       : null,
   );
 
@@ -91,7 +94,7 @@ export default function MapScreen() {
   // 공사 API가 실패하면 화면이 비지 않도록 저장된 목록으로 대체한다.
   const fallback = useVenuesQuery({
     keyword: keyword || undefined,
-    category: cat === "전체" ? undefined : cat,
+    category: cat === ALL ? undefined : cat,
     hanbokDiscount: hanbokOnly || undefined,
     size: 50,
     lat: origin?.lat,
@@ -329,7 +332,7 @@ export default function MapScreen() {
             {!ready && (
               <View style={styles.mapOverlay} pointerEvents="none">
                 <Text style={styles.mapOverlayText}>
-                  {mapError ?? "지도 불러오는 중…"}
+                  {mapError ?? t('map.loading')}
                 </Text>
               </View>
             )}
@@ -338,7 +341,7 @@ export default function MapScreen() {
           // 카카오 키 미설정 시 폴백: 좌표 정규화 핀 오버레이
           <View style={styles.fallback}>
             <View style={styles.grid} pointerEvents="none" />
-            <Text style={styles.mapHint}>서울 도심 · {venues.length}곳</Text>
+            <Text style={styles.mapHint}>{t('map.fallback.hint', { n: venues.length })}</Text>
             {venues.map((v) => (
               <Pressable
                 key={v.id}
@@ -372,7 +375,7 @@ export default function MapScreen() {
             <Ionicons name="search" size={18} color={colors.accent} />
             <TextInput
               style={styles.searchInput}
-              placeholder="장소·주소 검색 (예: 경복궁, 전주 한옥마을)"
+              placeholder={t('map.search.placeholder')}
               placeholderTextColor={colors.textFaint}
               value={query}
               onChangeText={setQuery}
@@ -398,7 +401,7 @@ export default function MapScreen() {
             {CATEGORIES.map((c) => (
               <Chip
                 key={c}
-                label={c}
+                label={categoryLabel(t, c)}
                 selected={c === cat}
                 onPress={() => setCat(c)}
               />
@@ -410,7 +413,7 @@ export default function MapScreen() {
             onPress={() => setHanbokOnly((p) => !p)}
           >
             <Text style={styles.toggleLabel}>
-              👘 한복 입고 방문 시 할인되는 곳만
+              {t('map.hanbokOnly')}
             </Text>
             <Switch
               value={hanbokOnly}
@@ -423,9 +426,7 @@ export default function MapScreen() {
           {/* 검색 결과 요약 */}
           {keyword.length > 0 && (
             <Text style={styles.resultHint}>
-              '{keyword}' 검색 · 카카오{" "}
-              <Text style={styles.resultNum}>{kakaoCount ?? 0}</Text>곳 · 우리
-              장소 <Text style={styles.resultNum}>{searchVenues.length}</Text>곳
+              {t('map.result.summary', { keyword, kakao: kakaoCount ?? 0, ours: searchVenues.length })}
             </Text>
         )}
       </View>
@@ -470,7 +471,7 @@ export default function MapScreen() {
             >
               <Rating value={selected.avgRating} count={selected.reviewCount} />
               {selected.hanbokDiscount && (
-                <Text style={styles.miniHanbok}>한복할인</Text>
+                <Text style={styles.miniHanbok}>{t('map.hanbokBadge')}</Text>
               )}
             </View>
           </View>
@@ -497,11 +498,11 @@ export default function MapScreen() {
                 {selectedKakao.name}
               </Text>
               <View style={styles.kakaoBadge}>
-                <Text style={styles.kakaoBadgeText}>카카오</Text>
+                <Text style={styles.kakaoBadgeText}>{t('map.kakaoBadge')}</Text>
               </View>
             </View>
             <Text style={styles.miniAddr} numberOfLines={1}>
-              {selectedKakao.address || "주소 정보 없음"}
+              {selectedKakao.address || t('map.noAddress')}
             </Text>
             {!!selectedKakao.category && (
               <Text style={styles.kakaoCat}>
@@ -524,14 +525,14 @@ export default function MapScreen() {
         peekHeight={168 + tabH}
         topInset={insets.top + 56}>
         <View style={styles.sheetHead}>
-          <Text style={styles.sheetTitle}>'{keyword}' 검색 결과</Text>
-          <Text style={styles.sheetCount}>{searchVenues.length + dedupedKakao.length}곳</Text>
+          <Text style={styles.sheetTitle}>{t('map.sheet.title', { keyword })}</Text>
+          <Text style={styles.sheetCount}>{t('common.placeCount', { n: searchVenues.length + dedupedKakao.length })}</Text>
         </View>
         <ScrollView
           contentContainerStyle={{ paddingBottom: tabH + 24 }}
           showsVerticalScrollIndicator={false}>
           {searchVenues.length > 0 && (
-            <Text style={styles.sheetGroup}>벼리 장소 {searchVenues.length}곳</Text>
+            <Text style={styles.sheetGroup}>{t('map.sheet.venues', { n: searchVenues.length })}</Text>
           )}
           {searchVenues.map((v) => (
             <Pressable
@@ -555,7 +556,7 @@ export default function MapScreen() {
             </Pressable>
           ))}
           {dedupedKakao.length > 0 && (
-            <Text style={styles.sheetGroup}>카카오 장소 {dedupedKakao.length}곳</Text>
+            <Text style={styles.sheetGroup}>{t('map.sheet.kakao', { n: dedupedKakao.length })}</Text>
           )}
           {dedupedKakao.map((k, i) => (
             <Pressable key={`k-${i}`} style={styles.sheetRow} onPress={() => focusKakao(k)}>
@@ -573,7 +574,7 @@ export default function MapScreen() {
             </Pressable>
           ))}
           {searchVenues.length + dedupedKakao.length === 0 && (
-            <Text style={styles.sheetEmpty}>검색 결과가 없어요</Text>
+            <Text style={styles.sheetEmpty}>{t('map.sheet.empty')}</Text>
           )}
         </ScrollView>
       </BottomSheet>
@@ -582,7 +583,7 @@ export default function MapScreen() {
       {keyword.length > 0 && sheetSnap === 'full' && (
         <Pressable style={[styles.mapBtn, { bottom: tabH + 20 }]} onPress={() => setSheetSnap('peek')}>
           <Ionicons name="location" size={16} color={colors.white} />
-          <Text style={styles.mapBtnText}>지도보기</Text>
+          <Text style={styles.mapBtnText}>{t('map.sheet.showMap')}</Text>
         </Pressable>
       )}
     </View>
