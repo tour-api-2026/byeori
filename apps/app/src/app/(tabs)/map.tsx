@@ -24,7 +24,7 @@ import { Venue } from "@/lib/api/types";
 import { ALL, CATEGORIES, inKorea } from "@/lib/categories";
 import { useT } from "@/lib/i18n";
 import { useMapLabels } from "@/lib/map/useMapLabels";
-import { categoryLabel } from "@/lib/i18n/labels";
+import { categoryLabel, kakaoCategoryLabel } from "@/lib/i18n/labels";
 import { distanceMeters, formatDistance } from "@/lib/geo";
 import { sized } from "@/lib/img";
 import { useNearbyVenuesQuery, useVenuesQuery } from "@/lib/hooks/queries";
@@ -509,7 +509,7 @@ export default function MapScreen() {
             </Text>
             {!!selectedKakao.category && (
               <Text style={styles.kakaoCat}>
-                {categoryLabel(t, selectedKakao.category)}
+                {kakaoCategoryLabel(t, selectedKakao.category)}
                 {selectedKakao.phone ? ` · ${selectedKakao.phone}` : ""}
               </Text>
             )}
@@ -571,7 +571,7 @@ export default function MapScreen() {
                 <Text style={styles.sheetAddr} numberOfLines={1}>
                   {distanceOf(k) ? `${distanceOf(k)} · ` : ''}{k.address}
                 </Text>
-                {!!k.category && <Text style={styles.sheetCat}>{categoryLabel(t, k.category)}</Text>}
+                {!!k.category && <Text style={styles.sheetCat}>{kakaoCategoryLabel(t, k.category)}</Text>}
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
             </Pressable>

@@ -32,7 +32,7 @@ export const MAP_CSS = `  html,body,#map{margin:0;padding:0;width:100%;height:10
  * searchKakao / clearKakao 를 전역에 정의하고, 결과는 window.ReactNativeWebView.postMessage 로 알린다.
  * 웹에서는 그 postMessage 를 흉내 내는 shim 을 미리 심어두면 수정 없이 동작한다.
  */
-export function mapScript(segColors: string[]): string {
+export function mapScript(segColors: string[], labels: MapLabels): string {
   const colorsJson = JSON.stringify(segColors);
   return `  var ROUTE_COLORS=${colorsJson};
   function segColor(i){ return ROUTE_COLORS[((i%ROUTE_COLORS.length)+ROUTE_COLORS.length)%ROUTE_COLORS.length]; }
@@ -242,7 +242,7 @@ export function mapScript(segColors: string[]): string {
     window.__me.setMap(map);
   };
   function boot(){
-    if(typeof kakao==='undefined'||!kakao.maps){ post({type:'error', msg:'SDK_LOAD_FAIL'}); return; }
+    if(typeof kakao==='undefined'||!kakao.maps){ post({type:'error', msg:${jsStr(labels.sdkLoadFail)}}); return; }
     kakao.maps.load(function(){
       map=new kakao.maps.Map(document.getElementById('map'),{center:new kakao.maps.LatLng(37.5759,126.9769), level:6});
       ready=true; post({type:'ready'});
@@ -284,6 +284,12 @@ export type MapLabels = {
   injectFail: string;
 };
 
+/**
+ * 스크립트 안에 넣을 문자열 리터럴. JSON 으로 따옴표를 닫고 `<` 는 \u003c 로 바꾼다 —
+ * 네이티브에서는 이 스크립트가 <script> 안에 들어가 `</script>` 가 있으면 문서가 끊긴다.
+ */
+const jsStr = (s: string) => JSON.stringify(s).replace(/</g, '\\u003c');
+
 /** 속성값 안에 넣을 문자열의 HTML 이스케이프. onerror="…" 안에서 따옴표가 속성을 끊지 않게 한다. */
 const attr = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -303,6 +309,6 @@ ${MAP_CSS}
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false&libraries=services"
   onerror="post({type:'error', msg:${attr(JSON.stringify(labels.sdkLoadFail))}})"></script>
 <script>
-${mapScript(segColors)}
+${mapScript(segColors, labels)}
 </script></body></html>`;
 }

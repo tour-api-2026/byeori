@@ -21,27 +21,29 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
         />
 
-        <title>벼리 — 한국 전통문화 여행 가이드</title>
-        <meta name="description" content="전국 관광 명소와 전통 공연·축제를 지도에서 찾는 한국 여행 가이드" />
+        {/* 이 파일은 빌드 때 한 번 만들어져 훅을 쓸 수 없다. 언어마다 달리 둘 수 없으므로 외국인 방문객이
+            탭 제목·PWA 이름·공유 미리보기로 먼저 보는 값을 영어로 고정한다(브랜드는 Byeori). */}
+        <title>Byeori — Korean Traditional Culture Travel Guide</title>
+        <meta name="description" content="Find sights, traditional performances and festivals across Korea on the map." />
 
         {/* ── PWA ── */}
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#263176" />
-        <meta name="application-name" content="벼리" />
+        <meta name="application-name" content="Byeori" />
 
         {/* iOS는 manifest의 display/아이콘을 아직 다 따르지 않아 별도 태그가 필요하다. */}
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="벼리" />
+        <meta name="apple-mobile-web-app-title" content="Byeori" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
         <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
 
         {/* ── 공유 미리보기 ── */}
         <meta property="og:type" content="website" />
-        <meta property="og:site_name" content="벼리" />
-        <meta property="og:title" content="벼리 — 한국 전통문화 여행 가이드" />
-        <meta property="og:description" content="전국 관광 명소와 전통 공연·축제를 지도에서 찾는 한국 여행 가이드" />
+        <meta property="og:site_name" content="Byeori" />
+        <meta property="og:title" content="Byeori — Korean Traditional Culture Travel Guide" />
+        <meta property="og:description" content="Find sights, traditional performances and festivals across Korea on the map." />
         <meta property="og:image" content="/icons/icon-512.png" />
 
         {/* RN Web의 body 스크롤 리셋 — 제거하면 앱 안 스크롤이 깨진다. */}

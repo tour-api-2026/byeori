@@ -12,6 +12,15 @@ export const categoryLabel = (t: TFn, value: string) => {
   const out = t(`category.${value}`);
   return out === `category.${value}` ? value : out;
 };
+/**
+ * 카카오 장소의 category_group_name 표시 이름. 카카오가 정한 닫힌 집합(18개)이라 사전을 따로 둔다
+ * (벼리 분류인 category.* 와 겹치는 건 카페뿐이다). 모르는 값은 키가 아니라 **원문 그대로** 보인다 —
+ * 카카오가 분류를 늘려도 `kakaoCategory.무언가` 가 화면에 뜨는 것보다 한국어가 낫다.
+ */
+export const kakaoCategoryLabel = (t: TFn, value: string) => {
+  const out = t(`kakaoCategory.${value}`);
+  return out === `kakaoCategory.${value}` ? value : out;
+};
 export const regionLabel = (t: TFn, value: string) => {
   const out = t(`region.${value}`);
   return out === `region.${value}` ? value : out;

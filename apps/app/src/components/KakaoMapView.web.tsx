@@ -65,7 +65,7 @@ export default forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMapView(
         // post()는 mapScript보다 먼저. 네이티브 문서에서는 별도 <script>로 들어간다.
         // window.onerror 후킹은 웹에서 앱 전역 에러까지 지도 오류로 잡아버리므로 옮기지 않는다.
         (0, eval)(MAP_POST_FN);
-        (0, eval)(mapScript(segColors));
+        (0, eval)(mapScript(segColors, labelsRef.current));
       } catch (e) {
         onErrorRef.current?.(labelsRef.current.scriptError(String(e)));
       }

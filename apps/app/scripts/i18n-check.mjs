@@ -138,7 +138,8 @@ ok('BY_CODE 의 값이 모두 ko 사전에 있다', dangling.length === 0, dangl
 //   src/lib/regions.ts       — 서버가 저장·필터에 쓰는 한국어 **값**을 들고 있다. 라벨이 아니라 바꾸면 안 된다
 //                              (표시만 labels.ts 의 categoryLabel/regionLabel 로 번역한다).
 // 같은 이유로 aiRouteAreas·interestOptions·venueForm·reportReasons(한국어 값 모듈), lib/api/*(서버 값·주석),
-// src/app/+html.tsx(빌드 시점에 한 번 만드는 정적 <head> — 훅을 쓸 수 없고 공유 미리보기용 한국어 메타다)도 뺀다.
+// src/app/+html.tsx(빌드 시점에 한 번 만드는 정적 <head> — 훅이 돌지 않아 번역할 수 없다. 메타데이터는
+// 일부러 영어로 고정했다: 탭 제목·PWA 이름·공유 미리보기를 외국인이 먼저 보기 때문이다)도 뺀다.
 const DONE = [
   'src/app/(tabs)/index.tsx',
   'src/app/(tabs)/map.tsx',
