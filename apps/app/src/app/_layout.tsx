@@ -10,7 +10,7 @@ import { useAutoUpdate } from '@/hooks/use-auto-update';
 import { applyGlobalFont } from '@/lib/font';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useT } from '@/lib/i18n';
-import { LANGUAGE_SCREEN_TITLE } from '@/lib/i18n/locales';
+import { languageLabel } from '@/lib/i18n/labels';
 import { useLocaleStore } from '@/lib/store/localeStore';
 import { colors, fonts } from '@/lib/theme';
 import LanguageScreen from './language';
@@ -102,8 +102,8 @@ export default function RootLayout() {
           <Stack.Screen name="bookmarks" options={{ title: t('nav.bookmarks') }} />
           <Stack.Screen name="performances/traditional" options={{ title: t('home.traditional') }} />
           <Stack.Screen name="my/blocked" options={{ title: t('profile.menu.blocked') }} />
-          {/* 일부러 번역하지 않는다 — 지금 언어를 읽지 못하는 사람이 이 화면을 찾아올 수 있어야 한다. */}
-          <Stack.Screen name="my/language" options={{ title: LANGUAGE_SCREEN_TITLE }} />
+          {/* 현재 언어 + ' / Language' — 지금 언어를 읽지 못하는 사람도 라틴 글자로 이 화면을 알아본다. */}
+          <Stack.Screen name="my/language" options={{ title: languageLabel(t) }} />
           <Stack.Screen name="my/service-info" options={{ title: t('profile.menu.serviceInfo') }} />
           <Stack.Screen name="my/profile" options={{ title: t('profile.edit.title') }} />
           <Stack.Screen name="ai-route" options={{ title: t('aiRoute.title') }} />

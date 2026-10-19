@@ -8,6 +8,7 @@ import { useTabBarHeight } from '@/components/TabBar';
 import { deleteAccount } from '@/lib/api/account';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useT } from '@/lib/i18n';
+import { languageLabel } from '@/lib/i18n/labels';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 const CONTACT_EMAIL = 'alstjq1012@gmail.com';
@@ -25,7 +26,7 @@ const GROUP1: MenuItem[] = [
 const GROUP2: MenuItem[] = [
   { icon: 'help-circle', labelKey: 'profile.menu.contact', action: 'contact', tint: colors.textSub, soft: colors.bgSoft },
   { icon: 'person-remove', labelKey: 'profile.menu.blocked', route: '/my/blocked', tint: colors.textSub, soft: colors.bgSoft },
-  { icon: 'language', labelKey: 'profile.menu.language', route: '/my/language', tint: colors.textSub, soft: colors.bgSoft },
+  { icon: 'language', labelKey: 'language.title', route: '/my/language', tint: colors.textSub, soft: colors.bgSoft },
   { icon: 'information-circle', labelKey: 'profile.menu.serviceInfo', route: '/my/service-info', tint: colors.textSub, soft: colors.bgSoft },
 ];
 
@@ -84,7 +85,7 @@ export default function ProfileScreen() {
   const Row = ({ m }: { m: MenuItem }) => (
     <Pressable style={styles.menuRow} onPress={() => onMenuPress(m)}>
       <View style={[styles.iconCircle, { backgroundColor: m.soft }]}><Ionicons name={m.icon as any} size={18} color={m.tint} /></View>
-      <Text style={styles.menuLabel}>{t(m.labelKey)}</Text>
+      <Text style={styles.menuLabel}>{m.labelKey === 'language.title' ? languageLabel(t) : t(m.labelKey)}</Text>
       <Ionicons name="chevron-forward" size={18} color={colors.textFaint} style={{ marginLeft: 'auto' }} />
     </Pressable>
   );

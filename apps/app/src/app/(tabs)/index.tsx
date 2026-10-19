@@ -20,7 +20,7 @@ import { useRecentStore } from '@/lib/store/recentStore';
 import { REGIONS, regionSpot } from '@/lib/regions';
 import { ALL, HOME_KEYWORDS } from '@/lib/categories';
 import { useT } from '@/lib/i18n';
-import { categoryLabel, regionLabel } from '@/lib/i18n/labels';
+import { categoryLabel, regionLabel, type TFn } from '@/lib/i18n/labels';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 export default function HomeScreen() {
@@ -194,8 +194,7 @@ function Grid({ venues }: { venues: VenueCardItem[] }) {
 }
 
 // 칩은 값(한국어, API 가 거르는 문자열)을 넘기고 라벨만 번역해 보인다.
-type Labeler = (t: ReturnType<typeof useT>, value: string) => string;
-function Chips({ items, value, onChange, label }: { items: string[]; value: string; onChange: (s: string) => void; label: Labeler }) {
+function Chips({ items, value, onChange, label }: { items: string[]; value: string; onChange: (s: string) => void; label: (t: TFn, value: string) => string }) {
   const t = useT();
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chips}>

@@ -11,7 +11,7 @@ import { AREAS, DEFAULT_THEMES, MY_LOCATION } from '@/lib/aiRouteAreas';
 import { AI_THEMES, generateAiRoute, saveAiRoute, type AiRoutePreview } from '@/lib/api/ai';
 import { searchKakaoPlaces, type KakaoPlace } from '@/lib/api/itineraries';
 import { useT } from '@/lib/i18n';
-import { categoryLabel, type TFn } from '@/lib/i18n/labels';
+import { areaLabel, categoryLabel, type TFn } from '@/lib/i18n/labels';
 import { sized } from '@/lib/img';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,13 +43,6 @@ function dateLabel(t: TFn, iso: string) {
   const [y, m, d] = iso.split('-').map(Number);
   const w = t(`common.weekday.${new Date(y, m - 1, d).getDay()}`);
   return t('common.dateShort', { m, d, w });
-}
-
-/** 고른 지역의 표시 이름. 값(서버로 가는 한국어)은 그대로 두고 보이는 것만 바꾼다. 검색으로 고른 곳은 사전에 없어 이름 그대로다. */
-function areaLabel(t: TFn, a: { name: string; my?: boolean }) {
-  if (a.my) return t('aiRoute.myLocation');
-  const out = t(`aiRoute.area.${a.name}`);
-  return out === `aiRoute.area.${a.name}` ? a.name : out;
 }
 
 /**

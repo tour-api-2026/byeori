@@ -47,6 +47,9 @@ export default function LanguageScreen() {
           <Pressable
             key={l}
             style={[styles.card, picked === l && styles.cardOn]}
+            accessibilityRole="button"
+            accessibilityLabel={LOCALE_NAMES[l]}
+            accessibilityState={{ selected: picked === l }}
             onPress={() => setPicked(l)}
           >
             <Text style={styles.flag}>{FLAG[l]}</Text>

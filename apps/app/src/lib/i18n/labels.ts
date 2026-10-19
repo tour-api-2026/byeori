@@ -21,6 +21,20 @@ export const kakaoCategoryLabel = (t: TFn, value: string) => {
   const out = t(`kakaoCategory.${value}`);
   return out === `kakaoCategory.${value}` ? value : out;
 };
+/** AI 코스 지역칩의 표시 이름. 검색으로 고른 곳은 사전에 없어 이름 그대로 보인다. */
+export const areaLabel = (t: TFn, a: { name: string; my?: boolean }) => {
+  if (a.my) return t('aiRoute.myLocation');
+  const out = t(`aiRoute.area.${a.name}`);
+  return out === `aiRoute.area.${a.name}` ? a.name : out;
+};
+/**
+ * 언어 설정을 가리키는 이름. 현재 언어의 '언어' 에 영어 'Language' 를 붙여 둔다 — 지금 언어를
+ * 읽지 못하는 사람도 라틴 글자로 이 행·화면을 알아본다. 영어는 이미 Language 라 중복을 피한다.
+ */
+export const languageLabel = (t: TFn) => {
+  const own = t('language.title');
+  return own === 'Language' ? own : `${own} / Language`;
+};
 export const regionLabel = (t: TFn, value: string) => {
   const out = t(`region.${value}`);
   return out === `region.${value}` ? value : out;
