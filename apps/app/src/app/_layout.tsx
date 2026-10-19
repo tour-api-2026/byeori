@@ -9,6 +9,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAutoUpdate } from '@/hooks/use-auto-update';
 import { applyGlobalFont } from '@/lib/font';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useT } from '@/lib/i18n';
+import { LANGUAGE_SCREEN_TITLE } from '@/lib/i18n/locales';
 import { useLocaleStore } from '@/lib/store/localeStore';
 import { colors, fonts } from '@/lib/theme';
 import LanguageScreen from './language';
@@ -39,6 +41,9 @@ export default function RootLayout() {
     'Pretendard-SemiBold': require('../../assets/fonts/Pretendard-SemiBold.ttf'),
     'Pretendard-Bold': require('../../assets/fonts/Pretendard-Bold.ttf'),
   });
+
+  // 얼리 리턴보다 위 — 훅 순서가 렌더마다 달라지면 안 된다.
+  const t = useT();
 
   // 앱 시작 시 저장된 세션 복원
   const hydrated = useAuthStore((s) => s.hydrated);
@@ -94,17 +99,18 @@ export default function RootLayout() {
           <Stack.Screen name="email-login" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
           <Stack.Screen name="language" options={{ headerShown: false }} />
-          <Stack.Screen name="bookmarks" options={{ title: '즐겨찾기' }} />
-          <Stack.Screen name="performances/traditional" options={{ title: '전통 테마 행사' }} />
-          <Stack.Screen name="my/blocked" options={{ title: '차단한 사용자' }} />
-          <Stack.Screen name="my/language" options={{ title: '언어 / Language' }} />
-          <Stack.Screen name="my/service-info" options={{ title: '서비스 정보' }} />
-          <Stack.Screen name="my/profile" options={{ title: '프로필 수정' }} />
-          <Stack.Screen name="ai-route" options={{ title: 'AI 루트 만들기' }} />
+          <Stack.Screen name="bookmarks" options={{ title: t('nav.bookmarks') }} />
+          <Stack.Screen name="performances/traditional" options={{ title: t('home.traditional') }} />
+          <Stack.Screen name="my/blocked" options={{ title: t('profile.menu.blocked') }} />
+          {/* 일부러 번역하지 않는다 — 지금 언어를 읽지 못하는 사람이 이 화면을 찾아올 수 있어야 한다. */}
+          <Stack.Screen name="my/language" options={{ title: LANGUAGE_SCREEN_TITLE }} />
+          <Stack.Screen name="my/service-info" options={{ title: t('profile.menu.serviceInfo') }} />
+          <Stack.Screen name="my/profile" options={{ title: t('profile.edit.title') }} />
+          <Stack.Screen name="ai-route" options={{ title: t('aiRoute.title') }} />
           {/* 경로 보기·검색은 탭이 아니라 탭 위에 쌓는 화면이다. 탭으로 두면
               backBehavior="none" 탓에 뒤로가기가 앱을 닫는다((tabs)/_layout 주석 참고). */}
-          <Stack.Screen name="route/[id]" options={{ title: '경로 보기' }} />
-          <Stack.Screen name="search" options={{ title: '검색' }} />
+          <Stack.Screen name="route/[id]" options={{ title: t('route.title') }} />
+          <Stack.Screen name="search" options={{ title: t('nav.search') }} />
         </Stack>
       </SafeAreaProvider>
     </QueryClientProvider>

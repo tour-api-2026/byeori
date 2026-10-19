@@ -14,7 +14,7 @@ import type { KakaoMapHandle, KakaoMapProps } from './KakaoMapView';
  * origin이 배포 도메인 그대로라 콘솔에 등록한 값과 일치한다.
  */
 export default forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMapView(
-  { jsKey, segColors, onMessage, onError },
+  { jsKey, segColors, onMessage, onError, labels },
   ref,
 ) {
   // 최신 콜백을 참조만 하고 effect는 다시 돌리지 않는다(지도 재생성 방지).
@@ -22,6 +22,9 @@ export default forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMapView(
   onMessageRef.current = onMessage;
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
+  // 문구도 ref 로 읽는다 — effect 의 의존성에 넣으면 언어를 바꿀 때 지도가 다시 만들어진다.
+  const labelsRef = useRef(labels);
+  labelsRef.current = labels;
 
   useImperativeHandle(
     ref,
@@ -31,7 +34,7 @@ export default forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMapView(
           // 간접 eval — WebView.injectJavaScript와 같이 전역 스코프에서 실행한다.
           (0, eval)(js);
         } catch (e) {
-          console.warn('[map] injectJavaScript 실패', e);
+          console.warn(labelsRef.current.injectFail, e);
         }
       },
     }),
@@ -64,7 +67,7 @@ export default forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMapView(
         (0, eval)(MAP_POST_FN);
         (0, eval)(mapScript(segColors));
       } catch (e) {
-        onErrorRef.current?.('지도 스크립트 오류: ' + String(e));
+        onErrorRef.current?.(labelsRef.current.scriptError(String(e)));
       }
     };
 
@@ -90,7 +93,7 @@ export default forwardRef<KakaoMapHandle, KakaoMapProps>(function KakaoMapView(
     script.async = true;
     script.onload = boot;
     script.onerror = () =>
-      onErrorRef.current?.('카카오 SDK 스크립트 로드 실패 — 콘솔에 이 도메인이 등록되어 있는지 확인하세요.');
+      onErrorRef.current?.(labelsRef.current.sdkBlocked);
     document.head.appendChild(script);
 
     return () => {

@@ -131,6 +131,14 @@ ok('BY_CODE 의 값이 모두 ko 사전에 있다', dangling.length === 0, dangl
 
 // ── 3. 번역을 마친 화면에 한국어가 남아 있지 않은지 ───────────
 // 화면을 옮길 때마다 아래 목록에 더한다. 목록에 없는 파일은 보지 않는다.
+// 일부러 목록에 넣지 않는 파일. 빠뜨린 게 아니니 "고치려" 들지 말 것.
+//   src/app/language.tsx     — 언어 고르기 화면. 지금 언어를 못 읽는 사람이 쓰는 곳이라 일부러 번역하지 않는다.
+//   src/lib/i18n/ko.ts       — 사전 자체(번역의 기준 문구).
+//   src/lib/categories.ts,
+//   src/lib/regions.ts       — 서버가 저장·필터에 쓰는 한국어 **값**을 들고 있다. 라벨이 아니라 바꾸면 안 된다
+//                              (표시만 labels.ts 의 categoryLabel/regionLabel 로 번역한다).
+// 같은 이유로 aiRouteAreas·interestOptions·venueForm·reportReasons(한국어 값 모듈), lib/api/*(서버 값·주석),
+// src/app/+html.tsx(빌드 시점에 한 번 만드는 정적 <head> — 훅을 쓸 수 없고 공유 미리보기용 한국어 메타다)도 뺀다.
 const DONE = [
   'src/app/(tabs)/index.tsx',
   'src/app/(tabs)/map.tsx',
@@ -167,6 +175,29 @@ const DONE = [
   'src/components/PerformanceCarousel.tsx',
   'src/components/FeedCarousel.tsx',
   'src/components/SectionHeader.tsx',
+  'src/app/_layout.tsx',
+  'src/app/bookmarks.tsx',
+  'src/app/my/accounts.tsx',
+  'src/app/my/blocked.tsx',
+  'src/app/my/language.tsx',
+  'src/app/my/profile.tsx',
+  'src/app/my/reviews.tsx',
+  'src/app/my/service-info.tsx',
+  'src/app/my/venues.tsx',
+  'src/app/search.tsx',
+  'src/components/BottomSheet.tsx',
+  'src/components/Chip.tsx',
+  'src/components/HeaderRight.tsx',
+  'src/components/Image.tsx',
+  'src/components/KakaoMapView.tsx',
+  'src/components/KakaoMapView.web.tsx',
+  'src/components/Refresh.tsx',
+  'src/components/TimeWheel.tsx',
+  'src/components/CountLine.tsx',
+  'src/lib/alert.ts',
+  'src/lib/api/uploads.ts',
+  'src/lib/map/kakaoMapSource.ts',
+  'src/lib/map/useMapLabels.ts',
 ];
 const HANGUL_LITERAL = /(['"`])[^'"`\n]*[가-힣][^'"`\n]*\1/g;
 for (const rel of DONE) {

@@ -8,18 +8,21 @@ import LoginRequired from '@/components/LoginRequired';
 import { Rating } from '@/components/Rating';
 import { Venue } from '@/lib/api/types';
 import { useMyVenuesQuery } from '@/lib/hooks/queries';
+import { useT } from '@/lib/i18n';
+import { categoryLabel } from '@/lib/i18n/labels';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 type StatusKey = 'approved' | 'review' | 'rejected';
-const TABS: { key: StatusKey; label: string; color: string; soft: string }[] = [
-  { key: 'approved', label: '승인완료', color: '#1F9D63', soft: '#E4F5EC' },
-  { key: 'review', label: '검토 중', color: '#E0930A', soft: '#FBF0D6' },
-  { key: 'rejected', label: '거절됨', color: colors.danger, soft: '#FBE7E4' },
+const TABS: { key: StatusKey; color: string; soft: string }[] = [
+  { key: 'approved', color: '#1F9D63', soft: '#E4F5EC' },
+  { key: 'review', color: '#E0930A', soft: '#FBF0D6' },
+  { key: 'rejected', color: colors.danger, soft: '#FBE7E4' },
 ];
 
 export default function MyVenuesScreen() {
+  const t = useT();
   const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const router = useRouter();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
@@ -29,19 +32,19 @@ export default function MyVenuesScreen() {
   if (!isLoggedIn) {
     return (
       <View style={styles.safe}>
-        <Stack.Screen options={{ title: '내가 등록한 장소' }} />
-        <LoginRequired description="내가 등록한 장소는 로그인 후에 확인할 수 있어요." />
+        <Stack.Screen options={{ title: t('profile.menu.venues') }} />
+        <LoginRequired description={t('myVenues.loginDesc')} />
       </View>
     );
   }
   // 목록에 승인상태 필드가 없어 현재 등록분은 승인완료로 표시(검토중·거절됨은 BE 확장 시 연동)
   const shown = tab === 'approved' ? (data ?? []) : [];
-  const cfg = TABS.find((t) => t.key === tab)!;
+  const cfg = TABS.find((s) => s.key === tab)!;
 
   return (
     <View style={styles.safe}>
       <Stack.Screen options={{
-        title: '내가 등록한 장소',
+        title: t('profile.menu.venues'),
         headerRight: () => (
           <HeaderRight>
             <Pressable hitSlop={8} onPress={() => router.push('/venue/register')}>
@@ -53,10 +56,10 @@ export default function MyVenuesScreen() {
 
       {/* 상태 탭 */}
       <View style={styles.tabs}>
-        {TABS.map((t) => (
-          <Pressable key={t.key} style={styles.tab} onPress={() => setTab(t.key)}>
-            <Text style={[styles.tabText, tab === t.key && { color: t.color, fontFamily: fonts.bold, fontWeight: '800' }]}>{t.label}</Text>
-            {tab === t.key && <View style={[styles.tabBar, { backgroundColor: t.color }]} />}
+        {TABS.map((s) => (
+          <Pressable key={s.key} style={styles.tab} onPress={() => setTab(s.key)}>
+            <Text style={[styles.tabText, tab === s.key && { color: s.color, fontFamily: fonts.bold, fontWeight: '800' }]}>{t(`myVenues.status.${s.key}`)}</Text>
+            {tab === s.key && <View style={[styles.tabBar, { backgroundColor: s.color }]} />}
           </Pressable>
         ))}
       </View>
@@ -65,15 +68,15 @@ export default function MyVenuesScreen() {
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
       ) : shown.length ? (
         <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 + insets.bottom }}>
-          {shown.map((v) => <VenueStatusCard key={v.id} venue={v} statusLabel={cfg.label} color={cfg.color} soft={cfg.soft} />)}
+          {shown.map((v) => <VenueStatusCard key={v.id} venue={v} statusLabel={t(`myVenues.status.${cfg.key}`)} color={cfg.color} soft={cfg.soft} />)}
         </ScrollView>
       ) : (
         <View style={styles.empty}>
           <Image source={require('../../../assets/images/empty-venues.png')} style={styles.emptyImg} contentFit="contain" />
-          <Text style={styles.emptyTitle}>등록한 장소가 없습니다</Text>
-          <Text style={styles.emptyText}>나만의 장소들을 공유해보세요!</Text>
+          <Text style={styles.emptyTitle}>{t('myVenues.emptyTitle')}</Text>
+          <Text style={styles.emptyText}>{t('myVenues.emptyText')}</Text>
           <Pressable style={styles.emptyBtn} onPress={() => router.push('/venue/register')}>
-            <Text style={styles.emptyBtnText}>등록하러가기</Text>
+            <Text style={styles.emptyBtnText}>{t('myVenues.emptyBtn')}</Text>
             <Ionicons name="chevron-forward" size={14} color={colors.white} />
           </Pressable>
         </View>
@@ -84,8 +87,9 @@ export default function MyVenuesScreen() {
 
 function VenueStatusCard({ venue, statusLabel, color, soft }: { venue: Venue; statusLabel: string; color: string; soft: string }) {
   const router = useRouter();
+  const t = useT();
   const region = venue.address?.split(' ')[0];
-  const badges = [region, venue.category].filter(Boolean) as string[];
+  const badges = [region, venue.category && categoryLabel(t, venue.category)].filter(Boolean) as string[];
 
   return (
     <Pressable style={styles.card} onPress={() => router.push(`/venue/${venue.id}?mine=1`)}>

@@ -2,16 +2,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from '@/components/Image';
 import { Stack, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { CountLine } from '@/components/CountLine';
 import LoginRequired from '@/components/LoginRequired';
 import { Rating } from '@/components/Rating';
 import { Refresh } from '@/components/Refresh';
 import { Wishlist } from '@/lib/api/wishlists';
 import { useMyWishlistsQuery, useVenueDetailQuery } from '@/lib/hooks/queries';
+import { useT } from '@/lib/i18n';
+import { categoryLabel } from '@/lib/i18n/labels';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 export default function BookmarksScreen() {
+  const t = useT();
   const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const router = useRouter();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
@@ -20,8 +24,8 @@ export default function BookmarksScreen() {
   if (!isLoggedIn) {
     return (
       <View style={styles.safe}>
-        <Stack.Screen options={{ title: '찜한 장소' }} />
-        <LoginRequired description="찜한 장소는 로그인 후에 확인할 수 있어요." />
+        <Stack.Screen options={{ title: t('profile.menu.bookmarks') }} />
+        <LoginRequired description={t('bookmarks.loginDesc')} />
       </View>
     );
   }
@@ -30,13 +34,13 @@ export default function BookmarksScreen() {
 
   return (
     <View style={styles.safe}>
-      <Stack.Screen options={{ title: '찜한 장소' }} />
+      <Stack.Screen options={{ title: t('profile.menu.bookmarks') }} />
       {!data?.length ? (
         <View style={styles.empty}>
           <Image source={require('../../assets/images/empty-bookmarks.png')} style={styles.emptyImg} contentFit="contain" />
-          <Text style={styles.emptyTitle}>아직 관심있는 장소가 없군요!{'\n'}다양한 장소를 구경해보세요</Text>
+          <Text style={styles.emptyTitle}>{t('bookmarks.emptyTitle')}</Text>
           <Pressable style={styles.emptyBtn} onPress={() => router.replace('/(tabs)')}>
-            <Text style={styles.emptyBtnText}>구경하러가기</Text>
+            <Text style={styles.emptyBtnText}>{t('bookmarks.emptyBtn')}</Text>
             <Ionicons name="chevron-forward" size={14} color={colors.white} />
           </Pressable>
         </View>
@@ -45,7 +49,7 @@ export default function BookmarksScreen() {
           refreshControl={<Refresh />}
           contentContainerStyle={{ padding: space.lg, paddingBottom: 28 + insets.bottom }}
           showsVerticalScrollIndicator={false}>
-          <Text style={styles.count}>총 <Text style={styles.countNum}>{data.length}</Text>개를 표시했어요</Text>
+          <CountLine k="bookmarks.count" n={data.length} style={styles.count} numStyle={styles.countNum} />
           <View style={styles.grid}>
             {data.map((w) => <BookmarkCard key={w.id} item={w} />)}
           </View>
@@ -57,17 +61,18 @@ export default function BookmarksScreen() {
 
 function BookmarkCard({ item }: { item: Wishlist }) {
   const router = useRouter();
+  const t = useT();
   const isVenue = item.targetType === 'VENUE';
   const { data: v } = useVenueDetailQuery(isVenue ? item.targetId : 0);
   const region = v?.address?.split(' ')[0];
-  const badges = [region, v?.category].filter(Boolean) as string[];
+  const badges = [region, v?.category && categoryLabel(t, v.category)].filter(Boolean) as string[];
 
   return (
     <Pressable style={styles.card} onPress={() => isVenue && router.push(`/venue/${item.targetId}`)}>
       <Image source={item.imageUrl} style={styles.img} contentFit="cover" transition={200} />
       <View style={styles.body}>
         <View style={styles.nameRow}>
-          <Text style={styles.name} numberOfLines={1}>{item.name ?? '장소'}</Text>
+          <Text style={styles.name} numberOfLines={1}>{item.name ?? t('common.stopType.venue')}</Text>
           {badges.slice(0, 2).map((b) => <View key={b} style={styles.badge}><Text style={styles.badgeText}>{b}</Text></View>)}
         </View>
         {!!v?.address && <Text style={styles.addr} numberOfLines={2}>{v.address}</Text>}

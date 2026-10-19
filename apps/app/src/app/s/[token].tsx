@@ -8,6 +8,7 @@ import KakaoMapView, { type KakaoMapHandle } from '@/components/KakaoMapView';
 import type { SharedStop } from '@/lib/api/itineraries';
 import { useSharedItineraryQuery } from '@/lib/hooks/queries';
 import { useT } from '@/lib/i18n';
+import { useMapLabels } from '@/lib/map/useMapLabels';
 import { sized } from '@/lib/img';
 import { ROUTE_SEGMENT_COLORS } from '@/lib/routeColors';
 import { useAuthStore } from '@/lib/store/authStore';
@@ -37,6 +38,7 @@ export default function SharedItineraryScreen() {
   const { token } = useLocalSearchParams<{ token: string }>();
   const router = useRouter();
   const t = useT();
+  const mapLabels = useMapLabels();
   const insets = useSafeAreaInsets();
   const { data, isLoading, isError } = useSharedItineraryQuery(String(token ?? ''));
   const signedIn = useAuthStore((s) => !!s.accessToken);
@@ -119,6 +121,7 @@ export default function SharedItineraryScreen() {
               jsKey={KAKAO_JS_KEY}
               segColors={ROUTE_SEGMENT_COLORS}
               baseUrl={KAKAO_WEB_ORIGIN}
+              labels={mapLabels}
               onMessage={(e) => {
                 try {
                   if (JSON.parse(e.nativeEvent.data)?.type === 'ready') setMapReady(true);

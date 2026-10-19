@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack } from 'expo-router';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { CountLine } from '@/components/CountLine';
 import LoginRequired from '@/components/LoginRequired';
+import { useT } from '@/lib/i18n';
 import { useBlockedUsersQuery, useUnblockUserMutation } from '@/lib/hooks/queries';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +11,7 @@ import { colors, fonts, radius, space } from '@/lib/theme';
 
 /** 차단한 사용자 관리 — 차단만 되고 해제할 수 없으면 안 되므로 반드시 필요한 화면. */
 export default function BlockedUsersScreen() {
+  const t = useT();
   const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const { data, isLoading } = useBlockedUsersQuery();
@@ -17,20 +20,20 @@ export default function BlockedUsersScreen() {
   if (!isLoggedIn) {
     return (
       <View style={styles.safe}>
-        <Stack.Screen options={{ title: '차단한 사용자' }} />
-        <LoginRequired description="차단 목록은 로그인 후에 확인할 수 있어요." />
+        <Stack.Screen options={{ title: t('profile.menu.blocked') }} />
+        <LoginRequired description={t('blocked.loginDesc')} />
       </View>
     );
   }
 
   const confirmUnblock = (userId: number) => {
-    Alert.alert('차단 해제', '이 사용자의 리뷰가 다시 보이게 됩니다.', [
-      { text: '취소', style: 'cancel' },
+    Alert.alert(t('blocked.unblockTitle'), t('blocked.unblockBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: '해제',
+        text: t('blocked.unblockConfirm'),
         onPress: () =>
           unblock.mutate(userId, {
-            onError: (e: any) => Alert.alert('해제 실패', e?.message ?? '잠시 후 다시 시도해주세요.'),
+            onError: (e: any) => Alert.alert(t('blocked.unblockFail'), e?.message ?? t('common.tryLater')),
           }),
       },
     ]);
@@ -40,24 +43,24 @@ export default function BlockedUsersScreen() {
 
   return (
     <View style={styles.safe}>
-      <Stack.Screen options={{ title: '차단한 사용자' }} />
+      <Stack.Screen options={{ title: t('profile.menu.blocked') }} />
 
       {isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
       ) : blocked.length ? (
         <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 + insets.bottom }}>
-          <Text style={styles.count}>총 <Text style={styles.countNum}>{blocked.length}</Text>명을 차단했어요</Text>
+          <CountLine k="blocked.count" n={blocked.length} style={styles.count} numStyle={styles.countNum} />
           {blocked.map((userId) => (
             <View key={userId} style={styles.row}>
               <View style={styles.avatar}>
                 <Ionicons name="person" size={16} color={colors.textFaint} />
               </View>
-              <Text style={styles.name}>사용자{userId}</Text>
+              <Text style={styles.name}>{t('blocked.user', { id: userId })}</Text>
               <Pressable
                 style={styles.btn}
                 disabled={unblock.isPending}
                 onPress={() => confirmUnblock(userId)}>
-                <Text style={styles.btnText}>차단 해제</Text>
+                <Text style={styles.btnText}>{t('blocked.unblockTitle')}</Text>
               </Pressable>
             </View>
           ))}
@@ -65,8 +68,8 @@ export default function BlockedUsersScreen() {
       ) : (
         <View style={styles.empty}>
           <Ionicons name="person-remove-outline" size={34} color={colors.textFaint} />
-          <Text style={styles.emptyText}>차단한 사용자가 없어요</Text>
-          <Text style={styles.emptyDesc}>리뷰 옆의 아이콘을 눌러 차단할 수 있어요.</Text>
+          <Text style={styles.emptyText}>{t('blocked.empty')}</Text>
+          <Text style={styles.emptyDesc}>{t('blocked.emptyDesc')}</Text>
         </View>
       )}
     </View>

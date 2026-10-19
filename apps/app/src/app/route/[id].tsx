@@ -7,6 +7,7 @@ import LoginRequired from '@/components/LoginRequired';
 import type { RouteLeg, RouteStop } from '@/lib/api/itineraries';
 import { useItineraryQuery, useItineraryRouteQuery } from '@/lib/hooks/queries';
 import { useT } from '@/lib/i18n';
+import { useMapLabels } from '@/lib/map/useMapLabels';
 import type { TFn } from '@/lib/i18n/labels';
 import { useAuthStore } from '@/lib/store/authStore';
 import { ROUTE_SEGMENT_COLORS, segmentColor } from '@/lib/routeColors';
@@ -95,6 +96,7 @@ const fmtDate = (d: string) => d.slice(5).replace('-', '.');
 export default function RouteScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const t = useT();
+  const mapLabels = useMapLabels();
   const id = Number(params.id);
   const valid = !!params.id && !Number.isNaN(id);
 
@@ -216,6 +218,7 @@ export default function RouteScreen() {
               jsKey={KAKAO_JS_KEY}
               segColors={ROUTE_SEGMENT_COLORS}
               baseUrl={KAKAO_WEB_ORIGIN}
+              labels={mapLabels}
               onMessage={onMessage}
               onError={setMapError}
             />

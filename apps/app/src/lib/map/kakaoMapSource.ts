@@ -1,3 +1,5 @@
+import { CATEGORY_EMOJI } from '@/lib/categories';
+
 // 카카오 지도 화면의 단일 원본.
 // 네이티브는 이 CSS/스크립트를 WebView용 HTML로 감싸 쓰고(buildHtml),
 // 웹은 iframe 없이 페이지에서 그대로 실행한다. 두 경로가 갈리지 않도록 여기서만 관리한다.
@@ -52,16 +54,10 @@ export function mapScript(segColors: string[]): string {
     map.setBounds(b);
   }
   // 카테고리별 이모지 마커. 음식점·행사(문화)·카페 등을 한눈에 구분.
+  var CAT_EMOJI=${JSON.stringify(CATEGORY_EMOJI)};
   function catEmoji(c){
-    if(c==='맛집') return '🍽️';
-    if(c==='카페') return '☕';
-    if(c==='문화') return '🎭';
-    if(c==='체험') return '🎨';
-    if(c==='전통시장') return '🏮';
-    if(c==='공예') return '🪡';
-    if(c==='한옥스테이') return '🏯';
-    if(c==='한복') return '👘';
-    return '📍';
+    // 서버가 준 문자열이라 'constructor' 같은 값이 와도 프로토타입을 읽지 않도록 자기 키만 본다.
+    return Object.prototype.hasOwnProperty.call(CAT_EMOJI, c) ? CAT_EMOJI[c] : '📍';
   }
   // 주변 조회 마커는 지금 보고 있는 영역에서 받아온 것이라 지도를 다시 맞추지 않는다.
   // fitAll()을 부르면 setBounds가 지도를 움직여 idle이 또 발생하고,
@@ -269,8 +265,31 @@ export function mapScript(segColors: string[]): string {
   if(document.readyState==='complete') boot(); else window.addEventListener('load', boot);`;
 }
 
-/** 네이티브 WebView 용 문서. 기존 동작 그대로. */
-export function buildHtml(key: string, segColors: string[]): string {
+/**
+ * 지도 쪽에서 사용자에게 닿는 문구. WebView 안의 스크립트에서는 useT() 가 닿지 않으므로
+ * 화면이 번역해서 넘긴다(useMapLabels). 필수 prop 으로 받아 하나라도 빠뜨리면 tsc 가 잡는다.
+ *
+ * 오류 문구는 화면의 mapError 로 올라가 그대로 보이므로 번역 대상이다. {detail} 이 붙는
+ * 것은 함수로 받는다 — 보간을 사전 항목 하나로 두려는 것이다.
+ */
+export type MapLabels = {
+  /** 네이티브: 카카오 SDK <script> 가 로드되지 않았을 때. */
+  sdkLoadFail: string;
+  /** 웹: 같은 상황이지만 도메인 미등록이 흔한 원인이라 안내를 덧붙인다. */
+  sdkBlocked: string;
+  webViewError: (detail: string) => string;
+  httpError: (detail: string) => string;
+  scriptError: (detail: string) => string;
+  /** 개발 로그. 사용자에게 보이지 않지만 한국어 리터럴을 남기지 않으려 사전에 둔다. */
+  injectFail: string;
+};
+
+/** 속성값 안에 넣을 문자열의 HTML 이스케이프. onerror="…" 안에서 따옴표가 속성을 끊지 않게 한다. */
+const attr = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** 네이티브 WebView 용 문서. */
+export function buildHtml(key: string, segColors: string[], labels: MapLabels): string {
   return `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <style>
@@ -282,7 +301,7 @@ ${MAP_CSS}
   window.onerror = function(m){ post({type:'error', msg:String(m)}); };
 </script>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false&libraries=services"
-  onerror="post({type:'error', msg:'카카오 SDK 스크립트 로드 실패'})"></script>
+  onerror="post({type:'error', msg:${attr(JSON.stringify(labels.sdkLoadFail))}})"></script>
 <script>
 ${mapScript(segColors)}
 </script></body></html>`;

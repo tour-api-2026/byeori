@@ -23,6 +23,7 @@ import { Rating } from "@/components/Rating";
 import { Venue } from "@/lib/api/types";
 import { ALL, CATEGORIES, inKorea } from "@/lib/categories";
 import { useT } from "@/lib/i18n";
+import { useMapLabels } from "@/lib/map/useMapLabels";
 import { categoryLabel } from "@/lib/i18n/labels";
 import { distanceMeters, formatDistance } from "@/lib/geo";
 import { sized } from "@/lib/img";
@@ -49,6 +50,7 @@ type KakaoPlace = {
 export default function MapScreen() {
   const router = useRouter();
   const t = useT();
+  const mapLabels = useMapLabels();
   const insets = useSafeAreaInsets();
   const tabH = useTabBarHeight(); // 떠 있는 탭바 높이 — 하단 UI(카드·현재위치 버튼)를 그만큼 올린다.
   // 경로 보기는 탭 위에 쌓는 화면(route/[id])으로 옮겼다 — 뒤로가기가 앱을 닫지 않고,
@@ -326,6 +328,7 @@ export default function MapScreen() {
               jsKey={KAKAO_JS_KEY}
               segColors={ROUTE_SEGMENT_COLORS}
               baseUrl={KAKAO_WEB_ORIGIN}
+              labels={mapLabels}
               onMessage={onMessage}
               onError={setMapError}
             />

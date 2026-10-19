@@ -6,11 +6,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { confirmDestructive, notify } from '@/lib/alert';
 import { fetchLinkedAccounts, unlinkAccount, type LinkedAccount } from '@/lib/api/social';
 import { isCancelled, linkGoogle, linkKakao, mergeGoogle, mergeKakao } from '@/lib/auth/oauth';
+import { useT } from '@/lib/i18n';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 const PROVIDERS = [
-  { key: 'KAKAO', label: '카카오', icon: 'chatbubble' as const, tint: '#3C1E1E', soft: colors.kakao },
-  { key: 'GOOGLE', label: '구글', icon: 'logo-google' as const, tint: '#DB4437', soft: '#FDECEA' },
+  { key: 'KAKAO', icon: 'chatbubble' as const, tint: '#3C1E1E', soft: colors.kakao },
+  { key: 'GOOGLE', icon: 'logo-google' as const, tint: '#DB4437', soft: '#FDECEA' },
 ];
 
 /**
@@ -25,6 +26,7 @@ const PROVIDERS = [
  */
 export default function LinkedAccountsScreen() {
   const insets = useSafeAreaInsets();
+  const t = useT();
   const [list, setList] = useState<LinkedAccount[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -32,14 +34,15 @@ export default function LinkedAccountsScreen() {
     try {
       setList(await fetchLinkedAccounts());
     } catch (e: any) {
-      notify('불러오지 못했어요', e?.message ?? '잠시 후 다시 시도해 주세요.');
+      notify(t('common.loadFail'), e?.message ?? t('common.tryLater'));
       setList([]);
     }
-  }, []);
+  }, [t]);
   useEffect(() => { load(); }, [load]);
 
   const linkedOf = (key: string) => list?.find((a) => a.provider === key);
 
+  // label 은 제공자 이름의 번역본이다(키는 서버가 아는 KAKAO/GOOGLE 그대로).
   const onLink = async (key: string, label: string) => {
     if (busy) return;
     setBusy(key);
@@ -54,7 +57,7 @@ export default function LinkedAccountsScreen() {
         await offerMerge(key, label, e?.message ?? '');
         return;
       }
-      notify(`${label} 연결 실패`, e?.message ?? '잠시 후 다시 시도해 주세요.');
+      notify(t('accounts.linkFail', { provider: label }), e?.message ?? t('common.tryLater'));
     } finally {
       setBusy(null);
     }
@@ -69,17 +72,17 @@ export default function LinkedAccountsScreen() {
    */
   const offerMerge = async (key: string, label: string, serverMessage: string) => {
     const ok = await confirmDestructive(
-      '두 계정을 합칠까요?',
-      `${serverMessage}\n\n그 계정의 루트·찜·리뷰가 지금 계정으로 넘어오고, 그 계정은 사라집니다. 되돌릴 수 없어요.\n확인을 누르면 ${label} 로그인 창이 한 번 더 뜹니다.`,
-      '합치기',
+      t('accounts.mergeTitle'),
+      t('accounts.mergeBody', { message: serverMessage, provider: label }),
+      t('accounts.mergeConfirm'),
     );
     if (!ok) return;
     setBusy(key);
     try {
       setList(key === 'KAKAO' ? await mergeKakao() : await mergeGoogle());
-      notify('두 계정을 합쳤어요', `이제 ${label} 로도 이 계정에 로그인할 수 있어요.`);
+      notify(t('accounts.mergedTitle'), t('accounts.mergedBody', { provider: label }));
     } catch (e: any) {
-      if (!isCancelled(e)) notify('합치지 못했어요', e?.message ?? '잠시 후 다시 시도해 주세요.');
+      if (!isCancelled(e)) notify(t('accounts.mergeFail'), e?.message ?? t('common.tryLater'));
     } finally {
       setBusy(null);
     }
@@ -87,20 +90,20 @@ export default function LinkedAccountsScreen() {
 
   const onUnlink = async (key: string, label: string) => {
     if ((list?.length ?? 0) <= 1) {
-      notify('끊을 수 없어요', '마지막 로그인 수단이에요. 다른 계정을 먼저 연결해 주세요.');
+      notify(t('accounts.lastTitle'), t('accounts.lastBody'));
       return;
     }
     const ok = await confirmDestructive(
-      `${label} 연결 해제`,
-      `${label} 계정으로는 더 이상 로그인할 수 없게 됩니다.`,
-      '해제',
+      t('accounts.unlinkTitle', { provider: label }),
+      t('accounts.unlinkBody', { provider: label }),
+      t('accounts.unlink'),
     );
     if (!ok) return;
     setBusy(key);
     try {
       setList(await unlinkAccount(key));
     } catch (e: any) {
-      notify('해제하지 못했어요', e?.message ?? '잠시 후 다시 시도해 주세요.');
+      notify(t('accounts.unlinkFail'), e?.message ?? t('common.tryLater'));
     } finally {
       setBusy(null);
     }
@@ -112,17 +115,17 @@ export default function LinkedAccountsScreen() {
 
   return (
     <View style={styles.safe}>
-      <Stack.Screen options={{ title: '연결된 계정' }} />
+      <Stack.Screen options={{ title: t('profile.menu.accounts') }} />
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 + insets.bottom }}>
         <Text style={styles.lead}>
-          여러 계정을 연결해 두면 어느 쪽으로 로그인해도 같은 벼리 계정으로 들어옵니다.
-          찜·루트·관심사가 한곳에 모입니다.
+          {t('accounts.lead')}
         </Text>
 
         <View style={styles.card}>
           {PROVIDERS.map((p, i) => {
             const linked = linkedOf(p.key);
             const working = busy === p.key;
+            const label = t(`accounts.provider.${p.key}`);
             return (
               <View key={p.key}>
                 {i > 0 && <View style={styles.divider} />}
@@ -131,20 +134,20 @@ export default function LinkedAccountsScreen() {
                     <Ionicons name={p.icon} size={17} color={p.tint} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.name}>{p.label}</Text>
+                    <Text style={styles.name}>{label}</Text>
                     <Text style={styles.state}>
-                      {linked ? `연결됨 · ${linked.linkedAt.slice(0, 10)}` : '연결되지 않음'}
+                      {linked ? t('accounts.linkedAt', { date: linked.linkedAt.slice(0, 10) }) : t('accounts.notLinked')}
                     </Text>
                   </View>
                   {working ? (
                     <ActivityIndicator color={colors.primary} />
                   ) : linked ? (
-                    <Pressable hitSlop={8} onPress={() => onUnlink(p.key, p.label)}>
-                      <Text style={styles.unlink}>해제</Text>
+                    <Pressable hitSlop={8} onPress={() => onUnlink(p.key, label)}>
+                      <Text style={styles.unlink}>{t('accounts.unlink')}</Text>
                     </Pressable>
                   ) : (
-                    <Pressable style={styles.linkBtn} hitSlop={8} onPress={() => onLink(p.key, p.label)}>
-                      <Text style={styles.linkText}>연결하기</Text>
+                    <Pressable style={styles.linkBtn} hitSlop={8} onPress={() => onLink(p.key, label)}>
+                      <Text style={styles.linkText}>{t('accounts.link')}</Text>
                     </Pressable>
                   )}
                 </View>
@@ -153,9 +156,7 @@ export default function LinkedAccountsScreen() {
           })}
         </View>
 
-        <Text style={styles.note}>
-          마지막 하나는 해제할 수 없어요. 끊는 순간 로그인할 길이 사라집니다.
-        </Text>
+        <Text style={styles.note}>{t('accounts.note')}</Text>
       </ScrollView>
     </View>
   );

@@ -35,6 +35,22 @@ export const HANBOK = '한복';
 /** 홈의 키워드 칩. 값은 카테고리와 같은 한국어다. */
 export const HOME_KEYWORDS = ['전체', '문화', '카페', '체험', '맛집'] as const;
 
+/**
+ * 지도 핀의 카테고리별 이모지. 키는 서버가 주는 category **값**이라 번역하지 않는다.
+ * 지도 스크립트(WebView 안의 문자열)가 쓰는데, 거기서는 한국어 리터럴을 직접 둘 수 없어
+ * (i18n-check 가 본다) 이 표를 JSON 으로 심어 보낸다.
+ */
+export const CATEGORY_EMOJI: Record<string, string> = {
+  맛집: '🍽️',
+  카페: '☕',
+  문화: '🎭',
+  체험: '🎨',
+  전통시장: '🏮',
+  공예: '🪡',
+  한옥스테이: '🏯',
+  한복: '👘',
+};
+
 /** 한국 본토·제주를 덮는 좌표 범위. */
 const KOREA = { minLat: 33, maxLat: 38.7, minLng: 124.5, maxLng: 132 };
 
