@@ -149,6 +149,8 @@ export default function RouteScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          // 가로 ScrollView 는 높이를 안 주면 세로로 늘어나 지도를 화면 밖으로 밀어낸다.
+          style={styles.bar}
           contentContainerStyle={styles.dayBar}
         >
           {days.map((d, i) => {
@@ -231,6 +233,7 @@ export default function RouteScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={styles.bar}
           contentContainerStyle={styles.stopBar}
         >
           {day.stops.map((s, i) => (
@@ -253,7 +256,9 @@ export default function RouteScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
 
-  dayBar: { paddingHorizontal: space.md, paddingTop: space.sm, gap: 6 },
+  // 가로 막대는 제 내용만큼만 차지한다(flex 부모 안에서 늘어나지 않게).
+  bar: { flexGrow: 0, flexShrink: 0 },
+  dayBar: { paddingHorizontal: space.md, paddingTop: space.sm, gap: 6, alignItems: 'center' },
   dayChip: {
     paddingHorizontal: 14, paddingVertical: 6, borderRadius: radius.pill,
     backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border,
