@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAutoUpdate } from '@/hooks/use-auto-update';
 import { applyGlobalFont } from '@/lib/font';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useLocaleStore } from '@/lib/store/localeStore';
 import { colors, fonts } from '@/lib/theme';
 
 applyGlobalFont();
@@ -37,12 +38,18 @@ export default function RootLayout() {
     hydrate();
   }, [hydrate]);
 
+  const localeHydrated = useLocaleStore((s) => s.hydrated);
+  const hydrateLocale = useLocaleStore((s) => s.hydrate);
+  useEffect(() => {
+    hydrateLocale();
+  }, [hydrateLocale]);
+
   useEffect(() => {
     if (loaded) applyGlobalFont();
   }, [loaded]);
 
-  // 폰트 + 세션 복원이 모두 끝날 때까지 렌더 게이트
-  if (!loaded || !hydrated) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+  // 폰트 + 세션 + 언어 복원이 모두 끝날 때까지 렌더 게이트
+  if (!loaded || !hydrated || !localeHydrated) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
 
   return (
     <QueryClientProvider client={client}>

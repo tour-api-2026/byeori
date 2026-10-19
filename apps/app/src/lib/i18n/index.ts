@@ -3,6 +3,7 @@ import { en } from './en';
 import { ja } from './ja';
 import { zh } from './zh';
 import type { Locale } from './locales';
+import { useLocaleStore } from '@/lib/store/localeStore';
 
 export { LOCALES, LOCALE_NAMES, type Locale } from './locales';
 
@@ -21,4 +22,15 @@ const DICT: Record<Locale, Record<string, string>> = { ko, en, ja, zh };
 export function translate(locale: Locale, key: string, vars?: Record<string, unknown>): string {
   const raw = DICT[locale]?.[key] ?? DICT.ko[key] ?? key;
   return raw.replace(/\{(\w+)\}/g, (_, name) => String(vars?.[name] ?? ''));
+}
+
+/**
+ * 화면에서 쓰는 번역 함수.
+ *
+ * 스토어를 구독하므로 언어가 바뀌면 이 훅을 쓰는 화면이 다시 그려진다. 모듈 수준에서
+ * `translate(locale, …)` 을 직접 부르면 그 갱신을 놓친다 — 화면에서는 반드시 이쪽을 쓴다.
+ */
+export function useT() {
+  const locale = useLocaleStore((s) => s.locale);
+  return (key: string, vars?: Record<string, unknown>) => translate(locale, key, vars);
 }
