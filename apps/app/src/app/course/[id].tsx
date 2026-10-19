@@ -4,6 +4,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert, ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCourseDetailQuery, useCreateItineraryMutation } from '@/lib/hooks/queries';
+import { useT } from '@/lib/i18n';
 import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
@@ -13,6 +14,7 @@ function todayIso() { const d = new Date(); return `${d.getFullYear()}-${pad(d.g
 export default function CourseDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const { data, isLoading } = useCourseDetailQuery(Number(id));
   const create = useCreateItineraryMutation();
@@ -32,14 +34,14 @@ export default function CourseDetailScreen() {
         // 편집 화면이 아니라 내 루트 탭으로 보낸다. 편집 화면에서 뒤로 가면 루트 탐색으로
         // 돌아와 담기가 안 된 것처럼 보였다. 오늘 날짜라 내 루트의 대표 카드로 뜬다.
         onSuccess: () => router.dismissTo('/routes'),
-        onError: (e: any) => Alert.alert('담기 실패', e?.message ?? '오류'),
+        onError: (e: any) => Alert.alert(t('course.copyFail'), e?.message ?? t('common.error.unknown')),
       },
     );
   };
 
   return (
     <View style={styles.safe}>
-      <Stack.Screen options={{ title: data?.title ?? '추천 코스' }} />
+      <Stack.Screen options={{ title: data?.title ?? t('course.defaultTitle') }} />
       {isLoading || !data ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
       ) : (
@@ -49,7 +51,7 @@ export default function CourseDetailScreen() {
             <View style={styles.themeBadge}><Text style={styles.themeText}>{data.theme}</Text></View>
             <Text style={styles.title}>{data.title}</Text>
             <Text style={styles.desc}>{data.description}</Text>
-            <Text style={styles.meta}>⏱ 약 {data.durationHours}시간 · 총 {data.items.length}곳</Text>
+            <Text style={styles.meta}>{t('course.meta', { h: data.durationHours, n: data.items.length })}</Text>
           </View>
 
           {/* 동선 타임라인 */}
@@ -67,7 +69,10 @@ export default function CourseDetailScreen() {
                 <View style={styles.stopBody}>
                   <View style={styles.stopType}>
                     <Ionicons name={it.targetType === 'PERFORMANCE' ? 'ticket-outline' : 'location-outline'} size={12} color={colors.primary} />
-                    <Text style={styles.stopTypeText}>{it.targetType === 'PERFORMANCE' ? '행사' : '장소'}{it.recommendedTime ? ` · ${it.recommendedTime}` : ''}</Text>
+                    <Text style={styles.stopTypeText}>{(() => {
+                      const type = t(it.targetType === 'PERFORMANCE' ? 'common.stopType.performance' : 'common.stopType.venue');
+                      return it.recommendedTime ? t('course.stopTime', { type, time: it.recommendedTime }) : type;
+                    })()}</Text>
                   </View>
                   <Text style={styles.stopName}>{it.name}</Text>
                   {!!it.note && <Text style={styles.stopNote}>{it.note}</Text>}
@@ -77,7 +82,7 @@ export default function CourseDetailScreen() {
           </View>
 
           <Pressable style={[styles.cta, create.isPending && { opacity: 0.6 }]} disabled={create.isPending} onPress={copyToItinerary}>
-            <Text style={styles.ctaText}>{create.isPending ? '담는 중...' : '내 루트로 담기'}</Text>
+            <Text style={styles.ctaText}>{create.isPending ? t('course.copying') : t('course.copy')}</Text>
           </Pressable>
         </ScrollView>
       )}

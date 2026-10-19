@@ -1,17 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
+import { useT } from '@/lib/i18n';
 import { colors, fonts } from '@/lib/theme';
 
 // 골드 별 5개 + 평점 숫자 (Figma 리디자인)
 export function Rating({ value, count, size = 12 }: { value: number; count?: number; size?: number }) {
+  const t = useT();
   const v = Number(value) || 0;
   // 리뷰가 없으면 빈 별 5개 + "0.0"이 뜬다. 평점이 낮다는 뜻으로 오해되므로 상태를 그대로 쓴다.
   if (count === 0 || (count == null && v <= 0)) {
-    return <Text style={[styles.empty, { fontSize: size }]}>아직 평가 없음</Text>;
+    return <Text style={[styles.empty, { fontSize: size }]}>{t('rating.none')}</Text>;
   }
   const full = Math.round(v);
   return (
-    <View style={styles.row}>
+    <View style={styles.row} accessibilityLabel={count != null ? t('rating.count', { n: count.toLocaleString() }) : undefined}>
       {[1, 2, 3, 4, 5].map((n) => (
         <Ionicons key={n} name={n <= full ? 'star' : 'star-outline'} size={size} color={colors.star} />
       ))}

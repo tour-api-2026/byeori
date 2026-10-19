@@ -153,6 +153,20 @@ const DONE = [
   'src/app/email-login.tsx',
   'src/app/onboarding.tsx',
   'src/lib/auth/oauth.ts',
+  'src/app/venue/[id].tsx',
+  'src/app/venue/register.tsx',
+  'src/app/performances/[id].tsx',
+  'src/app/performances/traditional.tsx',
+  'src/app/course/[id].tsx',
+  'src/app/review/write.tsx',
+  'src/components/VenueCard.tsx',
+  'src/components/VenueRow.tsx',
+  'src/components/Rating.tsx',
+  'src/components/ContentComments.tsx',
+  'src/components/ReportDialog.tsx',
+  'src/components/PerformanceCarousel.tsx',
+  'src/components/FeedCarousel.tsx',
+  'src/components/SectionHeader.tsx',
 ];
 const HANGUL_LITERAL = /(['"`])[^'"`\n]*[가-힣][^'"`\n]*\1/g;
 for (const rel of DONE) {

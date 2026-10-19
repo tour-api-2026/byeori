@@ -8,17 +8,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LoginRequired from '@/components/LoginRequired';
 import { uploadImage, type PickedImage } from '@/lib/api/uploads';
 import { useCreateVenueMutation, useUpdateVenueMutation, useVenueDetailQuery } from '@/lib/hooks/queries';
+import { useT } from '@/lib/i18n';
+import { categoryLabel, regionLabel } from '@/lib/i18n/labels';
+import { DAY_PATTERN, VENUE_CATEGORIES as CATEGORIES, VENUE_DAYS as DAYS, VENUE_REGIONS as REGIONS } from '@/lib/venueForm';
 import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 const MAX_PHOTOS = 3;
 
-const CATEGORIES = ['관람', '체험', '식사', '카페', '한복', '공예', '문화'];
-const REGIONS = ['서울', '제주', '부산', '대전', '대구', '경주', '전주', '강릉', '속초', '통영'];
-const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
-
 export default function VenueRegisterScreen() {
   const router = useRouter();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const { editId } = useLocalSearchParams<{ editId?: string }>();
@@ -29,15 +29,15 @@ export default function VenueRegisterScreen() {
   if (!isLoggedIn) {
     return (
       <View style={styles.safe}>
-        <Stack.Screen options={{ title: isEdit ? '장소 수정' : '장소등록' }} />
-        <LoginRequired description="장소 등록은 로그인 후에 이용할 수 있어요." />
+        <Stack.Screen options={{ title: isEdit ? t('venueRegister.title.edit') : t('venueRegister.title.new') }} />
+        <LoginRequired description={t('venueRegister.loginDesc')} />
       </View>
     );
   }
 
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('관람');
-  const [region, setRegion] = useState('서울');
+  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [region, setRegion] = useState(REGIONS[0]);
   const [address, setAddress] = useState('');
   const [addressDetail, setAddressDetail] = useState('');
   const [days, setDays] = useState<string[]>([]);
@@ -63,10 +63,10 @@ export default function VenueRegisterScreen() {
     setPhone(d.phone ?? '');
     setDescription(d.description ?? '');
     const oh = d.operatingHours ?? '';
-    const t = oh.match(/(\d{1,2}:\d{2})\s*~\s*(\d{1,2}:\d{2})/);
-    if (t) { setOpenTime(t[1]); setCloseTime(t[2]); }
+    const hm = oh.match(/(\d{1,2}:\d{2})\s*~\s*(\d{1,2}:\d{2})/);
+    if (hm) { setOpenTime(hm[1]); setCloseTime(hm[2]); }
     const dayTok = oh.split(' ')[0] ?? '';
-    if (/[월화수목금토일]/.test(dayTok)) setDays(dayTok.split('·').filter((x) => DAYS.includes(x)));
+    if (DAY_PATTERN.test(dayTok)) setDays(dayTok.split('·').filter((x) => DAYS.includes(x)));
   }, [detailQ.data, isEdit]);
 
   const toggleDay = (d: string) => setDays((s) => (s.includes(d) ? s.filter((x) => x !== d) : [...s, d]));
@@ -76,7 +76,7 @@ export default function VenueRegisterScreen() {
     // 네이티브는 갤러리 권한 필요(웹은 자동 허용)
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('권한 필요', '사진을 첨부하려면 갤러리 접근을 허용해주세요.');
+      Alert.alert(t('venueRegister.error.permTitle'), t('venueRegister.error.permBody'));
       return;
     }
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -92,7 +92,7 @@ export default function VenueRegisterScreen() {
   const submit = async () => {
     if (create.isPending || update.isPending || uploading) return;
     if (!name || !address) {
-      Alert.alert('필수 입력', '장소명과 주소는 필수입니다.');
+      Alert.alert(t('venueRegister.error.requiredTitle'), t('venueRegister.error.requiredBody'));
       return;
     }
     // 사진이 있으면 먼저 업로드해 첫 장을 대표 이미지로 사용
@@ -104,7 +104,7 @@ export default function VenueRegisterScreen() {
         imageUrl = urls[0] ?? '';
       } catch (e: any) {
         setUploading(false);
-        Alert.alert('사진 업로드 실패', e?.message ?? '사진을 올리지 못했습니다.');
+        Alert.alert(t('venueRegister.error.uploadTitle'), e?.message ?? t('venueRegister.error.uploadBody'));
         return;
       }
       setUploading(false);
@@ -127,7 +127,7 @@ export default function VenueRegisterScreen() {
         { id: Number(editId), body: { ...common, ...(imageUrl ? { imageUrl } : {}) } },
         {
           onSuccess: () => router.replace(`/venue/${editId}`),
-          onError: (e: any) => Alert.alert('수정 실패', e?.message ?? '오류'),
+          onError: (e: any) => Alert.alert(t('venueRegister.error.updateTitle'), e?.message ?? t('common.error.unknown')),
         },
       );
       return;
@@ -137,7 +137,7 @@ export default function VenueRegisterScreen() {
       { ...common, imageUrl, lat: 37.5759, lng: 126.9769 },
       {
         onSuccess: (v) => router.replace(`/venue/${v.id}`),
-        onError: (e: any) => Alert.alert('등록 실패', e?.message ?? '오류'),
+        onError: (e: any) => Alert.alert(t('venueRegister.error.createTitle'), e?.message ?? t('common.error.unknown')),
       },
     );
   };
@@ -146,36 +146,36 @@ export default function VenueRegisterScreen() {
 
   return (
     <View style={styles.safe}>
-      <Stack.Screen options={{ title: isEdit ? '장소 수정' : '장소등록' }} />
+      <Stack.Screen options={{ title: isEdit ? t('venueRegister.title.edit') : t('venueRegister.title.new') }} />
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 + insets.bottom }} showsVerticalScrollIndicator={false}>
         {/* 안내 배너 */}
         <View style={styles.banner}>
           <Ionicons name="information-circle" size={18} color={colors.accent} />
-          <Text style={styles.bannerText}>등록하신 장소는 관리자 확인 후 승인됩니다. 승인된 장소는 다른 사용자에게 노출되니 신중하게 작성해주세요.</Text>
+          <Text style={styles.bannerText}>{t('venueRegister.banner')}</Text>
         </View>
 
-        <Label text="장소명" required />
-        <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="장소 이름을 입력하세요" placeholderTextColor={colors.textFaint} />
+        <Label text={t('venueRegister.label.name')} required />
+        <TextInput style={styles.input} value={name} onChangeText={setName} placeholder={t('venueRegister.ph.name')} placeholderTextColor={colors.textFaint} />
 
-        <Label text="카테고리" required />
+        <Label text={t('venueRegister.label.category')} required />
         <View style={styles.chips}>
-          {CATEGORIES.map((c) => <SelChip key={c} label={c} on={c === category} onPress={() => setCategory(c)} />)}
+          {CATEGORIES.map((c) => <SelChip key={c} label={categoryLabel(t, c)} on={c === category} onPress={() => setCategory(c)} />)}
         </View>
 
-        <Label text="지역" required />
+        <Label text={t('venueRegister.label.region')} required />
         <View style={styles.chips}>
-          {REGIONS.map((r) => <SelChip key={r} label={r} on={r === region} onPress={() => setRegion(r)} />)}
+          {REGIONS.map((r) => <SelChip key={r} label={regionLabel(t, r)} on={r === region} onPress={() => setRegion(r)} />)}
         </View>
 
-        <Label text="주소" required />
-        <TextInput style={styles.input} value={address} onChangeText={setAddress} placeholder="주소를 입력하세요" placeholderTextColor={colors.textFaint} />
-        <TextInput style={[styles.input, { marginTop: 8 }]} value={addressDetail} onChangeText={setAddressDetail} placeholder="상세 주소 (선택)" placeholderTextColor={colors.textFaint} />
+        <Label text={t('venueRegister.label.address')} required />
+        <TextInput style={styles.input} value={address} onChangeText={setAddress} placeholder={t('venueRegister.ph.address')} placeholderTextColor={colors.textFaint} />
+        <TextInput style={[styles.input, { marginTop: 8 }]} value={addressDetail} onChangeText={setAddressDetail} placeholder={t('venueRegister.ph.addressDetail')} placeholderTextColor={colors.textFaint} />
 
-        <Label text="운영시간" />
+        <Label text={t('venueRegister.label.hours')} />
         <View style={styles.dayRow}>
           {DAYS.map((d) => (
             <Pressable key={d} style={[styles.day, days.includes(d) && styles.dayOn]} onPress={() => toggleDay(d)}>
-              <Text style={[styles.dayText, days.includes(d) && styles.dayTextOn]}>{d}</Text>
+              <Text style={[styles.dayText, days.includes(d) && styles.dayTextOn]}>{t(`venueRegister.day.${d}`)}</Text>
             </Pressable>
           ))}
         </View>
@@ -185,19 +185,19 @@ export default function VenueRegisterScreen() {
           <TextInput style={[styles.input, styles.timeInput]} value={closeTime} onChangeText={setCloseTime} placeholder="21:00" placeholderTextColor={colors.textFaint} />
         </View>
 
-        <Label text="가게 연락처" />
+        <Label text={t('venueRegister.label.phone')} />
         <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="02-1234-1234" placeholderTextColor={colors.textFaint} keyboardType="phone-pad" />
 
-        <Label text="설명" />
+        <Label text={t('venueRegister.label.desc')} />
         <View>
           <TextInput
-            style={[styles.input, styles.textarea]} value={description} onChangeText={(t) => t.length <= 500 && setDescription(t)}
-            placeholder="장소에 대한 설명을 자유롭게 적어주세요" placeholderTextColor={colors.textFaint} multiline maxLength={500}
+            style={[styles.input, styles.textarea]} value={description} onChangeText={(v) => v.length <= 500 && setDescription(v)}
+            placeholder={t('venueRegister.ph.desc')} placeholderTextColor={colors.textFaint} multiline maxLength={500}
           />
           <Text style={styles.counter}>{description.length}/500</Text>
         </View>
 
-        <Label text="사진등록" />
+        <Label text={t('venueRegister.label.photos')} />
         <View style={styles.photoRow}>
           {photos.map((p, i) => (
             <View key={p.uri} style={styles.thumbWrap}>
@@ -214,13 +214,13 @@ export default function VenueRegisterScreen() {
             </Pressable>
           )}
         </View>
-        <Text style={styles.photoHint}>최대 {MAX_PHOTOS}장까지 등록할 수 있어요 (첫 번째 사진이 대표 이미지)</Text>
+        <Text style={styles.photoHint}>{t('venueRegister.photoHint', { n: MAX_PHOTOS })}</Text>
 
         <Pressable style={[styles.submit, busy && styles.submitDisabled]} disabled={busy} onPress={submit}>
           <Text style={styles.submitText}>
-            {uploading ? '사진 올리는 중...'
-              : isEdit ? (update.isPending ? '수정 중...' : '수정하기')
-              : create.isPending ? '등록 중...' : '등록 신청하기'}
+            {uploading ? t('venueRegister.submit.uploading')
+              : isEdit ? (update.isPending ? t('venueRegister.submit.updating') : t('venueRegister.submit.update'))
+              : create.isPending ? t('venueRegister.submit.creating') : t('venueRegister.submit.create')}
           </Text>
         </Pressable>
       </ScrollView>

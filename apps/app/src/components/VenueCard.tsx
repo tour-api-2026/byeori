@@ -2,6 +2,9 @@ import { Image } from '@/components/Image';
 import { useRouter } from 'expo-router';
 import { DimensionValue, Pressable, StyleSheet, Text, View } from 'react-native';
 import { VenueCardItem } from '@/lib/api/types';
+import { HANBOK } from '@/lib/categories';
+import { useT } from '@/lib/i18n';
+import { categoryLabel } from '@/lib/i18n/labels';
 import { sized } from '@/lib/img';
 import { colors, fonts, radius, shadow } from '@/lib/theme';
 import { Rating } from './Rating';
@@ -9,9 +12,10 @@ import { Rating } from './Rating';
 // 카드: 이미지 + 이름 + 골드 별점 + 태그 (Figma 리디자인). 2열 그리드/가로 스크롤 공용.
 export function VenueCard({ venue, width = '48.5%' }: { venue: VenueCardItem; width?: DimensionValue }) {
   const router = useRouter();
+  const t = useT();
   const tags: string[] = [];
-  if (venue.hanbokDiscount) tags.push('한복');
-  if (venue.category && venue.category !== '한복') tags.push(venue.category);
+  if (venue.hanbokDiscount) tags.push(HANBOK);
+  if (venue.category && venue.category !== HANBOK) tags.push(venue.category);
 
   return (
     <Pressable style={[styles.card, { width }]} onPress={() => router.push(`/venue/${venue.id ?? venue.tourContentId}`)}>
@@ -21,9 +25,9 @@ export function VenueCard({ venue, width = '48.5%' }: { venue: VenueCardItem; wi
         <Rating value={venue.avgRating} count={venue.reviewCount} />
         {tags.length > 0 && (
           <View style={styles.tags}>
-            {tags.slice(0, 2).map((t) => (
-              <View key={t} style={[styles.tag, t === '한복' && styles.tagHanbok]}>
-                <Text style={[styles.tagText, t === '한복' && styles.tagTextHanbok]}>{t}</Text>
+            {tags.slice(0, 2).map((tag) => (
+              <View key={tag} style={[styles.tag, tag === HANBOK && styles.tagHanbok]}>
+                <Text style={[styles.tagText, tag === HANBOK && styles.tagTextHanbok]}>{categoryLabel(t, tag)}</Text>
               </View>
             ))}
           </View>

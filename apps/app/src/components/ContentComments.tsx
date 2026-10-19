@@ -7,6 +7,7 @@ import {
   useBlockUserMutation, useContentTagsQuery, useReportReviewMutation,
   useReviewsQuery, useVoteTagMutation,
 } from '@/lib/hooks/queries';
+import { useT } from '@/lib/i18n';
 import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius } from '@/lib/theme';
 
@@ -31,6 +32,7 @@ export function ContentComments({
   targetName: string;
 }) {
   const router = useRouter();
+  const t = useT();
   const tags = useContentTagsQuery(targetType, targetId);
   const reviews = useReviewsQuery(targetType, targetId);
   const { vote, unvote } = useVoteTagMutation(targetType, targetId);
@@ -41,15 +43,16 @@ export function ContentComments({
   const blockUser = useBlockUserMutation();
   const [reportId, setReportId] = useState<number | null>(null);
 
-  const needLogin = (what: string) => {
-    Alert.alert('로그인 필요', `${what}하려면 로그인이 필요해요.`, [
-      { text: '취소', style: 'cancel' },
-      { text: '로그인', onPress: () => router.push('/login') },
+  // 안내 문장은 동작마다 통째로 번역한다 — 동사를 끼워 넣는 식으로는 언어마다 어순이 안 맞는다.
+  const needLogin = (message: string) => {
+    Alert.alert(t('common.loginNeeded'), message, [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.login'), onPress: () => router.push('/login') },
     ]);
   };
 
   const openReport = (reviewId: number) => {
-    if (!isLoggedIn) return needLogin('신고');
+    if (!isLoggedIn) return needLogin(t('report.needLogin'));
     setReportId(reviewId);
   };
 
@@ -60,27 +63,27 @@ export function ContentComments({
       {
         onSuccess: () => {
           setReportId(null);
-          Alert.alert('신고 접수', '신고가 접수되었어요. 운영진이 확인 후 조치합니다.');
+          Alert.alert(t('report.doneTitle'), t('report.doneBody'));
         },
         onError: (e: any) => {
           setReportId(null);
-          Alert.alert('신고 실패', e?.message ?? '잠시 후 다시 시도해주세요.');
+          Alert.alert(t('report.failTitle'), e?.message ?? t('common.tryLater'));
         },
       },
     );
   };
 
   const confirmBlock = (targetUserId: number) => {
-    if (!isLoggedIn) return needLogin('차단');
-    Alert.alert('사용자 차단', '이 사용자의 리뷰가 더 이상 보이지 않아요. 차단은 마이 > 차단한 사용자에서 해제할 수 있어요.', [
-      { text: '취소', style: 'cancel' },
+    if (!isLoggedIn) return needLogin(t('comments.needLoginBlock'));
+    Alert.alert(t('comments.blockTitle'), t('comments.blockBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: '차단',
+        text: t('comments.blockBtn'),
         style: 'destructive',
         onPress: () =>
           blockUser.mutate(targetUserId, {
-            onSuccess: () => Alert.alert('차단 완료', '이 사용자의 리뷰를 더 이상 표시하지 않아요.'),
-            onError: (e: any) => Alert.alert('차단 실패', e?.message ?? '잠시 후 다시 시도해주세요.'),
+            onSuccess: () => Alert.alert(t('comments.blockDoneTitle'), t('comments.blockDoneBody')),
+            onError: (e: any) => Alert.alert(t('comments.blockFailTitle'), e?.message ?? t('common.tryLater')),
           }),
       },
     ]);
@@ -92,9 +95,9 @@ export function ContentComments({
   return (
     <View style={styles.section}>
       <View style={styles.commentHead}>
-        <Text style={styles.sectionTitle}>방문자 코멘트</Text>
+        <Text style={styles.sectionTitle}>{t('comments.title')}</Text>
         <Pressable hitSlop={8} onPress={() => router.push(writeHref as never)}>
-          <Text style={styles.writeLink}>코멘트 작성 +</Text>
+          <Text style={styles.writeLink}>{t('comments.write')}</Text>
         </Pressable>
       </View>
 
@@ -116,7 +119,7 @@ export function ContentComments({
           <View key={r.id} style={styles.reviewCard}>
             <View style={styles.reviewTop}>
               <View style={styles.reviewAvatar} />
-              <Text style={styles.reviewUser}>사용자{r.userId}</Text>
+              <Text style={styles.reviewUser}>{t('comments.user', { id: r.userId })}</Text>
               {String(r.userId) !== String(myId ?? '') && (
                 <View style={styles.reviewActions}>
                   <Pressable hitSlop={8} onPress={() => openReport(r.id)}>
@@ -135,12 +138,12 @@ export function ContentComments({
             </View>
             {!!r.content && <Text style={styles.reviewContent}>{r.content}</Text>}
           </View>
-        )) : <Text style={styles.noReview}>첫 코멘트를 남겨보세요</Text>}
+        )) : <Text style={styles.noReview}>{t('comments.empty')}</Text>}
       </View>
 
       <ReportDialog
         visible={reportId != null}
-        title="리뷰 신고"
+        title={t('report.reviewTitle')}
         pending={reportReview.isPending}
         onSelect={submitReport}
         onClose={() => setReportId(null)}

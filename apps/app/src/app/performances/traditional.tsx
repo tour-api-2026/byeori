@@ -6,13 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Chip } from '@/components/Chip';
 import { Performance } from '@/lib/api/types';
 import { usePerformancesQuery } from '@/lib/hooks/queries';
+import { useT } from '@/lib/i18n';
 import { sized } from '@/lib/img';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
-const TABS = [
-  { label: '진행 중', state: 'ONGOING' },
-  { label: '예정', state: 'UPCOMING' },
-] as const;
+// 탭 라벨은 상태 값에서 사전 키를 만든다(performance.state.*). 값은 서버가 거르는 코드다.
+const TABS = ['ONGOING', 'UPCOMING'] as const;
 
 function formatPeriod(p: Performance) {
   const d = (s?: string | null) => (s ? s.slice(5).replace('-', '.') : '');
@@ -24,6 +23,7 @@ function formatPeriod(p: Performance) {
 
 export default function TraditionalPerformancesScreen() {
   const router = useRouter();
+  const t = useT();
   const [state, setState] = useState<string>('ONGOING');
   const query = usePerformancesQuery({ traditional: true, state, size: 100 });
 
@@ -36,11 +36,11 @@ export default function TraditionalPerformancesScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <View style={styles.tabs}>
-        {TABS.map((t) => (
-          <Chip key={t.state} label={t.label} selected={t.state === state} onPress={() => setState(t.state)} />
+        {TABS.map((s) => (
+          <Chip key={s} label={t(`performance.state.${s}`)} selected={s === state} onPress={() => setState(s)} />
         ))}
         {!query.isLoading && (
-          <Text style={styles.count}>{query.data?.totalElements ?? 0}건</Text>
+          <Text style={styles.count}>{t('performance.count', { n: query.data?.totalElements ?? 0 })}</Text>
         )}
       </View>
 
@@ -51,7 +51,7 @@ export default function TraditionalPerformancesScreen() {
           data={items}
           keyExtractor={(p) => String(p.id)}
           contentContainerStyle={{ padding: space.lg, paddingTop: 4, gap: 12 }}
-          ListEmptyComponent={<Text style={styles.empty}>해당하는 전통 행사가 아직 없어요</Text>}
+          ListEmptyComponent={<Text style={styles.empty}>{t('performance.emptyTraditional')}</Text>}
           renderItem={({ item }) => (
             <Pressable style={styles.card} onPress={() => open(item)}>
               <Image
@@ -63,7 +63,7 @@ export default function TraditionalPerformancesScreen() {
               />
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
-                <Text style={styles.genre} numberOfLines={1}>{item.genre ?? '전통 행사'}</Text>
+                <Text style={styles.genre} numberOfLines={1}>{item.genre ?? t('performance.defaultGenre')}</Text>
                 <Text style={styles.period}>{formatPeriod(item)}</Text>
               </View>
             </Pressable>

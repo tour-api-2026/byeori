@@ -608,7 +608,7 @@ const styles = StyleSheet.create({
   skipText: { fontSize: 14, color: colors.textFaint, fontFamily: fonts.semibold, fontWeight: '600' },
   reviewCard: { backgroundColor: colors.bgSoft, borderRadius: radius.md, paddingHorizontal: 16 },
   reviewRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
-  reviewLabel: { fontSize: 13, color: colors.textFaint, width: 72 },
+  reviewLabel: { fontSize: 13, color: colors.textFaint, width: 52 },
   reviewValue: { flex: 1, fontSize: 14, color: colors.text, fontFamily: fonts.medium, fontWeight: '500' },
   secondary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderColor: colors.primary, borderRadius: radius.md, paddingVertical: 13, marginBottom: 20 },
   secondaryText: { fontSize: 14, color: colors.primary, fontFamily: fonts.bold, fontWeight: '800' },

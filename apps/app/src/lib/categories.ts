@@ -29,6 +29,9 @@ export const PICKER_CATEGORIES = [
 export const FOOD = '맛집';
 export const CAFE = '카페';
 
+/** 한복 태그·카테고리의 값. 한복 혜택이 있으면 카테고리와 별개로 이 태그를 앞에 붙인다. */
+export const HANBOK = '한복';
+
 /** 홈의 키워드 칩. 값은 카테고리와 같은 한국어다. */
 export const HOME_KEYWORDS = ['전체', '문화', '카페', '체험', '맛집'] as const;
 
