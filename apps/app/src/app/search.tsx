@@ -1,10 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Chip } from '@/components/Chip';
 import { Refresh } from '@/components/Refresh';
-import { useTabBarHeight } from '@/components/TabBar';
 import { VenueCard } from '@/components/VenueCard';
 import { useLiveSearchQuery, useNearbyVenuesQuery, useVenuesQuery } from '@/lib/hooks/queries';
 import { CATEGORIES } from '@/lib/categories';
@@ -14,8 +12,6 @@ import { colors, fonts, radius, space } from '@/lib/theme';
 const PER_PAGE = 6;
 
 export default function SearchScreen() {
-  // 떠 있는 탭바가 목록 끝을 가린다. 다른 탭 화면들과 같은 방식으로 그만큼 비운다.
-  const tabH = useTabBarHeight();
   const [keyword, setKeyword] = useState('');
   const [cat, setCat] = useState('전체');
   const [region, setRegion] = useState('전체');
@@ -62,7 +58,7 @@ export default function SearchScreen() {
   const reset = (fn: () => void) => { fn(); setPage(0); };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <View style={styles.safe}>
       {/* 검색창 */}
       <View style={styles.searchBar}>
         <Ionicons name="search" size={18} color={colors.accent} />
@@ -89,7 +85,7 @@ export default function SearchScreen() {
       ) : (
         <ScrollView
           refreshControl={<Refresh />}
-          contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: tabH + 24, paddingTop: 6 }}>
+          contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: 24, paddingTop: 6 }}>
           {pageItems.length ? (
             <>
               <View style={styles.grid}>
@@ -110,7 +106,7 @@ export default function SearchScreen() {
           ) : <Text style={styles.empty}>검색 결과가 없어요</Text>}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 

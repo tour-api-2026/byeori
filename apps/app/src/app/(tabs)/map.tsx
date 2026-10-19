@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
 import * as Location from "expo-location";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -15,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Image } from "@/components/Image";
 import KakaoMapView, { type KakaoMapHandle } from "@/components/KakaoMapView";
 import { BottomSheet, type SheetSnap } from "@/components/BottomSheet";
 import { Chip } from "@/components/Chip";
@@ -23,15 +23,10 @@ import { Rating } from "@/components/Rating";
 import { Venue } from "@/lib/api/types";
 import { CATEGORIES, inKorea } from "@/lib/categories";
 import { distanceMeters, formatDistance } from "@/lib/geo";
-import { useItineraryRouteQuery, useNearbyVenuesQuery, useVenuesQuery } from "@/lib/hooks/queries";
+import { sized } from "@/lib/img";
+import { useNearbyVenuesQuery, useVenuesQuery } from "@/lib/hooks/queries";
 import { colors, fonts, radius, shadow, space } from "@/lib/theme";
 import { ROUTE_SEGMENT_COLORS } from "@/lib/routeColors";
-
-const fmtKm = (m: number) => (m / 1000).toFixed(1);
-const fmtMin = (s: number) => {
-  const m = Math.round(s / 60);
-  return m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${m}분`;
-};
 
 const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? "";
 // WebView 문서의 origin. 카카오 개발자센터 Web 플랫폼 사이트 도메인에 등록된 값과 일치해야 한다.
@@ -53,30 +48,16 @@ export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const tabH = useTabBarHeight(); // 떠 있는 탭바 높이 — 하단 UI(카드·현재위치 버튼)를 그만큼 올린다.
+  // 경로 보기는 탭 위에 쌓는 화면(route/[id])으로 옮겼다 — 뒤로가기가 앱을 닫지 않고,
+  // 하루씩 끊어 볼 수 있다. 전에 쓰던 /map?itineraryId=N 링크는 그대로 살려 둔다
+  // (공유한 링크·북마크가 남아 있다).
   const params = useLocalSearchParams<{ itineraryId?: string }>();
-  const itineraryId = params.itineraryId
-    ? Number(params.itineraryId)
-    : undefined;
-  const routeMode = !!itineraryId && !Number.isNaN(itineraryId);
-  const [routeModeSel, setRouteModeSel] = useState<'AUTO' | 'WALK' | 'DRIVE'>('AUTO');
-  const routeQuery = useItineraryRouteQuery(
-    routeMode ? (itineraryId as number) : 0,
-    routeModeSel,
-  );
-  // 경로 보기 '닫기' → '내 루트'로 복귀(내 주변에 머무르지 않도록).
-  // 탭 포커스 해제 시 useFocusEffect가 itineraryId를 정리하므로 파라미터는 자동 초기화.
-  const exitRouteMode = () => router.replace('/routes');
-
-  // '내 주변' 탭을 떠나면 경로 모드를 해제한다.
-  // (여행 루트에서 넘어온 itineraryId 파라미터가 남아 다시 들어왔을 때
-  //  경로가 그대로 그려지는 문제 방지)
-  useFocusEffect(
-    useCallback(() => {
-      return () => {
-        if (params.itineraryId) router.setParams({ itineraryId: undefined });
-      };
-    }, [params.itineraryId, router]),
-  );
+  useEffect(() => {
+    const legacy = params.itineraryId;
+    if (legacy && !Number.isNaN(Number(legacy))) {
+      router.replace(`/route/${legacy}`);
+    }
+  }, [params.itineraryId, router]);
   const [cat, setCat] = useState("전체");
   const [hanbokOnly, setHanbokOnly] = useState(false);
   const [selected, setSelected] = useState<Venue | null>(null);
@@ -99,7 +80,7 @@ export default function MapScreen() {
 
   // 지도 화면은 보고 있는 영역만 공사 OpenAPI로 실시간 조회한다.
   const nearby = useNearbyVenuesQuery(
-    view && !routeMode
+    view
       ? { lat: view.lat, lng: view.lng, radius: view.radius, category: cat === "전체" ? undefined : cat }
       : null,
   );
@@ -282,32 +263,18 @@ export default function MapScreen() {
     }
   }, []);
 
-  // 최초 진입 시 1회 현재 위치로 이동(경로 모드 아닐 때).
+  // 최초 진입 시 1회 현재 위치로 이동.
   const locatedRef = useRef(false);
   useEffect(() => {
-    if (!ready || routeMode || locatedRef.current) return;
+    if (!ready || locatedRef.current) return;
     locatedRef.current = true;
     locateMe();
-  }, [ready, routeMode, locateMe]);
+  }, [ready, locateMe]);
 
   useEffect(() => {
     if (!ready || !webRef.current) return;
-    if (routeMode) {
-      if (routeQuery.data) {
-        const payload = JSON.stringify({
-          path: routeQuery.data.path,
-          stops: routeQuery.data.stops,
-          legs: routeQuery.data.legs,
-        });
-        webRef.current.injectJavaScript(`window.drawRoute(${payload}); true;`);
-      }
-    } else {
-      webRef.current.injectJavaScript(
-        `window.clearRoute(); window.forgetRouteFit && window.forgetRouteFit();`
-          + ` window.setMarkers(${markerPayload}); true;`,
-      );
-    }
-  }, [ready, routeMode, routeQuery.data, markerPayload]);
+    webRef.current.injectJavaScript(`window.setMarkers(${markerPayload}); true;`);
+  }, [ready, markerPayload]);
 
   const onMessage = (e: { nativeEvent: { data: string } }) => {
     try {
@@ -318,10 +285,6 @@ export default function MapScreen() {
       }
       if (msg.type === "error") setMapError(String(msg.msg));
       if (msg.type === "idle") {
-        // 경로 모드에서는 주변 장소를 조회하지 않으므로(useNearbyVenuesQuery 가 꺼진다)
-        // view 를 갱신할 이유가 없다. 갱신하면 상태가 바뀌어 다시 그려지고, 그 과정에서
-        // drawRoute 가 다시 주입돼 지도가 경로 범위로 튕겨 돌아갔다.
-        if (routeMode) return;
         const r = Math.min(Math.max(Number(msg.radius) || 3000, 500), 20000);
         setView({
           lat: Math.round(Number(msg.lat) * 1000) / 1000,
@@ -404,54 +367,8 @@ export default function MapScreen() {
         style={[styles.topOverlay, { paddingTop: insets.top + 8 }]}
         pointerEvents="box-none"
       >
-        {/* 경로 모드 배너 (여행 일지 경로 보기) */}
-      {routeMode && (
-        <View style={styles.routeBanner}>
-          <Ionicons name="navigate" size={18} color={colors.white} />
-          <View style={{ flex: 1 }}>
-            {routeQuery.isLoading ? (
-              <Text style={styles.routeBannerText}>경로 계산 중…</Text>
-            ) : routeQuery.data ? (
-              <Text style={styles.routeBannerText}>
-                총 {fmtKm(routeQuery.data.distance)}km · 약{" "}
-                {fmtMin(routeQuery.data.duration)} ·{" "}
-                {routeQuery.data.stops.length}곳
-              </Text>
-            ) : (
-              <Text style={styles.routeBannerText}>
-                경로를 불러오지 못했어요
-              </Text>
-            )}
-            <View style={styles.routeModes}>
-              {([['AUTO', '자동'], ['WALK', '걷기'], ['DRIVE', '차']] as const).map(([v, label]) => (
-                <Pressable
-                  key={v}
-                  hitSlop={6}
-                  onPress={() => setRouteModeSel(v)}
-                  style={[styles.routeModeChip, routeModeSel === v && styles.routeModeChipOn]}
-                >
-                  <Text style={[styles.routeModeText, routeModeSel === v && styles.routeModeTextOn]}>
-                    {label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-          <Pressable
-            hitSlop={8}
-            onPress={exitRouteMode}
-            style={styles.routeClose}
-          >
-            <Ionicons name="close" size={16} color={colors.white} />
-            <Text style={styles.routeCloseText}>닫기</Text>
-          </Pressable>
-        </View>
-      )}
-
-      {/* 검색창 (카카오 전체 장소 + 우리 장소 검색) */}
-      {!routeMode && (
-        <>
-          <View style={styles.search}>
+        {/* 검색창 (카카오 전체 장소 + 우리 장소 검색) */}
+        <View style={styles.search}>
             <Ionicons name="search" size={18} color={colors.accent} />
             <TextInput
               style={styles.searchInput}
@@ -510,22 +427,17 @@ export default function MapScreen() {
               <Text style={styles.resultNum}>{kakaoCount ?? 0}</Text>곳 · 우리
               장소 <Text style={styles.resultNum}>{searchVenues.length}</Text>곳
             </Text>
-          )}
-        </>
-      )}
-
+        )}
       </View>
 
       {/* 현재 위치 버튼 (우하단 FAB) */}
-      {!routeMode && (
-        <Pressable
-          style={[styles.locBtn, { bottom: (selected || selectedKakao ? 96 : 16) + tabH }]}
-          onPress={locateMe}
-          hitSlop={8}
-        >
-          <Ionicons name="locate" size={22} color={colors.primary} />
-        </Pressable>
-      )}
+      <Pressable
+        style={[styles.locBtn, { bottom: (selected || selectedKakao ? 96 : 16) + tabH }]}
+        onPress={locateMe}
+        hitSlop={8}
+      >
+        <Ionicons name="locate" size={22} color={colors.primary} />
+      </Pressable>
 
       {/* 선택된 우리 장소 미니 카드 */}
       {selected && (
@@ -536,9 +448,12 @@ export default function MapScreen() {
           onPress={() => router.push(`/venue/${selected.id ?? selected.tourContentId}`)}
         >
           <Image
-            source={selected.imageUrl}
+            source={sized(selected.imageUrl, 120, 120)}
             style={styles.miniImg}
             contentFit="cover"
+            // 같은 컴포넌트가 장소를 바꿔 가며 재사용된다. 이 키가 없으면 expo-image 가
+            // 앞 장소의 그림을 그대로 쥐고 있어, 사진이 없는 곳에 남의 사진이 뜬다.
+            recyclingKey={String(selected.id ?? selected.tourContentId ?? selected.name)}
           />
           <View style={{ flex: 1 }}>
             <Text style={styles.miniName}>{selected.name}</Text>
@@ -603,7 +518,7 @@ export default function MapScreen() {
 
       {/* 검색 결과 목록 — 아래에서 올라오는 시트. 지도를 가리지 않고 훑어볼 수 있게 한다. */}
       <BottomSheet
-        visible={keyword.length > 0 && !routeMode}
+        visible={keyword.length > 0}
         snap={sheetSnap}
         onSnapChange={setSheetSnap}
         peekHeight={168 + tabH}
@@ -623,7 +538,12 @@ export default function MapScreen() {
               key={`v-${v.id ?? v.tourContentId}`}
               style={styles.sheetRow}
               onPress={() => focusVenue(v)}>
-              <Image source={v.imageUrl} style={styles.sheetThumb} contentFit="cover" />
+              <Image
+                source={sized(v.imageUrl, 112, 112)}
+                style={styles.sheetThumb}
+                contentFit="cover"
+                recyclingKey={String(v.id ?? v.tourContentId ?? v.name)}
+              />
               <View style={{ flex: 1 }}>
                 <Text style={styles.sheetName} numberOfLines={1}>{v.name}</Text>
                 <Text style={styles.sheetAddr} numberOfLines={1}>
@@ -659,7 +579,7 @@ export default function MapScreen() {
       </BottomSheet>
 
       {/* 펼친 상태에서 지도로 돌아가는 버튼 */}
-      {keyword.length > 0 && !routeMode && sheetSnap === 'full' && (
+      {keyword.length > 0 && sheetSnap === 'full' && (
         <Pressable style={[styles.mapBtn, { bottom: tabH + 20 }]} onPress={() => setSheetSnap('peek')}>
           <Ionicons name="location" size={16} color={colors.white} />
           <Text style={styles.mapBtnText}>지도보기</Text>
@@ -697,55 +617,6 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   searchInput: { flex: 1, fontSize: 14, color: colors.text, padding: 0 },
-  routeBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginHorizontal: space.lg,
-    marginTop: 8,
-    backgroundColor: colors.primary,
-    borderRadius: radius.pill,
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    ...shadow.card,
-  },
-  routeBannerText: {
-    color: colors.white,
-    fontSize: 14,
-    fontFamily: fonts.bold,
-    fontWeight: "800",
-  },
-  routeClose: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: radius.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  routeCloseText: {
-    color: colors.white,
-    fontSize: 12,
-    fontFamily: fonts.semibold,
-    fontWeight: "600",
-  },
-  // 배너(primary 바탕) 안의 칩: 닫기 버튼과 같은 반투명 흰색, 선택되면 흰 바탕으로 뒤집는다.
-  routeModes: { flexDirection: "row", gap: 6, marginTop: 6 },
-  routeModeChip: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: radius.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  routeModeChipOn: { backgroundColor: colors.white },
-  routeModeText: {
-    color: colors.white,
-    fontSize: 12,
-    fontFamily: fonts.semibold,
-    fontWeight: "600",
-  },
-  routeModeTextOn: { color: colors.primary },
   resultHint: {
     fontSize: 12,
     color: colors.textSub,

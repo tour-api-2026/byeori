@@ -105,7 +105,9 @@ export default function HomeScreen() {
         <View style={styles.header}><Text style={styles.title}>벼리</Text></View>
 
         {/* 검색창 — 카카오 장소 검색(내 주변 지도)로 이동 */}
-        <Pressable style={styles.search} onPress={() => router.push('/(tabs)/map')}>
+        {/* 검색은 탭이 아니라 탭 위에 쌓는 화면으로 띄운다 — 뒤로가기가 홈으로 돌아온다.
+            전에는 '내 주변' 탭으로 보냈는데, 탭에서는 뒤로가기가 앱을 닫았다. */}
+        <Pressable style={styles.search} onPress={() => router.push('/search')}>
           <Ionicons name="search" size={18} color={colors.accent} />
           <Text style={styles.searchText}>장소·주소로 검색해보세요</Text>
         </Pressable>

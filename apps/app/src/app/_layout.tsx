@@ -68,6 +68,10 @@ export default function RootLayout() {
           <Stack.Screen name="my/service-info" options={{ title: '서비스 정보' }} />
           <Stack.Screen name="my/profile" options={{ title: '프로필 수정' }} />
           <Stack.Screen name="ai-route" options={{ title: 'AI 루트 만들기' }} />
+          {/* 경로 보기·검색은 탭이 아니라 탭 위에 쌓는 화면이다. 탭으로 두면
+              backBehavior="none" 탓에 뒤로가기가 앱을 닫는다((tabs)/_layout 주석 참고). */}
+          <Stack.Screen name="route/[id]" options={{ title: '경로 보기' }} />
+          <Stack.Screen name="search" options={{ title: '검색' }} />
         </Stack>
       </SafeAreaProvider>
     </QueryClientProvider>
