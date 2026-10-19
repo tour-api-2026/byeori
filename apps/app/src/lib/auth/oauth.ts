@@ -1,7 +1,14 @@
 import * as AuthSession from 'expo-auth-session';
 import { Platform } from 'react-native';
 import { api, type ApiEnvelope } from '@/lib/api/client';
+import { translate } from '@/lib/i18n';
 import { useAuthStore, type Session } from '@/lib/store/authStore';
+import { useLocaleStore } from '@/lib/store/localeStore';
+
+// 이 파일은 화면이 아니라 모듈이라 useT() 를 부를 수 없다. errors.ts 와 같이 스토어에서
+// 현재 언어를 꺼내 바로 번역한다. 던지는 시점의 언어로 굳는 점은 에러 문구에서 문제가 없다.
+const tr = (key: string, vars?: Record<string, unknown>) =>
+  translate(useLocaleStore.getState().locale, key, vars);
 
 // scheme은 app.json의 "scheme": "app" 과 일치해야 한다.
 // Expo Go에서는 exp:// 프록시 URI, 개발/프로덕션 빌드에서는 app:// 네이티브 URI가 생성된다.
@@ -25,7 +32,7 @@ function activeRedirectUri(): string {
 
 class AuthCancelledError extends Error {
   constructor() {
-    super('로그인이 취소되었습니다.');
+    super(tr('login.cancelled'));
     this.name = 'AuthCancelledError';
   }
 }
@@ -71,13 +78,13 @@ async function exchangeWithBackend(body: Credential, mode: Mode = 'login') {
     const path = mode === 'merge' ? '/users/me/social/merge' : '/users/me/social';
     const res = await api.post<ApiEnvelope<LinkedAccount[]>>(path, body);
     if (!res.data.success) {
-      throw new Error(res.data.error?.message ?? '계정을 연결하지 못했습니다.');
+      throw new Error(res.data.error?.message ?? tr('login.linkFailed'));
     }
     return res.data.data;
   }
   const res = await api.post<ApiEnvelope<Session>>('/auth/social', body);
   if (!res.data.success || !res.data.data?.accessToken) {
-    throw new Error(res.data.error?.message ?? '로그인에 실패했습니다.');
+    throw new Error(res.data.error?.message ?? tr('login.failed'));
   }
   await useAuthStore.getState().setSession(res.data.data);
   return res.data.data.user;
@@ -94,7 +101,7 @@ async function exchangeWithBackend(body: Credential, mode: Mode = 'login') {
 async function loginKakaoWeb(mode: Mode = 'login') {
   const clientId = process.env.EXPO_PUBLIC_KAKAO_REST_KEY;
   if (!clientId) {
-    throw new Error('카카오 웹 로그인 설정이 필요해요. (EXPO_PUBLIC_KAKAO_REST_KEY 미설정)');
+    throw new Error(tr('login.kakao.needsKey'));
   }
   const webRedirectUri = activeRedirectUri();
 
@@ -112,12 +119,12 @@ async function loginKakaoWeb(mode: Mode = 'login') {
   if (result.type !== 'success') {
     throw new Error(
       result.type === 'error'
-        ? (result.error?.message ?? '카카오 인증 오류')
-        : '카카오 인증에 실패했습니다.',
+        ? (result.error?.message ?? tr('login.kakao.authError'))
+        : tr('login.kakao.authFailed'),
     );
   }
   const code = result.params.code;
-  if (!code) throw new Error('카카오 인가 코드를 받지 못했습니다.');
+  if (!code) throw new Error(tr('login.kakao.noCode'));
 
   return exchangeWithBackend({ provider: 'kakao', code, redirectUri: webRedirectUri }, mode);
 }
@@ -132,7 +139,7 @@ function detail(e: any): string {
   const code = e?.code ? String(e.code) : '';
   const msg = e?.message ? String(e.message) : '';
   const parts = [code, msg].filter(Boolean);
-  return parts.length ? ` (${parts.join(': ')})` : '';
+  return parts.length ? tr('login.errorDetail', { detail: parts.join(': ') }) : '';
 }
 
 export async function loginKakao(mode: Mode = 'login') {
@@ -142,11 +149,11 @@ export async function loginKakao(mode: Mode = 'login') {
   try {
     KakaoLogin = require('@react-native-seoul/kakao-login');
   } catch {
-    throw new Error('카카오 로그인은 설치형 앱(APK)에서만 가능해요.');
+    throw new Error(tr('login.kakao.appOnly'));
   }
   try {
     const token = await KakaoLogin.login();
-    if (!token?.accessToken) throw new Error('카카오 토큰을 받지 못했습니다.');
+    if (!token?.accessToken) throw new Error(tr('login.kakao.noToken'));
     return exchangeWithBackend({ provider: 'kakao', accessToken: token.accessToken }, mode);
   } catch (e: any) {
     // 사용자가 카카오 화면에서 취소
@@ -155,7 +162,7 @@ export async function loginKakao(mode: Mode = 'login') {
     if (e instanceof AuthCancelledError) throw e;
     // SDK가 주는 코드를 남긴다. 이걸 삼키면 키 해시 불일치(KOE006)인지 네트워크인지
     // 사용자도 우리도 구분할 수 없다 — 실제로 원인을 찾는 데 한참 걸렸다.
-    throw new Error(`카카오 로그인에 실패했습니다.${detail(e)}`);
+    throw new Error(tr('login.kakao.error', { detail: detail(e) }));
   }
 }
 
@@ -166,7 +173,7 @@ export async function loginKakao(mode: Mode = 'login') {
 export async function loginAdmin(id: string, password: string) {
   const res = await api.post<ApiEnvelope<Session>>('/auth/login', { id: id?.trim(), password });
   if (!res.data.success || !res.data.data?.accessToken) {
-    throw new Error(res.data.error?.message ?? '로그인에 실패했습니다.');
+    throw new Error(res.data.error?.message ?? tr('login.failed'));
   }
   await useAuthStore.getState().setSession(res.data.data);
   return res.data.data.user;
@@ -193,14 +200,14 @@ export async function loginGoogle(mode: Mode = 'login') {
 
   const clientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
   if (!clientId) {
-    throw new Error('구글 로그인 설정이 필요해요. (EXPO_PUBLIC_GOOGLE_CLIENT_ID 미설정)');
+    throw new Error(tr('login.google.needsKey'));
   }
 
   let mod: typeof import('@react-native-google-signin/google-signin');
   try {
     mod = require('@react-native-google-signin/google-signin');
   } catch {
-    throw new Error('구글 로그인은 설치형 앱에서만 가능해요.');
+    throw new Error(tr('login.google.appOnly'));
   }
   const { GoogleSignin } = mod;
 
@@ -211,13 +218,13 @@ export async function loginGoogle(mode: Mode = 'login') {
     if (res.type === 'cancelled') throw new AuthCancelledError();
 
     const idToken = res.data.idToken;
-    if (!idToken) throw new Error('구글 id_token을 받지 못했습니다.');
+    if (!idToken) throw new Error(tr('login.google.noIdToken'));
     return exchangeWithBackend({ provider: 'google', idToken }, mode);
   } catch (e: any) {
     if (e instanceof AuthCancelledError) throw e;
     // 구버전 SDK 는 취소를 예외로 던진다
     if (/cancel/i.test(String(e?.code ?? e?.message ?? ''))) throw new AuthCancelledError();
-    throw new Error(`구글 로그인에 실패했습니다.${detail(e)}`);
+    throw new Error(tr('login.google.error', { detail: detail(e) }));
   }
 }
 
@@ -232,7 +239,7 @@ export async function loginGoogle(mode: Mode = 'login') {
 async function loginGoogleWeb(mode: Mode = 'login') {
   const clientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
   if (!clientId) {
-    throw new Error('구글 로그인 설정이 필요해요. (EXPO_PUBLIC_GOOGLE_CLIENT_ID 미설정)');
+    throw new Error(tr('login.google.needsKey'));
   }
   const webRedirectUri = activeRedirectUri();
 
@@ -248,11 +255,11 @@ async function loginGoogleWeb(mode: Mode = 'login') {
   const result = await request.promptAsync(GOOGLE_DISCOVERY);
   if (result.type === 'cancel' || result.type === 'dismiss') throw new AuthCancelledError();
   if (result.type !== 'success') {
-    throw new Error(result.type === 'error' ? (result.error?.message ?? '구글 인증 오류') : '구글 인증에 실패했습니다.');
+    throw new Error(result.type === 'error' ? (result.error?.message ?? tr('login.google.authError')) : tr('login.google.authFailed'));
   }
 
   const code = result.params.code;
-  if (!code) throw new Error('구글 인가 코드를 받지 못했습니다.');
+  if (!code) throw new Error(tr('login.google.noCode'));
 
   return exchangeWithBackend({ provider: 'google', code, redirectUri: webRedirectUri }, mode);
 }

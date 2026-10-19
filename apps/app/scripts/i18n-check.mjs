@@ -149,6 +149,10 @@ const DONE = [
   'src/components/StopEditSheet.tsx',
   'src/components/Calendar.tsx',
   'src/components/PlacePicker.tsx',
+  'src/app/login.tsx',
+  'src/app/email-login.tsx',
+  'src/app/onboarding.tsx',
+  'src/lib/auth/oauth.ts',
 ];
 const HANGUL_LITERAL = /(['"`])[^'"`\n]*[가-힣][^'"`\n]*\1/g;
 for (const rel of DONE) {

@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isCancelled, loginGoogle, loginKakao } from '@/lib/auth/oauth';
+import { useT } from '@/lib/i18n';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 type Provider = 'kakao' | 'google' | null;
@@ -13,6 +14,7 @@ type Provider = 'kakao' | 'google' | null;
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const t = useT();
   const [busy, setBusy] = useState<Provider>(null);
 
   const run = async (provider: Exclude<Provider, null>, fn: () => Promise<unknown>) => {
@@ -30,7 +32,7 @@ export default function LoginScreen() {
       router.replace(first ? '/onboarding' : '/(tabs)');
     } catch (e: any) {
       if (!isCancelled(e)) {
-        Alert.alert('로그인 실패', e?.message ?? '잠시 후 다시 시도해주세요.');
+        Alert.alert(t('login.failTitle'), e?.message ?? t('common.tryLater'));
       }
     } finally {
       setBusy(null);
@@ -44,13 +46,13 @@ export default function LoginScreen() {
         <View style={styles.logoBox}>
           <Image source={require('../../assets/images/logo-hat.png')} style={styles.logoImg} contentFit="contain" />
         </View>
-        <Text style={styles.brand}>벼리</Text>
-        <Text style={styles.brandSub}>한국 전통의 멋, 벼리에서</Text>
+        <Text style={styles.brand}>{t('home.title')}</Text>
+        <Text style={styles.brandSub}>{t('login.brandSub')}</Text>
       </View>
 
       {/* 로그인 */}
       <View style={styles.bottom}>
-        <Text style={styles.heading}>로그인</Text>
+        <Text style={styles.heading}>{t('login.heading')}</Text>
 
         <Pressable
           style={[styles.btn, { backgroundColor: colors.kakao }, !!busy && styles.btnDisabled]}
@@ -61,7 +63,7 @@ export default function LoginScreen() {
           ) : (
             <>
               <Ionicons name="chatbubble" size={18} color={colors.kakaoText} />
-              <Text style={[styles.btnText, { color: colors.kakaoText }]}>Kakao로 시작하기</Text>
+              <Text style={[styles.btnText, { color: colors.kakaoText }]}>{t('login.kakao')}</Text>
             </>
           )}
         </Pressable>
@@ -75,7 +77,7 @@ export default function LoginScreen() {
           ) : (
             <>
               <Ionicons name="logo-google" size={18} color="#EA4335" />
-              <Text style={[styles.btnText, { color: colors.text }]}>Google로 시작하기</Text>
+              <Text style={[styles.btnText, { color: colors.text }]}>{t('login.google')}</Text>
             </>
           )}
         </Pressable>
@@ -86,11 +88,11 @@ export default function LoginScreen() {
           disabled={!!busy}
           onPress={() => router.push('/email-login')}>
           <Ionicons name="person-outline" size={18} color={colors.text} />
-          <Text style={[styles.btnText, { color: colors.text }]}>아이디로 로그인</Text>
+          <Text style={[styles.btnText, { color: colors.text }]}>{t('login.id')}</Text>
         </Pressable>
 
         <Pressable disabled={!!busy} onPress={() => router.replace('/(tabs)')}>
-          <Text style={styles.skip}>둘러보기</Text>
+          <Text style={styles.skip}>{t('login.browse')}</Text>
         </Pressable>
       </View>
     </View>
