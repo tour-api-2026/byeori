@@ -138,13 +138,15 @@ const DONE = [
   'src/app/(tabs)/routes.tsx',
   'src/app/(tabs)/profile.tsx',
   'src/components/TabBar.tsx',
+  'src/components/LoginRequired.tsx',
+  'src/app/(tabs)/_layout.tsx',
 ];
 const HANGUL_LITERAL = /(['"`])[^'"`\n]*[가-힣][^'"`\n]*\1/g;
 for (const rel of DONE) {
   const src = readFileSync(join(ROOT, rel), 'utf8');
   // 주석 줄은 한국어로 쓴다 — 번역 대상이 아니다.
   // 여러 줄 /* … */ 블록(JSX 의 {/* … */} 포함)은 줄머리가 `*` 가 아닌 안쪽 줄까지 통째로 지운다.
-  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+  const code = src.replace(/(^|[\s{(=,:])\/\*[\s\S]*?\*\//g, '$1').split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
   const hits = [...code.matchAll(HANGUL_LITERAL)].map((m) => m[0]);
   ok(`${rel} 에 한국어 리터럴이 없다`, hits.length === 0, hits.slice(0, 3).join(' | '));
 }

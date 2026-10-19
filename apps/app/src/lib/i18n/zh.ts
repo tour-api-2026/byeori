@@ -113,4 +113,5 @@ export const zh: Record<string, string> = {
   'profile.menu.blocked': '已屏蔽用户',
   'profile.menu.language': '언어 / Language',
   'profile.menu.serviceInfo': '服务信息',
+  'login.required.desc': '登录后即可使用此功能。',
 };

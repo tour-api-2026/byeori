@@ -81,7 +81,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
               accessibilityState={{ selected: focused }}
               accessibilityLabel={t(cfg.labelKey)}>
               {cfg.icon?.(color, 22)}
-              <Text style={[styles.label, { color }]}>{t(cfg.labelKey)}</Text>
+              <Text style={[styles.label, { color }]} numberOfLines={1}>{t(cfg.labelKey)}</Text>
             </Pressable>
           );
         })}

@@ -119,4 +119,5 @@ export const ko: Record<string, string> = {
   'profile.menu.blocked': '차단한 사용자',
   'profile.menu.language': '언어 / Language',
   'profile.menu.serviceInfo': '서비스 정보',
+  'login.required.desc': '이 기능은 로그인 후에 이용할 수 있어요.',
 };

@@ -113,4 +113,5 @@ export const ja: Record<string, string> = {
   'profile.menu.blocked': 'ブロックしたユーザー',
   'profile.menu.language': '언어 / Language',
   'profile.menu.serviceInfo': 'サービス情報',
+  'login.required.desc': 'この機能はログイン後にご利用いただけます。',
 };

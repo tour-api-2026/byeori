@@ -113,4 +113,5 @@ export const en: Record<string, string> = {
   'profile.menu.blocked': 'Blocked users',
   'profile.menu.language': '언어 / Language',
   'profile.menu.serviceInfo': 'About the service',
+  'login.required.desc': 'Sign in to use this feature.',
 };

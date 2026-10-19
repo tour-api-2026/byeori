@@ -75,7 +75,7 @@ export default function ProfileScreen() {
 
   const onMenuPress = (m: MenuItem) => {
     if (m.action === 'contact') {
-      Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=${t('profile.mail.subject')}`);
+      Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(t('profile.mail.subject'))}`);
       return;
     }
     if (m.route) router.push(m.route as any);

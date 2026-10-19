@@ -627,11 +627,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
     fontWeight: "500",
   },
-  resultNum: {
-    color: colors.accent,
-    fontFamily: fonts.bold,
-    fontWeight: "800",
-  },
   toggleWrap: {
     flexDirection: "row",
     alignItems: "center",
