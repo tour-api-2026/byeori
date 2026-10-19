@@ -24,6 +24,7 @@ const GROUP1: MenuItem[] = [
 const GROUP2: MenuItem[] = [
   { icon: 'help-circle', label: '문의하기', action: 'contact', tint: colors.textSub, soft: colors.bgSoft },
   { icon: 'person-remove', label: '차단한 사용자', route: '/my/blocked', tint: colors.textSub, soft: colors.bgSoft },
+  { icon: 'language', label: '언어 / Language', route: '/my/language', tint: colors.textSub, soft: colors.bgSoft },
   { icon: 'information-circle', label: '서비스 정보', route: '/my/service-info', tint: colors.textSub, soft: colors.bgSoft },
 ];
 

@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -22,7 +21,6 @@ const FLAG: Record<Locale, string> = { ko: '🇰🇷', en: '🇺🇸', ja: '🇯
  * 각 언어의 자기 이름(LOCALE_NAMES)과 영어 단어만 쓴다.
  */
 export default function LanguageScreen() {
-  const router = useRouter();
   const qc = useQueryClient();
   const current = useLocaleStore((s) => s.locale);
   const setLocale = useLocaleStore((s) => s.setLocale);
@@ -35,7 +33,9 @@ export default function LanguageScreen() {
     // 콘텐츠를 번역하면 이 줄이 빠졌을 때 "언어를 바꿨는데 장소 이름이 그대로"라는
     // 증상이 나오고 원인을 여기서 찾기 어렵다. 눈에 안 보인다고 지우지 말 것.
     await qc.invalidateQueries();
-    router.replace('/');
+    // 이동하지 않는다. setLocale 이 chosen 을 켜면 루트 레이아웃이 이 화면을 내리고 메인 Stack 을
+    // 올리는데, Stack 은 홈 라우트로 알아서 열린다. 여기서 replace 하면 이미 내려간 화면에서
+    // 이동하는 꼴이라 네이티브에서 경고가 날 수 있다.
   };
 
   return (

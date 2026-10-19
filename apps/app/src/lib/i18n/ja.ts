@@ -4,4 +4,6 @@ export const ja: Record<string, string> = {
   'common.cancel': 'キャンセル',
   'common.close': '閉じる',
   'common.error.unknown': 'エラーが発生しました',
+  'language.title': '言語',
+  'language.hint': 'アプリの表示と場所の名前に使われます。',
 };

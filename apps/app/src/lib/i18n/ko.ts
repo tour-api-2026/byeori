@@ -10,4 +10,6 @@ export const ko: Record<string, string> = {
   'common.cancel': '취소',
   'common.close': '닫기',
   'common.error.unknown': '요청에 실패했어요',
+  'language.title': '언어',
+  'language.hint': '앱 화면과 장소 이름에 쓰이는 언어예요.',
 };

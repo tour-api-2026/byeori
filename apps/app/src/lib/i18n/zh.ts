@@ -4,4 +4,6 @@ export const zh: Record<string, string> = {
   'common.cancel': '取消',
   'common.close': '关闭',
   'common.error.unknown': '请求失败',
+  'language.title': '语言',
+  'language.hint': '用于应用界面和地点名称。',
 };

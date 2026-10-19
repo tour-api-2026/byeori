@@ -4,4 +4,6 @@ export const en: Record<string, string> = {
   'common.cancel': 'Cancel',
   'common.close': 'Close',
   'common.error.unknown': 'Something went wrong',
+  'language.title': 'Language',
+  'language.hint': 'Used for the app interface and place names.',
 };
