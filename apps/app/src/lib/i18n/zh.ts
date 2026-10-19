@@ -347,7 +347,7 @@ export const zh: Record<string, string> = {
   'common.viewAll': '查看全部',
   'common.addToTrip': '加入我的行程',
   'rating.none': '暂无评价',
-  'rating.count': '{n}条评价',
+  'rating.summary': '{v}分，共{n}条评价',
   'category.관람': '观赏',
   'category.식사': '餐饮',
   'region.대전': '大田',

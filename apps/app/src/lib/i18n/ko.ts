@@ -353,7 +353,7 @@ export const ko: Record<string, string> = {
   'common.viewAll': '전체보기',
   'common.addToTrip': '내 여행에 추가',
   'rating.none': '아직 평가 없음',
-  'rating.count': '{n}개 평가',
+  'rating.summary': '{v}점, {n}개 평가',
   'category.관람': '관람',
   'category.식사': '식사',
   'region.대전': '대전',

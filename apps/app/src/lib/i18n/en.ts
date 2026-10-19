@@ -347,7 +347,7 @@ export const en: Record<string, string> = {
   'common.viewAll': 'View all',
   'common.addToTrip': 'Add to my trip',
   'rating.none': 'No ratings yet',
-  'rating.count': '{n} ratings',
+  'rating.summary': '{v} out of 5, {n} ratings',
   'category.관람': 'Shows',
   'category.식사': 'Dining',
   'region.대전': 'Daejeon',

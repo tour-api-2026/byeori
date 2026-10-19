@@ -347,7 +347,7 @@ export const ja: Record<string, string> = {
   'common.viewAll': 'すべて見る',
   'common.addToTrip': 'マイ旅行に追加',
   'rating.none': '評価がありません',
-  'rating.count': '{n}件の評価',
+  'rating.summary': '5点中{v}、{n}件の評価',
   'category.관람': '観覧',
   'category.식사': '食事',
   'region.대전': '大田',
