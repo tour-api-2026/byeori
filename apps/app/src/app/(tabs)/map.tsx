@@ -360,7 +360,7 @@ export default function MapScreen() {
                   {/* 리뷰가 없으면 "0.0"만 깔려 정보가 없다. 그럴 땐 카테고리를 보여준다. */}
                   {v.reviewCount > 0
                     ? Number(v.avgRating).toFixed(1)
-                    : v.category || '·'}
+                    : v.category ? categoryLabel(t, v.category) : '·'}
                 </Text>
               </Pressable>
             ))}
@@ -509,7 +509,7 @@ export default function MapScreen() {
             </Text>
             {!!selectedKakao.category && (
               <Text style={styles.kakaoCat}>
-                {selectedKakao.category}
+                {categoryLabel(t, selectedKakao.category)}
                 {selectedKakao.phone ? ` · ${selectedKakao.phone}` : ""}
               </Text>
             )}
@@ -571,7 +571,7 @@ export default function MapScreen() {
                 <Text style={styles.sheetAddr} numberOfLines={1}>
                   {distanceOf(k) ? `${distanceOf(k)} · ` : ''}{k.address}
                 </Text>
-                {!!k.category && <Text style={styles.sheetCat}>{k.category}</Text>}
+                {!!k.category && <Text style={styles.sheetCat}>{categoryLabel(t, k.category)}</Text>}
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
             </Pressable>
