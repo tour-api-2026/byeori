@@ -1,0 +1,79 @@
+// 앱 다국어 검사. 의존성이 없어야 한다 — package.json 이 바뀌면 OTA 가 끊긴다.
+//
+// 세 가지를 본다.
+//   1. 네 사전의 키 집합이 같은지
+//   2. translate() 가 키 없음·변수 없음 같은 경우에 어떻게 떨어지는지
+//   3. 이미 번역한 화면에 한국어 리터럴이 남아 있지 않은지
+//
+// 2번은 index.ts 에서 함수 본문을 떼어내 타입 표기만 지우고 실제로 돌린다.
+// 베껴 쓰면 구현과 어긋나므로 그렇게 하지 않는다.
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const I18N = join(ROOT, 'src/lib/i18n');
+
+let failed = 0;
+const ok = (label, cond, detail = '') => {
+  if (!cond) failed++;
+  console.log(`${cond ? 'OK  ' : 'FAIL'} ${label}${cond || !detail ? '' : '  ' + detail}`);
+};
+
+// ── 1. 키 집합 ──────────────────────────────────────────────
+// 사전은 "'키': '값'," 한 줄 꼴로만 쓴다. 그래야 여기서 읽을 수 있다.
+function keysOf(locale) {
+  const src = readFileSync(join(I18N, `${locale}.ts`), 'utf8');
+  return new Set([...src.matchAll(/^\s*'([^']+)':/gm)].map((m) => m[1]));
+}
+const LOCALES = ['ko', 'en', 'ja', 'zh'];
+const keys = Object.fromEntries(LOCALES.map((l) => [l, keysOf(l)]));
+ok('ko 사전이 비어 있지 않다', keys.ko.size > 0, `${keys.ko.size}개`);
+for (const l of LOCALES.filter((l) => l !== 'ko')) {
+  const missing = [...keys.ko].filter((k) => !keys[l].has(k));
+  const extra = [...keys[l]].filter((k) => !keys.ko.has(k));
+  ok(`${l} 사전에 빠진 키가 없다`, missing.length === 0, missing.slice(0, 5).join(', '));
+  ok(`${l} 사전에 군더더기 키가 없다`, extra.length === 0, extra.slice(0, 5).join(', '));
+}
+
+// ── 2. translate() ──────────────────────────────────────────
+// index.ts 의 본문을 떼어내 타입 표기만 지운다. 못 찾으면 바로 멈춘다
+// (조용히 안 돌면 검사한 척만 하게 된다).
+const idx = readFileSync(join(I18N, 'index.ts'), 'utf8');
+const SIG = 'export function translate(locale: Locale, key: string, vars?: Record<string, unknown>): string {';
+if (!idx.includes(SIG)) {
+  console.log('FAIL translate() 서명을 찾지 못했다 — 스크립트의 SIG 를 함께 고칠 것');
+  process.exit(1);
+}
+const body = idx.slice(idx.indexOf(SIG)).replace(SIG, 'function translate(locale, key, vars) {');
+const end = body.indexOf('\n}\n');
+const fn = new Function('DICT', body.slice(0, end + 3) + '\nreturn translate;');
+
+const DICT = {
+  ko: { greet: '안녕 {name}', only: '한국어에만' },
+  en: { greet: 'Hi {name}' },
+  ja: {}, zh: {},
+};
+const t = fn(DICT);
+ok('치환이 된다', t('en', 'greet', { name: 'Ann' }) === 'Hi Ann');
+ok('키가 없으면 한국어로 떨어진다', t('en', 'only') === '한국어에만');
+ok('한국어에도 없으면 키를 그대로 준다', t('en', 'nope.key') === 'nope.key');
+ok('변수를 안 넘기면 빈 문자열로 치운다', t('en', 'greet') === 'Hi ');
+ok('모르는 변수도 빈 문자열', t('ko', 'greet', { other: 1 }) === '안녕 ');
+
+// ── 3. 번역을 마친 화면에 한국어가 남아 있지 않은지 ───────────
+// 화면을 옮길 때마다 아래 목록에 더한다. 목록에 없는 파일은 보지 않는다.
+const DONE = [
+  // 'src/app/(tabs)/routes.tsx',
+];
+const HANGUL_LITERAL = /(['"`])[^'"`\n]*[가-힣][^'"`\n]*\1/g;
+for (const rel of DONE) {
+  const src = readFileSync(join(ROOT, rel), 'utf8');
+  // 주석 줄은 한국어로 쓴다 — 번역 대상이 아니다.
+  const code = src.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+  const hits = [...code.matchAll(HANGUL_LITERAL)].map((m) => m[0]);
+  ok(`${rel} 에 한국어 리터럴이 없다`, hits.length === 0, hits.slice(0, 3).join(' | '));
+}
+
+console.log(failed ? `\n${failed}건 실패` : '\n전부 통과');
+process.exit(failed ? 1 : 0);
