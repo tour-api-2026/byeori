@@ -275,8 +275,9 @@ function RouteCard({ summary }: { summary: ItinerarySummary }) {
     : "실패";
 
   // 방문지는 한 줄로 줄인다 — 번호 레일은 루트 편집 화면에 이미 있다.
+  // 남은 개수(+N)는 붙이지 않는다. 한 줄에 네댓 곳이면 말줄임에 걸려 잘려 나가고,
+  // 총 개수는 바로 윗줄의 "11곳"이 이미 말해 준다.
   const stopLine = stops.map((x) => x.name ?? "장소").join(" · ");
-  const more = summary.itemCount - stops.length;
 
   return (
     <Pressable
@@ -293,7 +294,7 @@ function RouteCard({ summary }: { summary: ItinerarySummary }) {
         </Text>
         {stops.length ? (
           <Text style={styles.cardStops} numberOfLines={1}>
-            {stopLine}{more > 0 ? ` · +${more}` : ""}
+            {stopLine}
           </Text>
         ) : (
           <Text style={styles.cardEmpty}>아직 담은 장소가 없어요</Text>
