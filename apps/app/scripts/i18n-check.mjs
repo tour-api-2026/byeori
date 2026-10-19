@@ -50,7 +50,7 @@ const end = body.indexOf('\n}\n');
 const fn = new Function('DICT', body.slice(0, end + 3) + '\nreturn translate;');
 
 const DICT = {
-  ko: { greet: '안녕 {name}', only: '한국어에만' },
+  ko: { greet: '안녕 {name}', only: '한국어에만', count: '{n}곳' },
   en: { greet: 'Hi {name}' },
   ja: {}, zh: {},
 };
@@ -60,6 +60,34 @@ ok('키가 없으면 한국어로 떨어진다', t('en', 'only') === '한국어�
 ok('한국어에도 없으면 키를 그대로 준다', t('en', 'nope.key') === 'nope.key');
 ok('변수를 안 넘기면 빈 문자열로 치운다', t('en', 'greet') === 'Hi ');
 ok('모르는 변수도 빈 문자열', t('ko', 'greet', { other: 1 }) === '안녕 ');
+ok('0 같은 falsy 값도 그대로 치환한다', t('ko', 'count', { n: 0 }) === '0곳');
+ok('모르는 언어는 한국어로 떨어진다', t('xx', 'greet', { name: 'Ann' }) === '안녕 Ann');
+
+// ── 2b. normalizeLocale() ───────────────────────────────────
+const dev = readFileSync(join(I18N, 'device.ts'), 'utf8');
+const NSIG = 'export function normalizeLocale(raw: string | null | undefined): Locale | null {';
+if (!dev.includes(NSIG)) {
+  console.log('FAIL normalizeLocale() 서명을 찾지 못했다 — 스크립트의 NSIG 를 함께 고칠 것');
+  process.exit(1);
+}
+const nBody = dev.slice(dev.indexOf(NSIG)).replace(NSIG, 'function normalizeLocale(raw) {');
+const nEnd = nBody.indexOf('\n}\n');
+// LOCALES 는 import 라 본문에 없다 — 넣어 준다. 본문에 타입 캐스트(`as …`)를 쓰면
+// node 가 읽지 못하므로 normalizeLocale 은 캐스트 없이 쓴다.
+const normalize = new Function('LOCALES', nBody.slice(0, nEnd + 3) + '\nreturn normalizeLocale;')(
+  ['ko', 'en', 'ja', 'zh'],
+);
+
+ok('ko-KR → ko', normalize('ko-KR') === 'ko');
+ok('en-US → en', normalize('en-US') === 'en');
+ok('ja_JP → ja (밑줄도 받는다)', normalize('ja_JP') === 'ja');
+ok('zh-Hans-CN → zh', normalize('zh-Hans-CN') === 'zh');
+ok('zh-TW 도 zh (번체는 따로 두지 않는다)', normalize('zh-TW') === 'zh');
+ok('대문자도 받는다', normalize('EN') === 'en');
+ok('모르는 언어는 null', normalize('de-DE') === null);
+ok('빈 문자열은 null', normalize('') === null);
+ok('null 은 null', normalize(null) === null);
+ok('undefined 는 null', normalize(undefined) === null);
 
 // ── 3. 번역을 마친 화면에 한국어가 남아 있지 않은지 ───────────
 // 화면을 옮길 때마다 아래 목록에 더한다. 목록에 없는 파일은 보지 않는다.
