@@ -2,6 +2,7 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useLocaleStore } from '@/lib/store/localeStore';
 
 // 실기기(Expo Go)에서는 dev 머신의 IP로 API를 호출해야 한다.
 // Expo가 알려주는 hostUri(예: "192.168.0.5:8081")에서 호스트를 추출해 :8080에 붙인다.
@@ -43,9 +44,12 @@ export async function unwrap<T>(promise: Promise<{ data: ApiEnvelope<T> }>): Pro
 // ---------- 인증 인터셉터 ----------
 // 요청: 로그인 상태면 Authorization Bearer 첨부 (기존 기본 헤더는 유지)
 api.interceptors.request.use((config) => {
+  config.headers = config.headers ?? {};
+  // 콘텐츠 번역(다음 계획)이 이 값을 보고 어느 컬럼을 줄지 고른다. 지금은 서버가 무시한다.
+  // 기본 헤더의 'ko' 는 고정값이라 요청마다 현재 언어로 덮는다. 우리 4글자 로케일 그대로 보낸다.
+  config.headers['Accept-Language'] = useLocaleStore.getState().locale;
   const token = useAuthStore.getState().accessToken;
   if (token) {
-    config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;

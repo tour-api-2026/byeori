@@ -11,6 +11,7 @@ import { applyGlobalFont } from '@/lib/font';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useLocaleStore } from '@/lib/store/localeStore';
 import { colors, fonts } from '@/lib/theme';
+import LanguageScreen from './language';
 
 applyGlobalFont();
 
@@ -51,6 +52,8 @@ export default function RootLayout() {
   useEffect(() => {
     hydrateLocale();
   }, [hydrateLocale]);
+  // 얼리 리턴보다 위에서 읽는다 — 훅 순서가 렌더마다 달라지면 안 된다.
+  const chosen = useLocaleStore((s) => s.chosen);
 
   useEffect(() => {
     if (loaded) applyGlobalFont();
@@ -58,6 +61,19 @@ export default function RootLayout() {
 
   // 폰트 + 세션 + 언어 복원이 모두 끝날 때까지 렌더 게이트
   if (!loaded || !hydrated || !localeHydrated) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+
+  // 언어를 아직 안 고른 사람에게는 이 화면만 보여 준다. 탭을 먼저 띄우고 그 위에
+  // 쌓으면 뒤에 한국어 화면이 비친다. 고르면 chosen 이 true 가 되어 아래 Stack 으로 넘어간다.
+  if (!chosen) {
+    return (
+      <QueryClientProvider client={client}>
+        <SafeAreaProvider>
+          <StatusBar style="dark" />
+          <LanguageScreen />
+        </SafeAreaProvider>
+      </QueryClientProvider>
+    );
+  }
 
   return (
     <QueryClientProvider client={client}>
@@ -77,6 +93,7 @@ export default function RootLayout() {
           <Stack.Screen name="login" options={{ headerShown: false, presentation: 'modal' }} />
           <Stack.Screen name="email-login" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+          <Stack.Screen name="language" options={{ headerShown: false }} />
           <Stack.Screen name="bookmarks" options={{ title: '즐겨찾기' }} />
           <Stack.Screen name="performances/traditional" options={{ title: '전통 테마 행사' }} />
           <Stack.Screen name="my/blocked" options={{ title: '차단한 사용자' }} />
