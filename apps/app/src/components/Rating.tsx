@@ -13,7 +13,7 @@ export function Rating({ value, count, size = 12 }: { value: number; count?: num
   }
   const full = Math.round(v);
   return (
-    <View style={styles.row} accessibilityLabel={count != null ? t('rating.count', { n: count.toLocaleString() }) : undefined}>
+    <View style={styles.row} accessible accessibilityRole="text" accessibilityLabel={count != null ? t('rating.count', { n: count.toLocaleString() }) : undefined}>
       {[1, 2, 3, 4, 5].map((n) => (
         <Ionicons key={n} name={n <= full ? 'star' : 'star-outline'} size={size} color={colors.star} />
       ))}

@@ -102,13 +102,13 @@ export function ContentComments({
       </View>
 
       <View style={styles.tagWrap}>
-        {tags.data?.map((t) => (
+        {tags.data?.map((tag) => (
           <Pressable
-            key={t.commentTagId}
-            style={[styles.tag, t.voted && styles.tagOn]}
-            onPress={() => (t.voted ? unvote.mutate(t.commentTagId) : vote.mutate(t.commentTagId))}>
-            <Text style={[styles.tagText, t.voted && styles.tagTextOn]}>
-              {t.name}{t.count > 0 ? ` ${t.count}` : ''}
+            key={tag.commentTagId}
+            style={[styles.tag, tag.voted && styles.tagOn]}
+            onPress={() => (tag.voted ? unvote.mutate(tag.commentTagId) : vote.mutate(tag.commentTagId))}>
+            <Text style={[styles.tagText, tag.voted && styles.tagTextOn]}>
+              {tag.name}{tag.count > 0 ? ` ${tag.count}` : ''}
             </Text>
           </Pressable>
         ))}

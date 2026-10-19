@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: '800', color: colors.text, lineHeight: 28 },
   rows: { marginTop: 14, gap: 10 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rowLabel: { fontSize: 13, color: colors.textFaint, width: 40 },
+  rowLabel: { fontSize: 13, color: colors.textFaint, width: 64 },
   rowValue: { fontSize: 14, color: colors.text, flex: 1 },
   rowLink: { color: colors.accent, fontWeight: '700' },
   section: { marginTop: 22 },
