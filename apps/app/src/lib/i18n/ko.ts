@@ -8,7 +8,6 @@
 export const ko: Record<string, string> = {
   'common.retry': '다시 시도',
   'common.cancel': '취소',
-  'common.close': '닫기',
   'common.error.unknown': '요청에 실패했어요',
   'language.title': '언어',
   'language.hint': '앱 화면과 장소 이름에 쓰이는 언어예요.',
@@ -117,7 +116,6 @@ export const ko: Record<string, string> = {
   'profile.menu.bookmarks': '찜한 장소',
   'profile.menu.contact': '문의하기',
   'profile.menu.blocked': '차단한 사용자',
-  'profile.menu.language': '언어 / Language',
   'profile.menu.serviceInfo': '서비스 정보',
   'login.required.desc': '이 기능은 로그인 후에 이용할 수 있어요.',
   'common.weekday.0': '일',
