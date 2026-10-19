@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useLocaleStore } from '@/lib/store/localeStore';
+import { errorText } from '@/lib/i18n/errors';
 
 // 실기기(Expo Go)에서는 dev 머신의 IP로 API를 호출해야 한다.
 // Expo가 알려주는 hostUri(예: "192.168.0.5:8081")에서 호스트를 추출해 :8080에 붙인다.
@@ -36,7 +37,7 @@ export type Page<T> = { content: T[]; page: number; size: number; totalElements:
 export async function unwrap<T>(promise: Promise<{ data: ApiEnvelope<T> }>): Promise<T> {
   const res = await promise;
   if (!res.data.success) {
-    throw new Error(res.data.error?.message ?? '요청 실패');
+    throw new Error(errorText(res.data.error));
   }
   return res.data.data;
 }
@@ -96,9 +97,8 @@ async function runRefresh(): Promise<string | null> {
  */
 function toApiError(error: AxiosError): unknown {
   const body = error.response?.data as ApiEnvelope<unknown> | undefined;
-  const message = body?.error?.message;
-  if (!message) return error;        // 봉투가 없으면(네트워크 끊김 등) 원래 오류 그대로
-  const e = new Error(message) as Error & { code?: string; status?: number };
+  if (!body?.error) return error;    // 봉투가 없으면(네트워크 끊김 등) 원래 오류 그대로
+  const e = new Error(errorText(body.error)) as Error & { code?: string; status?: number };
   e.code = body?.error?.code;
   e.status = error.response?.status;
   return e;

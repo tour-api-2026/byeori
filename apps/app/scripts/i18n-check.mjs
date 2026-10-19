@@ -89,6 +89,37 @@ ok('빈 문자열은 null', normalize('') === null);
 ok('null 은 null', normalize(null) === null);
 ok('undefined 는 null', normalize(undefined) === null);
 
+// ── 2c. errorTextIn() ───────────────────────────────────────
+// errorText() 는 스토어에서 언어를 꺼내므로 node 에서 돌릴 수 없다. 판단은 순수 함수인
+// errorTextIn() 에 있고 errorText() 는 얇은 껍데기다 — 돌려 보는 쪽은 알맹이다.
+const errSrc = readFileSync(join(I18N, 'errors.ts'), 'utf8');
+const ESIG = 'export function errorTextIn(locale: Locale, err: ApiErrorBody): string {';
+if (!errSrc.includes(ESIG)) {
+  console.log('FAIL errorTextIn() 서명을 찾지 못했다 — 스크립트의 ESIG 를 함께 고칠 것');
+  process.exit(1);
+}
+const eBody = errSrc.slice(errSrc.indexOf(ESIG)).replace(ESIG, 'function errorTextIn(locale, err) {');
+const eEnd = eBody.indexOf('\n}\n');
+// BY_CODE 와 translate 는 이 함수 밖에 있다 — 넣어 준다.
+const errorTextIn = new Function(
+  'BY_CODE', 'translate',
+  eBody.slice(0, eEnd + 3) + '\nreturn errorTextIn;',
+)(
+  { ITINERARY_NOT_FOUND: 'error.itinerary.notFound' },
+  (loc, key) => (key === 'error.itinerary.notFound' ? '없는 루트' : key === 'common.error.unknown' ? '알 수 없음' : key),
+);
+
+ok('아는 코드는 사전으로 번역한다',
+   errorTextIn('ko', { code: 'ITINERARY_NOT_FOUND', message: '여행 일지를 찾을 수 없습니다.' }) === '없는 루트');
+ok('모르는 코드는 서버 message 를 그대로 띄운다',
+   errorTextIn('ko', { code: 'SOMETHING_NEW', message: '서버가 준 말' }) === '서버가 준 말');
+ok('코드도 message 도 없으면 common.error.unknown',
+   errorTextIn('ko', null) === '알 수 없음');
+ok('message 만 있고 code 가 없으면 message',
+   errorTextIn('ko', { message: '그냥 메시지' }) === '그냥 메시지');
+ok('아는 코드는 message 보다 사전이 이긴다',
+   errorTextIn('ko', { code: 'ITINERARY_NOT_FOUND', message: '한국어' }) === '없는 루트');
+
 // ── 3. 번역을 마친 화면에 한국어가 남아 있지 않은지 ───────────
 // 화면을 옮길 때마다 아래 목록에 더한다. 목록에 없는 파일은 보지 않는다.
 const DONE = [
