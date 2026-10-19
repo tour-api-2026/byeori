@@ -32,6 +32,8 @@ const SITE_ORIGIN =
   Platform.OS === "web" ? window.location.origin : "https://byeori.ernebi.org";
 
 const pad = (n: number) => String(n).padStart(2, "0");
+/** '2026-10-20' → '10.20' — 목록 한 줄에 기간을 담으려면 연도를 뺀다. */
+const shortDate = (d: string) => d.slice(5).replace("-", ".");
 function todayIso() {
   const d = new Date();
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -269,77 +271,59 @@ function RouteCard({ summary }: { summary: ItinerarySummary }) {
 
   const shareLabel =
     shareState === "working" ? "준비 중…"
-    : shareState === "copied" ? "링크 복사됨"
-    : shareState === "failed" ? "실패"
-    : "공유하기";
+    : shareState === "copied" ? "복사됨"
+    : "실패";
+
+  // 방문지는 한 줄로 줄인다 — 번호 레일은 루트 편집 화면에 이미 있다.
+  const stopLine = stops.map((x) => x.name ?? "장소").join(" · ");
+  const more = summary.itemCount - stops.length;
 
   return (
-    <View style={[styles.card, past && styles.cardPast]}>
-      <View style={[styles.cardHead, past && styles.cardHeadPast]}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.cardTitle} numberOfLines={1}>
-            {summary.title}
-          </Text>
-          <Text style={styles.cardMeta}>
-            {past ? "지난 여행 · " : ""}
-            {summary.itemCount}곳 · {summary.startDate} ~ {summary.endDate}
-          </Text>
-        </View>
-        <Pressable style={styles.shareBtn} disabled={shareState === "working"} onPress={share}>
-          <Text style={styles.shareText}>{shareLabel}</Text>
-        </Pressable>
-      </View>
-      <View style={styles.cardBody}>
+    <Pressable
+      style={[styles.card, past && styles.cardPast]}
+      onPress={() => router.push(`/itinerary/${summary.id}`)}
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={styles.cardTitle} numberOfLines={1}>
+          {summary.title}
+        </Text>
+        <Text style={styles.cardMeta} numberOfLines={1}>
+          {past ? "지난 여행 · " : ""}
+          {summary.itemCount}곳 · {shortDate(summary.startDate)} ~ {shortDate(summary.endDate)}
+        </Text>
         {stops.length ? (
-          <View>
-            {stops.slice(0, 5).map((s, i, arr) => (
-              <View key={s.id} style={styles.tRow}>
-                <View style={styles.rail}>
-                  {i > 0 && <View style={[styles.rLine, styles.rTop, { backgroundColor: segmentColor(i - 1) }]} />}
-                  {i < arr.length - 1 && (
-                    <View style={[styles.rLine, styles.rBot, { backgroundColor: segmentColor(i) }]} />
-                  )}
-                  <View style={[styles.stopNum, { backgroundColor: segmentColor(i) }]}>
-                    <Text style={styles.stopNumText}>{i + 1}</Text>
-                  </View>
-                </View>
-                <Text style={styles.stopName} numberOfLines={1}>
-                  {s.name ?? "장소"}
-                </Text>
-              </View>
-            ))}
-          </View>
+          <Text style={styles.cardStops} numberOfLines={1}>
+            {stopLine}{more > 0 ? ` · +${more}` : ""}
+          </Text>
         ) : (
-          <Text style={styles.stopEmpty}>아직 담은 장소가 없어요</Text>
+          <Text style={styles.cardEmpty}>아직 담은 장소가 없어요</Text>
         )}
-        <View style={styles.cardActions}>
-          {summary.itemCount >= 2 && (
-            <Pressable
-              style={styles.routeBtn}
-              onPress={() =>
-                router.push({
-                  pathname: "/map",
-                  params: { itineraryId: String(summary.id) },
-                })
-              }
-            >
-              <Ionicons
-                name="navigate-outline"
-                size={13}
-                color={colors.white}
-              />
-              <Text style={styles.routeBtnText}>지도에서 경로 보기</Text>
-            </Pressable>
-          )}
-          <Pressable
-            style={styles.editBtn}
-            onPress={() => router.push(`/itinerary/${summary.id}`)}
-          >
-            <Text style={styles.editText}>루트 편집</Text>
-          </Pressable>
-        </View>
       </View>
-    </View>
+
+      {summary.itemCount >= 2 && (
+        <Pressable
+          style={styles.iconBtn}
+          hitSlop={6}
+          onPress={() => router.push(`/route/${summary.id}`)}
+        >
+          <Ionicons name="navigate-outline" size={17} color={colors.primary} />
+        </Pressable>
+      )}
+      {/* 공유 결과는 이 버튼이 유일한 통로다 — 웹의 Alert.alert 는 빈 함수다(share 주석 참고).
+          그래서 진행·완료·실패일 때는 아이콘 대신 짧은 글자를 띄운다. */}
+      <Pressable
+        style={[styles.iconBtn, shareState !== "idle" && styles.iconBtnWide]}
+        hitSlop={6}
+        disabled={shareState === "working"}
+        onPress={share}
+      >
+        {shareState === "idle" ? (
+          <Ionicons name="share-outline" size={17} color={colors.primary} />
+        ) : (
+          <Text style={styles.shareText}>{shareLabel}</Text>
+        )}
+      </Pressable>
+    </Pressable>
   );
 }
 
@@ -516,99 +500,43 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   // route card
+  // 목록 카드: 한 줄 요약. 전에는 제목·기간·공유·방문지 5줄·버튼 2개로 240px 가까이 되어
+  // 루트가 셋만 넘어도 화면을 넘겼다. 자세한 것은 눌러서 들어가 본다.
   card: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     backgroundColor: colors.bgCard,
-    borderRadius: radius.lg,
-    marginBottom: 16,
-    overflow: "hidden",
+    borderRadius: radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
     ...shadow.card,
   },
   // 지난 여행: 전체적으로 물빠진(흐린) 느낌
   cardPast: { opacity: 0.55 },
-  cardHead: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  // 지난 여행 헤더: 진한 남색 대신 흐린 회색
-  cardHeadPast: { backgroundColor: colors.textFaint },
   cardTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: fonts.bold,
     fontWeight: "800",
-    color: colors.white,
+    color: colors.text,
   },
-  cardMeta: { fontSize: 12, color: "rgba(255,255,255,0.8)", marginTop: 2 },
-  shareBtn: {
-    backgroundColor: "rgba(255,255,255,0.18)",
+  cardMeta: { fontSize: 11, color: colors.textFaint, marginTop: 2 },
+  cardStops: { fontSize: 12, color: colors.textSub, marginTop: 3 },
+  cardEmpty: { fontSize: 12, color: colors.textFaint, marginTop: 3 },
+  iconBtn: {
+    width: 34,
+    height: 34,
     borderRadius: radius.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  shareText: {
-    color: colors.white,
-    fontSize: 12,
-    fontFamily: fonts.semibold,
-    fontWeight: "600",
-  },
-  cardBody: { padding: 16 },
-  stopNum: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
-  stopNumText: {
-    color: colors.white,
-    fontSize: 12,
-    fontFamily: fonts.bold,
-    fontWeight: "800",
-  },
-  stopName: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: fonts.medium,
-    fontWeight: "500",
-    color: colors.text,
-  },
-  stopEmpty: { fontSize: 13, color: colors.textFaint },
-  cardActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 8,
-    marginTop: 8,
-  },
-  routeBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: colors.primary,
-    borderRadius: radius.sm,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  routeBtnText: {
-    color: colors.white,
-    fontSize: 12,
-    fontFamily: fonts.semibold,
-    fontWeight: "700",
-  },
-  editBtn: {
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: radius.sm,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  editText: {
+  iconBtnWide: { width: "auto", paddingHorizontal: 10 },
+  shareText: {
     color: colors.primary,
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: fonts.semibold,
     fontWeight: "600",
   },

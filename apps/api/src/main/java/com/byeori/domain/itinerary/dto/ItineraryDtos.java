@@ -90,9 +90,17 @@ public final class ItineraryDtos {
 
     // ── 길찾기(여러 경유지 경로) ─────────────────────────────
 
-    /** 경유지(방문지) 한 곳. order는 방문 순서(0부터). */
+    /**
+     * 경유지(방문지) 한 곳. order는 방문 순서(0부터).
+     *
+     * visitDate 는 지도가 하루씩 끊어 그리기 위한 것이다. 사흘짜리 루트를 한 번에 그리면
+     * 지도가 전국을 담아(서울↔전주면 세로 200km) 방문지가 모두 점이 된다. 날짜를 모르면
+     * 앱이 끊을 수 없으므로 함께 내려준다. 항목에 날짜가 없으면 루트 시작일로 본다 —
+     * 비워 두면 그 한 곳만 날짜 없는 묶음이 되어 탭이 하나 더 생긴다.
+     */
     public record RouteStop(
-            int order, String targetType, Long targetId, String name, double lat, double lng) {}
+            int order, String targetType, Long targetId, String name,
+            double lat, double lng, LocalDate visitDate) {}
 
     /**
      * 구간별 거리·시간과 이동 수단. mode 는 WALK | DRIVE | STRAIGHT.

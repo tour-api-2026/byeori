@@ -67,6 +67,7 @@ export function fetchSharedItinerary(token: string): Promise<SharedItinerary> {
 // ── 길찾기(경로) ──
 export type RouteStop = {
   order: number; targetType: 'VENUE' | 'PERFORMANCE'; targetId: number; name: string | null; lat: number; lng: number;
+  visitDate: string;           // 'YYYY-MM-DD' — 지도가 하루씩 끊어 그리는 기준(항목에 없으면 루트 시작일)
 };
 export type RouteLeg = {
   distance: number;            // 구간 거리(m)

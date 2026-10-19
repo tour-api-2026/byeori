@@ -37,6 +37,8 @@ export function mapScript(segColors: string[]): string {
   var map, venueOv=[], kakaoOv=[], ready=false, pending=null, places=null, kakaoData=[], lastList=[];
   var routeLines=[], routeOv=[], pendingRoute=null;
   // 마지막으로 지도를 맞춘 경로의 지문. 같은 경로를 다시 그릴 때는 지도를 건드리지 않는다.
+  // 되돌릴 일은 없다 — 경로는 전용 화면(route/[id])에서만 그리고, 그 화면을 떠나면 문서
+  // 자체가 사라져 이 값도 함께 사라진다. 날짜·이동수단을 바꾸면 지문이 달라져 다시 맞춘다.
   var fittedKey=null;
   function sel(id){ post({type:'select', id:id}); }
   function selK(i){ post({type:'selectKakao', place:kakaoData[i]}); }
@@ -64,15 +66,23 @@ export function mapScript(segColors: string[]): string {
   // 주변 조회 마커는 지금 보고 있는 영역에서 받아온 것이라 지도를 다시 맞추지 않는다.
   // fitAll()을 부르면 setBounds가 지도를 움직여 idle이 또 발생하고,
   // 그 idle이 재조회를 부르는 되먹임 고리가 생겨 호출이 몇 배로 늘어난다.
-  // 확대 단계별 격자 크기(도 단위). 레벨이 클수록(축소) 넓게 묶는다.
-  // 카카오 기본 클러스터러는 Marker 만 받아 이모지 CustomOverlay 를 못 쓴다. 직접 묶는다.
+  /**
+   * 확대 단계별 격자 크기(도 단위). 레벨이 클수록(축소) 넓게 묶는다.
+   * 카카오 기본 클러스터러는 Marker 만 받아 이모지 CustomOverlay 를 못 쓴다. 직접 묶는다.
+   *
+   * 거리에 따라 세 단계로만 나눈다. 전에는 여섯 단계였는데, 한 단계 확대할 때마다 묶음이
+   * 조금씩 쪼개져 숫자가 계속 바뀌는 탓에 지금 몇 곳을 보고 있는지 가늠하기 어려웠다.
+   *
+   *   가까울 때(레벨 ≤6, 화면 ~1km)  : 묶지 않는다 — 핀을 하나씩 본다.
+   *   중간(레벨 7~10, 시·군)         : 0.05도 ≈ 5km — 동네 단위로 묶는다.
+   *   멀 때(레벨 ≥11, 도·전국)       : 0.5도 ≈ 50km — 지역 단위로 묶는다.
+   *
+   * 주변 조회는 50건에서 잘려 내려오므로 "가까울 때" 핀이 쏟아질 일은 없다.
+   */
   function cellSize(level){
-    if(level<=4) return 0;          // 4 이하: 묶지 않고 하나씩
-    if(level<=6) return 0.010;
-    if(level<=8) return 0.045;
-    if(level<=10) return 0.18;
-    if(level<=12) return 0.55;
-    return 1.4;
+    if(level<=6) return 0;
+    if(level<=10) return 0.05;
+    return 0.5;
   }
   function zoomInto(lat,lng){
     map.setLevel(Math.max(1, map.getLevel()-3), {anchor:new kakao.maps.LatLng(lat,lng)});
@@ -224,9 +234,6 @@ export function mapScript(segColors: string[]): string {
     routeLines.forEach(function(l){ l.setMap(null); }); routeLines=[];
     clearArr(routeOv);
   };
-  // 경로 모드를 벗어났다 돌아오면 다시 맞춰야 한다. clearRoute 는 되그릴 때도 불리므로
-  // 거기서 지우면 안 되고, 모드를 벗어날 때만 부른다.
-  window.forgetRouteFit = function(){ fittedKey=null; };
   // 현재 위치로 지도 중심 이동 + 내 위치 점 표시(RN에서 좌표 주입).
   window.moveTo = function(lat,lng,level){
     if(!map) return;

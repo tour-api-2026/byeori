@@ -31,8 +31,6 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" options={{ title: '홈' }} />
       <Tabs.Screen name="routes" options={{ title: '내 루트' }} />
       <Tabs.Screen name="profile" options={{ title: '마이' }} />
-      {/* 검색은 홈에서 진입 — 탭바에서 숨김(라우트는 유지) */}
-      <Tabs.Screen name="search" options={{ href: null }} />
     </Tabs>
   );
 }

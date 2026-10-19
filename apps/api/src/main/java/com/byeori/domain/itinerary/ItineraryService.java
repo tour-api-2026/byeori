@@ -163,7 +163,7 @@ public class ItineraryService {
      */
     @Transactional
     public RouteResponse route(Long userId, Long id, String mode) {
-        own(userId, id);
+        Itinerary itinerary = own(userId, id);
         // 카카오 키가 없다고 미리 막지 않는다. directions 가 스스로 null 을 주므로 구간마다
         // 알아서 내려가고, 도보로 충분한 루트는 키 없이도 온전히 나온다. 막아 두면 그 루트가
         // 400 이 되고 mode=WALK 가 카카오 키 없이는 불가능해진다.
@@ -189,7 +189,9 @@ public class ItineraryService {
                 continue;
             }
             if (lat == null || lng == null) continue; // 좌표 없는 항목은 경로에서 제외
-            stops.add(new RouteStop(order++, type, targetId, name, lat.doubleValue(), lng.doubleValue()));
+            LocalDate visit = item.getVisitDate() == null ? itinerary.getStartDate() : item.getVisitDate();
+            stops.add(new RouteStop(order++, type, targetId, name,
+                    lat.doubleValue(), lng.doubleValue(), visit));
             coords.add(new double[]{lng.doubleValue(), lat.doubleValue()});
         }
         if (coords.size() < 2) {
