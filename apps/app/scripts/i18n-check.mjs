@@ -3,11 +3,12 @@
 // 세 가지를 본다.
 //   1. 네 사전의 키 집합이 같은지
 //   2. translate() 가 키 없음·변수 없음 같은 경우에 어떻게 떨어지는지
-//   3. 이미 번역한 화면에 한국어 리터럴이 남아 있지 않은지
+//   3. 이미 번역한 화면에 한국어 리터럴이 남아 있지 않은지 (+ 어느 쪽 목록에도 없는 새 파일이 없는지)
+//   4. 서버가 저장하는 한국어 값마다 사전 키가 있는지
 //
 // 2번은 index.ts 에서 함수 본문을 떼어내 타입 표기만 지우고 실제로 돌린다.
 // 베껴 쓰면 구현과 어긋나므로 그렇게 하지 않는다.
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -130,16 +131,17 @@ const dangling = byCodeVals.filter((k) => !keys.ko.has(k));
 ok('BY_CODE 의 값이 모두 ko 사전에 있다', dangling.length === 0, dangling.join(', '));
 
 // ── 3. 번역을 마친 화면에 한국어가 남아 있지 않은지 ───────────
-// 화면을 옮길 때마다 아래 목록에 더한다. 목록에 없는 파일은 보지 않는다.
-// 일부러 목록에 넣지 않는 파일. 빠뜨린 게 아니니 "고치려" 들지 말 것.
-//   src/app/language.tsx     — 언어 고르기 화면. 지금 언어를 못 읽는 사람이 쓰는 곳이라 일부러 번역하지 않는다.
-//   src/lib/i18n/ko.ts       — 사전 자체(번역의 기준 문구).
-//   src/lib/categories.ts,
-//   src/lib/regions.ts       — 서버가 저장·필터에 쓰는 한국어 **값**을 들고 있다. 라벨이 아니라 바꾸면 안 된다
-//                              (표시만 labels.ts 의 categoryLabel/regionLabel 로 번역한다).
-// 같은 이유로 aiRouteAreas·interestOptions·venueForm·reportReasons(한국어 값 모듈), lib/api/*(서버 값·주석),
-// src/app/+html.tsx(빌드 시점에 한 번 만드는 정적 <head> — 훅이 돌지 않아 번역할 수 없다. 메타데이터는
-// 일부러 영어로 고정했다: 탭 제목·PWA 이름·공유 미리보기를 외국인이 먼저 보기 때문이다)도 뺀다.
+// 화면을 옮길 때마다 DONE 에 더한다. DONE 에도 EXCLUDED 에도 없는 파일은 아래에서 실패한다
+// (새 한국어 화면이 조용히 통과하던 구멍을 막는다). 제외는 이유를 한 줄 적어야 한다.
+// 일부러 DONE 에 넣지 않는 파일. 빠뜨린 게 아니니 "고치려" 들지 말 것.
+const EXCLUDED = {
+  'src/app/language.tsx': '언어 고르기 화면. 지금 언어를 못 읽는 사람이 쓰는 곳이라 일부러 번역하지 않는다(각 언어의 자기 이름과 영어만 쓴다).',
+  'src/app/+html.tsx': '빌드 시점에 한 번 만드는 정적 <head> — 훅이 돌지 않아 번역할 수 없다. 메타데이터는 일부러 영어로 고정했다.',
+  'src/lib/api/ai.ts': 'AI_THEMES 는 서버가 저장·필터하는 한국어 **값**이다. 아래 4번이 사전 키를 검사한다.',
+  'src/lib/api/itineraries.ts': "'맛집'/'카페' 를 카카오 분류 코드로 바꾸려고 서버 값과 비교한다. 표시 문구가 아니다.",
+};
+// 4번이 값 목록을 검사하는 모듈(categories·regions·interestOptions·venueForm·aiRouteAreas·reportReasons)은
+// src/lib 아래라 열거 대상이 아니다. 열거 대상은 src/app, src/components, src/lib/api 다.
 const DONE = [
   'src/app/(tabs)/index.tsx',
   'src/app/(tabs)/map.tsx',
@@ -197,6 +199,18 @@ const DONE = [
   'src/components/CountLine.tsx',
   'src/lib/alert.ts',
   'src/lib/api/uploads.ts',
+  'src/lib/api/account.ts',
+  'src/lib/api/client.ts',
+  'src/lib/api/courses.ts',
+  'src/lib/api/feed.ts',
+  'src/lib/api/interests.ts',
+  'src/lib/api/performances.ts',
+  'src/lib/api/reviews.ts',
+  'src/lib/api/social.ts',
+  'src/lib/api/tags.ts',
+  'src/lib/api/types.ts',
+  'src/lib/api/venues.ts',
+  'src/lib/api/wishlists.ts',
   'src/lib/map/kakaoMapSource.ts',
   'src/lib/map/useMapLabels.ts',
 ];
@@ -209,6 +223,69 @@ for (const rel of DONE) {
   const hits = [...code.matchAll(HANGUL_LITERAL)].map((m) => m[0]);
   ok(`${rel} 에 한국어 리터럴이 없다`, hits.length === 0, hits.slice(0, 3).join(' | '));
 }
+
+// ── 3b. 목록에 없는 파일 ────────────────────────────────────
+// 반대 방향 검사. 열거한 파일이 DONE 에도 EXCLUDED 에도 없으면 실패한다.
+function walk(dir) {
+  return readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((e) => {
+    const rel = `${dir}/${e.name}`;
+    if (e.isDirectory()) return walk(rel);
+    return /\.tsx?$/.test(e.name) ? [rel] : [];
+  });
+}
+const listed = new Set([...DONE, ...Object.keys(EXCLUDED)]);
+const onDisk = ['src/app', 'src/components', 'src/lib/api'].flatMap(walk);
+const unlisted = onDisk.filter((f) => !listed.has(f));
+ok('src/app·components·lib/api 의 모든 파일이 DONE 이나 EXCLUDED 에 있다', unlisted.length === 0, unlisted.join(', '));
+const gone = [...listed].filter((f) => !onDisk.includes(f) && !existsSync(join(ROOT, f)));
+ok('DONE·EXCLUDED 의 파일이 모두 실제로 있다', gone.length === 0, gone.join(', '));
+const both = Object.keys(EXCLUDED).filter((f) => DONE.includes(f));
+ok('DONE 과 EXCLUDED 에 동시에 있는 파일이 없다', both.length === 0, both.join(', '));
+ok('EXCLUDED 마다 이유가 적혀 있다', Object.values(EXCLUDED).every((r) => r.trim().length > 0));
+
+// ── 4. 서버가 저장하는 한국어 값에 사전 키가 있는지 ───────────
+// labels.ts 는 키가 없으면 한국어 원문으로 떨어지도록 만들었다(의도). 그래서 키를 빠뜨려도
+// 아무도 모른다 — 값마다 키가 ko 사전에 있는지 여기서 본다.
+// 일곱 모듈을 한데 합치지 않는다. 각자 있는 자리에서 읽는다.
+const quoted = (txt) => [...txt.matchAll(/'([^']*[가-힣][^']*)'/g)].map((m) => m[1]);
+function listOf(rel, name) {
+  const src = readFileSync(join(ROOT, rel), 'utf8');
+  const at = src.indexOf(`export const ${name} =`);
+  if (at < 0) { console.log(`FAIL ${rel} 에서 ${name} 을 찾지 못했다 — 스크립트도 함께 고칠 것`); process.exit(1); }
+  const open = src.indexOf('[', at);
+  const close = src.indexOf(']', open);
+  return src.slice(open, close);
+}
+const VALUE_LISTS = [
+  // [파일, 이름, 키 접두사, 뽑는 방식]
+  ['src/lib/categories.ts', 'CATEGORIES', 'category.'],
+  ['src/lib/categories.ts', 'PICKER_CATEGORIES', 'category.'],
+  ['src/lib/categories.ts', 'HOME_KEYWORDS', 'category.'],
+  ['src/lib/regions.ts', 'REGIONS', 'region.'],
+  ['src/lib/interestOptions.ts', 'TOPICS', 'onboarding.topic.'],
+  ['src/lib/interestOptions.ts', 'REGIONS', 'onboarding.region.'],
+  ['src/lib/venueForm.ts', 'VENUE_CATEGORIES', 'category.'],
+  ['src/lib/venueForm.ts', 'VENUE_REGIONS', 'region.'],
+  ['src/lib/venueForm.ts', 'VENUE_DAYS', 'venueRegister.day.'],
+  ['src/lib/aiRouteAreas.ts', 'AREAS', 'aiRoute.area.', /name:\s*'([^']+)'/g],
+  ['src/lib/aiRouteAreas.ts', 'DEFAULT_THEMES', 'category.'],
+  ['src/lib/api/ai.ts', 'AI_THEMES', 'category.'],
+];
+for (const [rel, name, prefix, pick] of VALUE_LISTS) {
+  const body = listOf(rel, name);
+  const vals = pick ? [...body.matchAll(pick)].map((m) => m[1]) : quoted(body);
+  const missing = vals.filter((v) => !keys.ko.has(prefix + v));
+  ok(`${rel} ${name} 의 값 ${vals.length}개가 ko 사전에 ${prefix}* 키로 있다`, vals.length > 0 && missing.length === 0,
+     vals.length === 0 ? '값을 하나도 못 읽었다' : missing.map((v) => prefix + v).join(', '));
+}
+// REPORT_REASONS 는 키를 데이터에 같이 들고 있다 — 그 키가 사전에 있는지.
+{
+  const body = listOf('src/lib/reportReasons.ts', 'REPORT_REASONS');
+  const ks = [...body.matchAll(/key:\s*'([^']+)'/g)].map((m) => m[1]);
+  const missing = ks.filter((k) => !keys.ko.has(k));
+  ok(`src/lib/reportReasons.ts REPORT_REASONS 의 키 ${ks.length}개가 ko 사전에 있다`, ks.length > 0 && missing.length === 0, missing.join(', '));
+}
+ok('aiRoute.myLocation 키가 ko 사전에 있다', keys.ko.has('aiRoute.myLocation'));
 
 console.log(failed ? `\n${failed}건 실패` : '\n전부 통과');
 process.exit(failed ? 1 : 0);

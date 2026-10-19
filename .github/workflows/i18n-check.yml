@@ -1,0 +1,22 @@
+name: i18n check
+
+# 앱 다국어 검사. PR 에서 돌아야 나쁜 변경을 막을 수 있다(main 머지 뒤엔 늦다).
+# node 만 있으면 되고 npm install 이 필요 없다. package.json 의 scripts 에 넣지 않는 이유:
+# packageJson:scripts 가 Expo fingerprint 에 들어가 OTA 가 끊긴다.
+
+on:
+  pull_request:
+    paths: ['apps/app/**', '.github/workflows/i18n-check.yml']
+  push:
+    branches: [main]
+    paths: ['apps/app/**', '.github/workflows/i18n-check.yml']
+
+jobs:
+  i18n:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node apps/app/scripts/i18n-check.mjs
