@@ -140,6 +140,15 @@ const DONE = [
   'src/components/TabBar.tsx',
   'src/components/LoginRequired.tsx',
   'src/app/(tabs)/_layout.tsx',
+  'src/app/ai-route.tsx',
+  'src/app/itinerary/[id].tsx',
+  'src/app/itinerary/index.tsx',
+  'src/app/route/[id].tsx',
+  'src/app/s/[token].tsx',
+  'src/components/DraggableStops.tsx',
+  'src/components/StopEditSheet.tsx',
+  'src/components/Calendar.tsx',
+  'src/components/PlacePicker.tsx',
 ];
 const HANGUL_LITERAL = /(['"`])[^'"`\n]*[가-힣][^'"`\n]*\1/g;
 for (const rel of DONE) {

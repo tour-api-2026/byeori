@@ -20,6 +20,15 @@ export const CATEGORIES = [
  */
 export const ALL = '전체';
 
+/** 장소 고르기 창의 칩. 순서가 위 목록과 달라(맛집·카페를 앞에 둔다) 따로 둔다. 값은 같은 한국어다. */
+export const PICKER_CATEGORIES = [
+  '전체', '문화', '맛집', '카페', '전통시장', '체험', '공예', '한옥스테이',
+] as const;
+
+/** 카카오 장소의 category 값 중 아이콘을 가르는 둘. 화면 파일에 한국어 리터럴을 두지 않으려고 이름을 붙였다. */
+export const FOOD = '맛집';
+export const CAFE = '카페';
+
 /** 홈의 키워드 칩. 값은 카테고리와 같은 한국어다. */
 export const HOME_KEYWORDS = ['전체', '문화', '카페', '체험', '맛집'] as const;
 

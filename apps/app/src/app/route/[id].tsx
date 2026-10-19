@@ -6,6 +6,8 @@ import KakaoMapView, { type KakaoMapHandle } from '@/components/KakaoMapView';
 import LoginRequired from '@/components/LoginRequired';
 import type { RouteLeg, RouteStop } from '@/lib/api/itineraries';
 import { useItineraryQuery, useItineraryRouteQuery } from '@/lib/hooks/queries';
+import { useT } from '@/lib/i18n';
+import type { TFn } from '@/lib/i18n/labels';
 import { useAuthStore } from '@/lib/store/authStore';
 import { ROUTE_SEGMENT_COLORS, segmentColor } from '@/lib/routeColors';
 import { colors, fonts, radius, space } from '@/lib/theme';
@@ -15,9 +17,12 @@ const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
 const KAKAO_WEB_ORIGIN = 'https://byeori.seoulride.site';
 
 const fmtKm = (m: number) => (m / 1000).toFixed(1);
-const fmtMin = (s: number) => {
+// 어순이 언어마다 달라 한 문장으로 사전에 둔다(시간·분을 이어 붙이지 않는다).
+const fmtMin = (t: TFn, s: number) => {
   const m = Math.round(s / 60);
-  return m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${m}분`;
+  return m >= 60
+    ? t('common.duration.hourMin', { h: Math.floor(m / 60), m: m % 60 })
+    : t('common.duration.min', { m });
 };
 
 type Mode = 'AUTO' | 'WALK' | 'DRIVE';
@@ -89,6 +94,7 @@ const fmtDate = (d: string) => d.slice(5).replace('-', '.');
 
 export default function RouteScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
+  const t = useT();
   const id = Number(params.id);
   const valid = !!params.id && !Number.isNaN(id);
 
@@ -134,15 +140,15 @@ export default function RouteScreen() {
   if (!isLoggedIn) {
     return (
       <View style={styles.root}>
-        <Stack.Screen options={{ title: '경로 보기' }} />
-        <LoginRequired description="내 여행 루트의 경로는 로그인 후에 볼 수 있어요." />
+        <Stack.Screen options={{ title: t('route.title') }} />
+        <LoginRequired description={t('route.login.desc')} />
       </View>
     );
   }
 
   return (
     <View style={styles.root}>
-      <Stack.Screen options={{ title: detail.data?.title ?? '경로 보기' }} />
+      <Stack.Screen options={{ title: detail.data?.title ?? t('route.title') }} />
 
       {/* 날짜 탭 — 하루짜리 루트에서는 고를 것이 없으므로 숨긴다. */}
       {days.length > 1 && (
@@ -162,7 +168,7 @@ export default function RouteScreen() {
                 style={[styles.dayChip, on && styles.dayChipOn]}
               >
                 <Text style={[styles.dayText, on && styles.dayTextOn]}>
-                  {i + 1}일차
+                  {t('route.day', { n: i + 1 })}
                 </Text>
                 <Text style={[styles.daySub, on && styles.dayTextOn]}>
                   {fmtDate(d.date)}
@@ -177,25 +183,25 @@ export default function RouteScreen() {
       <View style={styles.summary}>
         <View style={{ flex: 1 }}>
           {route.isLoading ? (
-            <Text style={styles.summaryText}>경로 계산 중…</Text>
+            <Text style={styles.summaryText}>{t('route.calculating')}</Text>
           ) : day ? (
             <Text style={styles.summaryText}>
-              {fmtKm(day.distance)}km · 약 {fmtMin(day.duration)} · {day.stops.length}곳
+              {t('route.summary', { km: fmtKm(day.distance), min: fmtMin(t, day.duration), n: day.stops.length })}
             </Text>
           ) : (
-            <Text style={styles.summaryText}>경로를 불러오지 못했어요</Text>
+            <Text style={styles.summaryText}>{t('route.failed')}</Text>
           )}
-          <Text style={styles.summaryHint}>실선은 걷는 길, 점선은 타고 가는 길</Text>
+          <Text style={styles.summaryHint}>{t('route.legend')}</Text>
         </View>
         <View style={styles.modes}>
-          {([['AUTO', '자동'], ['WALK', '걷기'], ['DRIVE', '차']] as const).map(([v, label]) => (
+          {([['AUTO', 'route.mode.auto'], ['WALK', 'route.mode.walk'], ['DRIVE', 'route.mode.drive']] as const).map(([v, label]) => (
             <Pressable
               key={v}
               hitSlop={6}
               onPress={() => setMode(v)}
               style={[styles.modeChip, mode === v && styles.modeChipOn]}
             >
-              <Text style={[styles.modeText, mode === v && styles.modeTextOn]}>{label}</Text>
+              <Text style={[styles.modeText, mode === v && styles.modeTextOn]}>{t(label)}</Text>
             </Pressable>
           ))}
         </View>
@@ -215,14 +221,14 @@ export default function RouteScreen() {
             />
             {!ready && (
               <View style={styles.mapOverlay} pointerEvents="none">
-                <Text style={styles.mapOverlayText}>{mapError ?? '지도 불러오는 중…'}</Text>
+                <Text style={styles.mapOverlayText}>{mapError ?? t('route.map.loading')}</Text>
               </View>
             )}
           </>
         ) : (
           <View style={styles.mapOverlay}>
             <Text style={styles.mapOverlayText}>
-              {mapError ?? '지도를 띄울 수 없어요'}
+              {mapError ?? t('route.map.unavailable')}
             </Text>
           </View>
         )}
@@ -241,7 +247,7 @@ export default function RouteScreen() {
               <View style={[styles.stopNum, { backgroundColor: segmentColor(i) }]}>
                 <Text style={styles.stopNumText}>{i + 1}</Text>
               </View>
-              <Text style={styles.stopName} numberOfLines={1}>{s.name ?? '장소'}</Text>
+              <Text style={styles.stopName} numberOfLines={1}>{s.name ?? t('routes.stop.unnamed')}</Text>
               {i < day.stops.length - 1 && (
                 <Ionicons name="chevron-forward" size={12} color={colors.textFaint} />
               )}

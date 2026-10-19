@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ItineraryItem } from '@/lib/api/itineraries';
+import { useT } from '@/lib/i18n';
 import { colors, fonts, radius } from '@/lib/theme';
 
 /**
@@ -41,6 +42,7 @@ export function DraggableStops({
   /** 놓았을 때 새 순서의 id 목록. 자리가 바뀌지 않았으면 부르지 않는다. */
   onReorder: (itemIds: number[]) => void;
 }) {
+  const t = useT();
   // 끌 때 바로 따라오도록 화면이 들고 있는 순서. 서버 응답이 오면 그쪽으로 맞춘다.
   const [list, setList] = useState(items);
   useEffect(() => { setList(items); }, [items]);
@@ -117,7 +119,7 @@ export function DraggableStops({
           onPress={() => onPressItem(it.id)}
         />
       ))}
-      {pending ? <Text style={styles.saving}>순서 저장 중…</Text> : null}
+      {pending ? <Text style={styles.saving}>{t('itinerary.savingOrder')}</Text> : null}
     </View>
   );
 }
@@ -144,6 +146,7 @@ function StopRow({
   ctl: React.MutableRefObject<DragControl>;
   onPress: () => void;
 }) {
+  const t = useT();
   const pan = useMemo(
     () =>
       PanResponder.create({
@@ -175,7 +178,7 @@ function StopRow({
         <View style={{ flex: 1 }}>
           <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
           <Text style={styles.meta} numberOfLines={1}>
-            {item.targetType === 'PERFORMANCE' ? '행사' : '장소'}{item.plannedTime ? ` · ${item.plannedTime}` : ''}
+            {item.targetType === 'PERFORMANCE' ? t('common.stopType.performance') : t('common.stopType.venue')}{item.plannedTime ? ` · ${item.plannedTime}` : ''}
           </Text>
           {/* AI 루트는 추천 이유를 메모로 저장한다 */}
           {item.memo ? <Text style={styles.memo} numberOfLines={1}>{item.memo}</Text> : null}

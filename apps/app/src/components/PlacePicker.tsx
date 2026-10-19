@@ -6,10 +6,12 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, Text
 import { searchKakaoPlaces, type KakaoPlace } from '@/lib/api/itineraries';
 import type { Venue } from '@/lib/api/types';
 import { useLiveSearchQuery, useNearbyVenuesQuery, useVenuesQuery } from '@/lib/hooks/queries';
+import { ALL, CAFE, FOOD, PICKER_CATEGORIES } from '@/lib/categories';
+import { useT } from '@/lib/i18n';
+import { categoryLabel } from '@/lib/i18n/labels';
 import { sized } from '@/lib/img';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
-const CATEGORIES = ['전체', '문화', '맛집', '카페', '전통시장', '체험', '공예', '한옥스테이'] as const;
 const NEAR_RADIUS = 2000;
 
 type Props = {
@@ -41,17 +43,18 @@ function useDebounced<T>(value: T, ms = 300) {
  * 카카오맵에서 찾아 넣는다(서버가 나만 보는 장소로 저장한다).
  */
 export default function PlacePicker({ visible, onClose, near, excludeIds = [], onPickVenue, onPickPlace }: Props) {
+  const t = useT();
   const [keyword, setKeyword] = useState('');
-  const [category, setCategory] = useState<string>('전체');
+  const [category, setCategory] = useState<string>(ALL);
   const [mode, setMode] = useState<'byeori' | 'kakao'>('byeori');
   const q = useDebounced(keyword.trim());
-  const cat = category === '전체' ? undefined : category;
+  const cat = category === ALL ? undefined : category;
 
   // 창을 닫으면 처음 상태로 돌린다
   useEffect(() => {
     if (!visible) {
       setKeyword('');
-      setCategory('전체');
+      setCategory(ALL);
       setMode('byeori');
     }
   }, [visible]);
@@ -73,14 +76,14 @@ export default function PlacePicker({ visible, onClose, near, excludeIds = [], o
     ? live.data ?? []
     : near ? nearby.data ?? [] : popular.data?.content ?? [];
   const loading = searching ? live.isLoading : near ? nearby.isLoading : popular.isLoading;
-  const listLabel = searching ? `'${q}' 검색 결과` : near ? '이 루트 주변' : '추천 장소';
+  const listLabel = searching ? t('placePicker.searchResults', { q }) : near ? t('placePicker.nearRoute') : t('placePicker.recommended');
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.bg}>
         <View style={styles.sheet}>
           <View style={styles.head}>
-            <Text style={styles.title}>{mode === 'kakao' ? '카카오맵에서 찾기' : '장소 추가'}</Text>
+            <Text style={styles.title}>{mode === 'kakao' ? t('placePicker.kakaoTitle') : t('placePicker.addTitle')}</Text>
             <Pressable onPress={onClose} hitSlop={8}><Ionicons name="close" size={22} color={colors.text} /></Pressable>
           </View>
 
@@ -90,7 +93,7 @@ export default function PlacePicker({ visible, onClose, near, excludeIds = [], o
               style={styles.input}
               value={keyword}
               onChangeText={setKeyword}
-              placeholder={mode === 'kakao' ? '식당·카페 이름 (예: 명동교자)' : '장소 이름 검색'}
+              placeholder={mode === 'kakao' ? t('placePicker.kakaoPlaceholder') : t('placePicker.searchPlaceholder')}
               placeholderTextColor={colors.textFaint}
               returnKeyType="search"
               autoCorrect={false}
@@ -105,16 +108,16 @@ export default function PlacePicker({ visible, onClose, near, excludeIds = [], o
           {mode === 'byeori' ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}
               contentContainerStyle={{ gap: 6 }}>
-              {CATEGORIES.map((c) => (
+              {PICKER_CATEGORIES.map((c) => (
                 <Pressable key={c} style={[styles.chip, category === c && styles.chipOn]} onPress={() => setCategory(c)}>
-                  <Text style={[styles.chipText, category === c && styles.chipTextOn]}>{c}</Text>
+                  <Text style={[styles.chipText, category === c && styles.chipTextOn]}>{categoryLabel(t, c)}</Text>
                 </Pressable>
               ))}
             </ScrollView>
           ) : (
             <Pressable style={styles.backLink} onPress={() => setMode('byeori')}>
               <Ionicons name="chevron-back" size={14} color={colors.accent} />
-              <Text style={styles.backLinkText}>벼리 장소로 돌아가기</Text>
+              <Text style={styles.backLinkText}>{t('placePicker.backToByeori')}</Text>
             </Pressable>
           )}
 
@@ -125,7 +128,7 @@ export default function PlacePicker({ visible, onClose, near, excludeIds = [], o
                 {loading ? <ActivityIndicator color={colors.primary} style={{ marginVertical: 20 }} /> : null}
                 {!loading && venues.length === 0 ? (
                   <Text style={styles.empty}>
-                    {searching ? '벼리에 등록된 장소 중에는 없어요.' : '주변에 등록된 장소가 없어요. 이름으로 찾아보세요.'}
+                    {searching ? t('placePicker.emptySearch') : t('placePicker.emptyNear')}
                   </Text>
                 ) : null}
                 {venues.filter((v) => v.id != null && !excludeIds.includes(v.id)).map((v) => (
@@ -137,7 +140,7 @@ export default function PlacePicker({ visible, onClose, near, excludeIds = [], o
                     )}
                     <View style={{ flex: 1 }}>
                       <Text style={styles.name} numberOfLines={1}>{v.name}</Text>
-                      <Text style={styles.meta} numberOfLines={1}>{[v.category, v.address].filter(Boolean).join(' · ')}</Text>
+                      <Text style={styles.meta} numberOfLines={1}>{[v.category ? categoryLabel(t, v.category) : v.category, v.address].filter(Boolean).join(' · ')}</Text>
                     </View>
                     <Ionicons name="add-circle" size={22} color={colors.primary} />
                   </Pressable>
@@ -149,23 +152,23 @@ export default function PlacePicker({ visible, onClose, near, excludeIds = [], o
                   onPress={() => setMode('kakao')}
                 >
                   <Ionicons name="storefront-outline" size={16} color={colors.primary} />
-                  <Text style={styles.kakaoCtaText}>찾는 곳이 없나요? 카카오맵에서 찾기</Text>
+                  <Text style={styles.kakaoCtaText}>{t('placePicker.kakaoCta')}</Text>
                   <Ionicons name="chevron-forward" size={16} color={colors.primary} />
                 </Pressable>
               </>
             ) : (
               <>
                 {q.length === 0 ? (
-                  <Text style={styles.empty}>가고 싶은 식당·카페 이름을 입력해 주세요.{'\n'}고른 곳은 나만 보는 장소로 루트에 들어가요.</Text>
+                  <Text style={styles.empty}>{t('placePicker.kakaoPrompt')}</Text>
                 ) : kakao.isLoading ? (
                   <ActivityIndicator color={colors.primary} style={{ marginVertical: 20 }} />
                 ) : (kakao.data ?? []).length === 0 ? (
-                  <Text style={styles.empty}>검색 결과가 없어요.</Text>
+                  <Text style={styles.empty}>{t('placePicker.noResults')}</Text>
                 ) : (
                   (kakao.data ?? []).map((p) => (
                     <Pressable key={p.kakaoPlaceId} style={styles.row} onPress={() => onPickPlace(p)}>
                       <View style={[styles.img, styles.imgEmpty]}>
-                        <Ionicons name={p.category === '맛집' ? 'restaurant-outline' : p.category === '카페' ? 'cafe-outline' : 'location-outline'}
+                        <Ionicons name={p.category === FOOD ? 'restaurant-outline' : p.category === CAFE ? 'cafe-outline' : 'location-outline'}
                           size={18} color={colors.textSub} />
                       </View>
                       <View style={{ flex: 1 }}>
@@ -176,7 +179,7 @@ export default function PlacePicker({ visible, onClose, near, excludeIds = [], o
                     </Pressable>
                   ))
                 )}
-                <Text style={styles.source}>장소 검색: 카카오</Text>
+                <Text style={styles.source}>{t('placePicker.source')}</Text>
               </>
             )}
           </ScrollView>
