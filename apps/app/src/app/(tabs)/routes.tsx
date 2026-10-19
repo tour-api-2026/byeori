@@ -27,8 +27,12 @@ import { segmentColor } from "@/lib/routeColors";
  *
  * 웹에서는 지금 열려 있는 오리진을 그대로 쓴다 — 로컬에서 띄워 보면 로컬 주소가 나와야
  * 눌러서 확인할 수 있다. 앱에는 주소창이 없으니 배포 도메인을 적는다.
+ *
+ * 상수가 아니라 함수인 이유: 모듈 수준에서 `window` 를 읽으면 정적 웹 렌더링(서버 쪽,
+ * window 없음) 중에 던져 `expo start --web` 의 `/` 가 500 이 된다. 쓰는 순간(공유를
+ * 누를 때, 항상 브라우저)에 읽어야 한다. 배포본은 expo export 라 이 문제를 가려 준다.
  */
-const SITE_ORIGIN =
+const siteOrigin = () =>
   Platform.OS === "web" ? window.location.origin : "https://byeori.ernebi.org";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -242,7 +246,7 @@ function RouteCard({ summary }: { summary: ItinerarySummary }) {
     setShareState("working");
     try {
       const { token } = await shareItinerary(summary.id);
-      const url = `${SITE_ORIGIN}/s/${token}`;
+      const url = `${siteOrigin()}/s/${token}`;
       const text = `[벼리] '${summary.title}' 여행 루트 (${summary.startDate} ~ ${summary.endDate})`;
 
       if (Platform.OS === "web" && !(navigator as any).share) {

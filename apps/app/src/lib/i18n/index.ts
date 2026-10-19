@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { ko } from './ko';
 import { en } from './en';
 import { ja } from './ja';
@@ -32,5 +33,11 @@ export function translate(locale: Locale, key: string, vars?: Record<string, unk
  */
 export function useT() {
   const locale = useLocaleStore((s) => s.locale);
-  return (key: string, vars?: Record<string, unknown>) => translate(locale, key, vars);
+  // 언어가 바뀔 때만 함수 정체성이 바뀌게 메모한다. 매 렌더 새 함수를 돌려주면 t 를
+  // useEffect/useMemo/useCallback 의존성에 넣는 순간 렌더마다 다시 실행되고, 그 안에서
+  // 상태를 바꾸면 무한 루프가 된다. 사라져도 당장은 티가 안 나서 나중에 터진다.
+  return useCallback(
+    (key: string, vars?: Record<string, unknown>) => translate(locale, key, vars),
+    [locale],
+  );
 }

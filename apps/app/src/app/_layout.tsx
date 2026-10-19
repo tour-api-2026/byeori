@@ -19,7 +19,15 @@ applyGlobalFont();
 // 이 호출이 로그인 화면에만 있을 때는 팝업이 코드를 쥔 채 홈을 띄우고 멈춰,
 // 카카오 로그인이 서버(/auth/social)까지 한 번도 닿지 못했다. 어느 화면으로
 // 돌아오든 처리되도록 루트에서 부른다(해당 없으면 아무 일도 하지 않는다).
-WebBrowser.maybeCompleteAuthSession();
+// localStorage 가 통째로 막힌 환경(사생활 보호 모드, 사이트 데이터 차단, 일부 임베디드
+// 웹뷰)에서는 이 호출이 모듈 평가 중에 던진다. 그러면 레이아웃 모듈이 로드되지 못해
+// 앱이 열화되는 게 아니라 빈 페이지가 된다. 저장소가 막히면 팝업 인계 자체가 불가능하니
+// 삼켜도 잃는 것이 없다 — 이 try/catch 를 "불필요한 방어"로 걷어내지 말 것.
+try {
+  WebBrowser.maybeCompleteAuthSession();
+} catch {
+  // 복구할 것이 없다.
+}
 
 export default function RootLayout() {
   useAutoUpdate();

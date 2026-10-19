@@ -30,12 +30,19 @@ export const useLocaleStore = create<LocaleState>((set) => ({
    * 짐작은 선택이 아니므로 첫 화면에서 확인받아야 한다.
    */
   hydrate: async () => {
-    const raw = await getItem(KEY);
-    const saved = LOCALES.find((l) => l === raw);
-    if (saved) {
-      set({ locale: saved, chosen: true, hydrated: true });
-      return;
+    // 루트 레이아웃은 hydrated 가 true 가 될 때까지 빈 화면을 붙들고 있다(게이트). 그래서
+    // 어떤 경우에도 hydrated: true 로 끝나야 한다 — storage/device 가 던지게 바뀌면 앱이
+    // 오류 메시지 하나 없이 영원히 빈 화면에 멈춘다. 실패하면 한국어로 연다.
+    try {
+      const raw = await getItem(KEY);
+      const saved = LOCALES.find((l) => l === raw);
+      if (saved) {
+        set({ locale: saved, chosen: true, hydrated: true });
+        return;
+      }
+      set({ locale: detectDeviceLocale() ?? 'ko', chosen: false, hydrated: true });
+    } catch {
+      set({ locale: 'ko', chosen: false, hydrated: true });
     }
-    set({ locale: detectDeviceLocale() ?? 'ko', chosen: false, hydrated: true });
   },
 }));
