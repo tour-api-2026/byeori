@@ -23,7 +23,18 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
     void updateRating(@Param("id") Long id, @Param("avg") BigDecimal avg, @Param("cnt") int cnt);
 
     /**
-     * 정렬 미지정이면 페이지 간 중복·누락이 생긴다. 포스터 있는 것 → 최근 시작 순으로 고정한다.
+     * 정렬은 **부르는 쪽(Pageable)이 정한다.** 여기에 order by 를 두지 않는다.
+     *
+     * 전에는 여기에 "포스터 있는 것 → 시작일 내림차순" 이 박혀 있었는데, 컨트롤러도
+     * 시작일 오름차순을 넘기고 있었다. JPQL 의 order by 가 있으면 Pageable 정렬은 그
+     * **뒤에** 붙으므로 앞의 내림차순이 이겼고, '예정' 탭이 가장 먼 미래부터 나왔다.
+     * 정렬 기준이 두 곳에 있으면 이렇게 조용히 어긋난다 — 한 곳에만 둔다.
+     *
+     * 포스터 유무로 먼저 가르던 것도 함께 뗀다. 포스터 없는 행사는 12,753건 중 5건이고
+     * 예정·진행중에는 하나도 없다. 지키는 값은 없으면서, 포스터 없는 행사가 들어오는
+     * 순간 날짜 순서를 깨뜨릴 준비만 하고 있었다.
+     *
+     * 정렬을 아예 주지 않으면 페이지 간 중복·누락이 생기므로 부르는 쪽이 반드시 준다.
      *
      * state 는 저장된 컬럼이 아니라 :today 기준으로 따진다. 그 컬럼은 동기화 시점 값이라
      * 시간이 지나면 틀어진다(Performance.stateOn 주석 참고). 판정은 그 메서드와 같은 규칙이다.
@@ -44,8 +55,6 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
               and (:keyword is null or p.title like %:keyword%)
               and (:traditional is null or p.traditional = :traditional)
               and p.duplicateOf is null
-            order by case when p.posterImageUrl is null or p.posterImageUrl = '' then 1 else 0 end,
-                     p.startDate desc, p.id asc
             """)
     Page<Performance> search(@Param("state") String state,
                              @Param("today") LocalDate today,
