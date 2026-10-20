@@ -9,7 +9,10 @@ export type FeedItem = {
   category: string | null;
   lat: number | null;
   lng: number | null;
+  /** 코드(NEARBY·ONGOING…). 구버전 서버는 완성된 한국어 문장을 준다. */
   reason: string;
+  /** reason 의 값(거리·날수·분류). 없으면 null — 구버전 서버에선 필드 자체가 없다. */
+  reasonParam?: string | null;
   score: number;
 };
 

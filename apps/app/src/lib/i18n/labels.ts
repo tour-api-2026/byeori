@@ -50,3 +50,30 @@ export const languageLabel = (t: TFn) => {
   return own === 'Language' ? own : `${own} / Language`;
 };
 export const regionLabel = (t: TFn, value: string) => passthrough(t, 'region', value);
+/**
+ * 추천이 뜬 이유를 문장으로.
+ *
+ * 서버는 문장이 아니라 코드와 값을 준다(FeedReason). CATEGORY·GENRE 는 값 자체가 문구다 —
+ * 이미 가진 분류값 사전을 태우고, 따로 키를 두지 않는다(같은 것의 번역이 둘이 되므로).
+ *
+ * 구버전 서버가 올 수 있다: 앱은 OTA 로 먼저 나가므로, 서버가 아직 안 올라간 동안
+ * reason 에 "관심 주제 · 문화" 같은 **완성된 한국어 문장**이 오고 reasonParam 은 없다.
+ * 그걸 코드로 보고 사전을 찾으면 못 찾고, 값도 없어 빈 배지가 된다. 그래서 코드 꼴
+ * (대문자·밑줄)이 아닌 reason 은 이미 문장이라고 보고 그대로 보여 준다.
+ * 새 서버의 모르는 코드(앱보다 서버가 먼저 새 코드를 낸 경우)는 값이 있으면 값을, 없으면
+ * 빈 문자열을 준다 — 코드 이름이 화면에 뜨는 것만은 막는다.
+ */
+export function feedReasonText(t: TFn, code: string, param?: string | null): string {
+  if (code === 'CATEGORY') return param ? categoryLabel(t, param) : '';
+  if (code === 'GENRE') return param ? genreLabel(t, param) : '';
+  if (!/^[A-Z][A-Z_]*$/.test(code)) return code;
+  // FAVORITE_TOPIC 의 값은 분류 또는 장르 — 분류 사전에 없으면 장르 사전을 본다.
+  let p = param ?? '';
+  if (code === 'FAVORITE_TOPIC' && p) {
+    const asCategory = categoryLabel(t, p);
+    p = asCategory !== p ? asCategory : genreLabel(t, p);
+  }
+  const key = `feed.reason.${code}`;
+  const out = t(key, { p });
+  return out === key ? p : out;
+}

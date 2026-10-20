@@ -148,9 +148,9 @@ public class FeedService {
             // 더 받아 장소가 구조적으로 밀린다(실제로 추천 상위 10칸이 전부 공연이었다).
             double score = props.getTaste() * match + props.getDistance() * dist
                     + props.getImminence() + props.getPopularity() * pop;
+            FeedReason reason = venueReason(taste, v, match, dist, lat, lng);
             out.add(new FeedItem("VENUE", v.getId(), v.getName(), v.getImageUrl(), v.getCategory(),
-                    num(v.getLat()), num(v.getLng()),
-                    venueReason(taste, v, match, dist, lat, lng), score));
+                    num(v.getLat()), num(v.getLng()), reason.code(), reason.param(), score));
         }
         return out;
     }
@@ -180,8 +180,9 @@ public class FeedService {
             double pop = popularity(p.getReviewCount());
             double score = props.getTaste() * match + props.getDistance() * dist
                     + props.getImminence() * imminence + props.getPopularity() * pop;
+            FeedReason reason = performanceReason(p, today, match);
             out.add(new FeedItem("PERFORMANCE", p.getId(), p.getTitle(), p.getPosterImageUrl(), p.getGenre(),
-                    num(p.getLat()), num(p.getLng()), performanceReason(p, today, match), score));
+                    num(p.getLat()), num(p.getLng()), reason.code(), reason.param(), score));
         }
         return out;
     }
@@ -255,25 +256,25 @@ public class FeedService {
 
     // ── 왜 떴는지 ─────────────────────────────
 
-    private String venueReason(TasteProfile taste, Venue v, double match, double dist, Double lat, Double lng) {
+    private FeedReason venueReason(TasteProfile taste, Venue v, double match, double dist, Double lat, Double lng) {
         if (lat != null && lng != null && v.getLat() != null && v.getLng() != null) {
             double km = haversineKm(lat, lng, v.getLat().doubleValue(), v.getLng().doubleValue());
-            if (km <= 3) return String.format("내 주변 %.1fkm", km);
+            if (km <= 3) return FeedReason.nearby(km);
         }
-        if (taste.inFavoriteRegion(v.getAddress())) return "관심 지역";
-        if (match > 0.5 && v.getCategory() != null) return "관심 주제 · " + v.getCategory();
-        return v.getCategory() == null ? "추천" : v.getCategory();
+        if (taste.inFavoriteRegion(v.getAddress())) return FeedReason.favoriteRegion();
+        if (match > 0.5 && v.getCategory() != null) return FeedReason.favoriteTopic(v.getCategory());
+        return v.getCategory() == null ? FeedReason.recommended() : FeedReason.category(v.getCategory());
     }
 
-    private String performanceReason(Performance p, LocalDate today, double match) {
+    private FeedReason performanceReason(Performance p, LocalDate today, double match) {
         LocalDate start = p.getStartDate();
-        if (start != null && !start.isAfter(today)) return "지금 진행중";
+        if (start != null && !start.isAfter(today)) return FeedReason.ongoing();
         if (start != null) {
             long days = java.time.temporal.ChronoUnit.DAYS.between(today, start);
-            if (days <= 7) return days == 0 ? "오늘 시작" : days + "일 뒤 시작";
+            if (days <= 7) return days == 0 ? FeedReason.startsToday() : FeedReason.startsInDays(days);
         }
-        if (match > 0.5 && p.getGenre() != null) return "관심 주제 · " + p.getGenre();
-        return p.getGenre() == null ? "곧 열리는 행사" : p.getGenre();
+        if (match > 0.5 && p.getGenre() != null) return FeedReason.favoriteTopic(p.getGenre());
+        return p.getGenre() == null ? FeedReason.upcoming() : FeedReason.genre(p.getGenre());
     }
 
     private static double haversineKm(double lat1, double lng1, double lat2, double lng2) {
