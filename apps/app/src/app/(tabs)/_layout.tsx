@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { TabBar } from '@/components/TabBar';
+import { useT } from '@/lib/i18n';
 
 /**
  * 탭에서 뒤로가기를 누르면 앱이 닫힌다. 탭 사이를 되짚지 않는다.
@@ -19,6 +20,7 @@ import { TabBar } from '@/components/TabBar';
 export const unstable_settings = { initialRouteName: 'index' };
 
 export default function TabsLayout() {
+  const t = useT();
   return (
     <Tabs
       screenOptions={{ headerShown: false }}
@@ -26,11 +28,11 @@ export default function TabsLayout() {
       tabBar={(props) => <TabBar {...props} />}
     >
       {/* 좌→우: 내 주변 · 루트 탐색 · [홈] · 내 루트 · 마이 (가운데 돌출) */}
-      <Tabs.Screen name="map" options={{ title: '내 주변' }} />
-      <Tabs.Screen name="explore" options={{ title: '루트 탐색' }} />
-      <Tabs.Screen name="index" options={{ title: '홈' }} />
-      <Tabs.Screen name="routes" options={{ title: '내 루트' }} />
-      <Tabs.Screen name="profile" options={{ title: '마이' }} />
+      <Tabs.Screen name="map" options={{ title: t('tabbar.map') }} />
+      <Tabs.Screen name="explore" options={{ title: t('tabbar.explore') }} />
+      <Tabs.Screen name="index" options={{ title: t('tabbar.home') }} />
+      <Tabs.Screen name="routes" options={{ title: t('tabbar.routes') }} />
+      <Tabs.Screen name="profile" options={{ title: t('tabbar.profile') }} />
     </Tabs>
   );
 }

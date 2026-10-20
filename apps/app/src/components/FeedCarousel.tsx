@@ -2,6 +2,8 @@ import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from '@/components/Image';
 import type { FeedItem } from '@/lib/api/feed';
+import { useT } from '@/lib/i18n';
+import { categoryLabel } from '@/lib/i18n/labels';
 import { sized } from '@/lib/img';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
@@ -15,6 +17,7 @@ import { colors, fonts, radius, space } from '@/lib/theme';
  */
 export function FeedCarousel({ items }: { items: FeedItem[] }) {
   const router = useRouter();
+  const t = useT();
   return (
     <ScrollView
       horizontal
@@ -40,9 +43,12 @@ export function FeedCarousel({ items }: { items: FeedItem[] }) {
           <View style={styles.reason}>
             <Text style={styles.reasonText} numberOfLines={1}>{it.reason}</Text>
           </View>
-          <Text style={styles.name} numberOfLines={2}>{it.name ?? '이름 없음'}</Text>
+          <Text style={styles.name} numberOfLines={2}>{it.name ?? t('feed.noName')}</Text>
           <Text style={styles.sub} numberOfLines={1}>
-            {it.targetType === 'PERFORMANCE' ? '행사' : '장소'}{it.category ? ` · ${it.category}` : ''}
+            {(() => {
+              const type = t(it.targetType === 'PERFORMANCE' ? 'common.stopType.performance' : 'common.stopType.venue');
+              return it.category ? t('feed.sub', { type, category: categoryLabel(t, it.category) }) : type;
+            })()}
           </Text>
         </Pressable>
       ))}

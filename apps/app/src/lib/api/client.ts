@@ -2,6 +2,8 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useLocaleStore } from '@/lib/store/localeStore';
+import { errorText } from '@/lib/i18n/errors';
 
 // 실기기(Expo Go)에서는 dev 머신의 IP로 API를 호출해야 한다.
 // Expo가 알려주는 hostUri(예: "192.168.0.5:8081")에서 호스트를 추출해 :8080에 붙인다.
@@ -35,7 +37,7 @@ export type Page<T> = { content: T[]; page: number; size: number; totalElements:
 export async function unwrap<T>(promise: Promise<{ data: ApiEnvelope<T> }>): Promise<T> {
   const res = await promise;
   if (!res.data.success) {
-    throw new Error(res.data.error?.message ?? '요청 실패');
+    throw new Error(errorText(res.data.error));
   }
   return res.data.data;
 }
@@ -43,9 +45,12 @@ export async function unwrap<T>(promise: Promise<{ data: ApiEnvelope<T> }>): Pro
 // ---------- 인증 인터셉터 ----------
 // 요청: 로그인 상태면 Authorization Bearer 첨부 (기존 기본 헤더는 유지)
 api.interceptors.request.use((config) => {
+  config.headers = config.headers ?? {};
+  // 콘텐츠 번역(다음 계획)이 이 값을 보고 어느 컬럼을 줄지 고른다. 지금은 서버가 무시한다.
+  // 기본 헤더의 'ko' 는 고정값이라 요청마다 현재 언어로 덮는다. 우리 4글자 로케일 그대로 보낸다.
+  config.headers['Accept-Language'] = useLocaleStore.getState().locale;
   const token = useAuthStore.getState().accessToken;
   if (token) {
-    config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -92,9 +97,8 @@ async function runRefresh(): Promise<string | null> {
  */
 function toApiError(error: AxiosError): unknown {
   const body = error.response?.data as ApiEnvelope<unknown> | undefined;
-  const message = body?.error?.message;
-  if (!message) return error;        // 봉투가 없으면(네트워크 끊김 등) 원래 오류 그대로
-  const e = new Error(message) as Error & { code?: string; status?: number };
+  if (!body?.error) return error;    // 봉투가 없으면(네트워크 끊김 등) 원래 오류 그대로
+  const e = new Error(errorText(body.error)) as Error & { code?: string; status?: number };
   e.code = body?.error?.code;
   e.status = error.response?.status;
   return e;

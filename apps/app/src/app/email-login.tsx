@@ -7,11 +7,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { loginAdmin } from '@/lib/auth/oauth';
+import { useT } from '@/lib/i18n';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 export default function EmailLoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const t = useT();
   const [id, setId] = useState('');
   const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
@@ -20,7 +22,7 @@ export default function EmailLoginScreen() {
   const submit = async () => {
     if (busy) return;
     if (!id.trim() || !pw) {
-      Alert.alert('입력 확인', '아이디와 비밀번호를 입력해주세요.');
+      Alert.alert(t('login.email.checkTitle'), t('login.email.checkBody'));
       return;
     }
     setBusy(true);
@@ -28,7 +30,7 @@ export default function EmailLoginScreen() {
       await loginAdmin(id, pw);
       router.replace('/(tabs)');
     } catch (e: any) {
-      Alert.alert('로그인 실패', e?.message ?? '아이디 또는 비밀번호를 확인해주세요.');
+      Alert.alert(t('login.failTitle'), e?.message ?? t('login.email.wrong'));
     } finally {
       setBusy(false);
     }
@@ -43,17 +45,17 @@ export default function EmailLoginScreen() {
         <Pressable hitSlop={10} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={26} color={colors.text} />
         </Pressable>
-        <Text style={styles.headerTitle}>아이디 로그인</Text>
+        <Text style={styles.headerTitle}>{t('login.email.title')}</Text>
         <View style={{ width: 26 }} />
       </View>
 
       <View style={styles.body}>
-        <Text style={styles.label}>아이디</Text>
+        <Text style={styles.label}>{t('login.email.id')}</Text>
         <TextInput
           style={styles.input}
           value={id}
           onChangeText={setId}
-          placeholder="아이디를 입력하세요"
+          placeholder={t('login.email.idPlaceholder')}
           placeholderTextColor={colors.textFaint}
           autoCapitalize="none"
           autoCorrect={false}
@@ -63,13 +65,13 @@ export default function EmailLoginScreen() {
           onSubmitEditing={() => pwRef.current?.focus()}
         />
 
-        <Text style={[styles.label, { marginTop: 16 }]}>비밀번호</Text>
+        <Text style={[styles.label, { marginTop: 16 }]}>{t('login.email.pw')}</Text>
         <TextInput
           ref={pwRef}
           style={styles.input}
           value={pw}
           onChangeText={setPw}
-          placeholder="비밀번호를 입력하세요"
+          placeholder={t('login.email.pwPlaceholder')}
           placeholderTextColor={colors.textFaint}
           secureTextEntry
           autoCapitalize="none"
@@ -85,7 +87,7 @@ export default function EmailLoginScreen() {
           onPress={submit}>
           {busy
             ? <ActivityIndicator color={colors.white} />
-            : <Text style={styles.btnText}>로그인</Text>}
+            : <Text style={styles.btnText}>{t('login.email.submit')}</Text>}
         </Pressable>
       </View>
     </KeyboardAvoidingView>

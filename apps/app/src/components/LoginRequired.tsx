@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useT } from '@/lib/i18n';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 type Props = {
@@ -8,20 +9,18 @@ type Props = {
   description?: string;
 };
 
-export default function LoginRequired({
-  title = '로그인이 필요해요',
-  description = '이 기능은 로그인 후에 이용할 수 있어요.',
-}: Props) {
+export default function LoginRequired({ title, description }: Props) {
   const router = useRouter();
+  const t = useT();
   return (
     <View style={styles.wrap}>
       <View style={styles.iconCircle}>
         <Ionicons name="lock-closed" size={30} color={colors.primary} />
       </View>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.desc}>{description}</Text>
+      <Text style={styles.title}>{title ?? t('profile.loginNeeded')}</Text>
+      <Text style={styles.desc}>{description ?? t('login.required.desc')}</Text>
       <Pressable style={styles.btn} onPress={() => router.push('/login')}>
-        <Text style={styles.btnText}>로그인하기</Text>
+        <Text style={styles.btnText}>{t('profile.login')}</Text>
         <Ionicons name="chevron-forward" size={15} color={colors.white} />
       </Pressable>
     </View>

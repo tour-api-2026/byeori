@@ -12,12 +12,15 @@ import {
   useDeleteVenueMutation, useNearbyPerformancesQuery, useReportVenueMutation, useToggleWishlistMutation,
   useVenueDetailQuery, useVenuePerformancesQuery,
 } from '@/lib/hooks/queries';
+import { useT } from '@/lib/i18n';
+import { categoryLabel } from '@/lib/i18n/labels';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useBookmarkStore } from '@/lib/store/bookmarkStore';
 import { useRecentStore } from '@/lib/store/recentStore';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 export default function VenueDetailScreen() {
+  const t = useT();
   const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const { id, mine } = useLocalSearchParams<{ id: string; mine?: string }>();
   const { data: v, isLoading } = useVenueDetailQuery(id);
@@ -43,15 +46,15 @@ export default function VenueDetailScreen() {
   const del = useDeleteVenueMutation();
 
   const confirmDelete = () => {
-    Alert.alert('장소 삭제', '이 장소를 삭제할까요? 되돌릴 수 없습니다.', [
-      { text: '취소', style: 'cancel' },
+    Alert.alert(t('venue.deleteTitle'), t('venue.deleteBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: '삭제',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: () =>
           del.mutate(vid, {
             onSuccess: () => router.back(),
-            onError: (e: any) => Alert.alert('삭제 실패', e?.message ?? '오류'),
+            onError: (e: any) => Alert.alert(t('venue.deleteFail'), e?.message ?? t('common.error.unknown')),
           }),
       },
     ]);
@@ -79,9 +82,9 @@ export default function VenueDetailScreen() {
 
   const openReport = () => {
     if (!isLoggedIn) {
-      Alert.alert('로그인 필요', '신고하려면 로그인이 필요해요.', [
-        { text: '취소', style: 'cancel' },
-        { text: '로그인', onPress: () => router.push('/login') },
+      Alert.alert(t('common.loginNeeded'), t('report.needLogin'), [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('common.login'), onPress: () => router.push('/login') },
       ]);
       return;
     }
@@ -94,11 +97,11 @@ export default function VenueDetailScreen() {
       {
         onSuccess: () => {
           setReporting(false);
-          Alert.alert('신고 접수', '신고가 접수되었어요. 운영진이 확인 후 조치합니다.');
+          Alert.alert(t('report.doneTitle'), t('report.doneBody'));
         },
         onError: (e: any) => {
           setReporting(false);
-          Alert.alert('신고 실패', e?.message ?? '잠시 후 다시 시도해주세요.');
+          Alert.alert(t('report.failTitle'), e?.message ?? t('common.tryLater'));
         },
       },
     );
@@ -140,10 +143,10 @@ export default function VenueDetailScreen() {
           <View style={styles.titleRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{v.name}</Text>
-              <Text style={styles.cat}>{v.category} · {v.address}</Text>
+              <Text style={styles.cat}>{v.category ? categoryLabel(t, v.category) : ''} · {v.address}</Text>
             </View>
             <Pressable style={styles.addBtn} onPress={() => router.push('/itinerary')}>
-              <Text style={styles.addBtnText}>내 여행에 추가</Text>
+              <Text style={styles.addBtnText}>{t('common.addToTrip')}</Text>
             </Pressable>
           </View>
 
@@ -151,7 +154,7 @@ export default function VenueDetailScreen() {
 
           {v.hanbokDiscount && (
             <View style={styles.hanbokBox}>
-              <Text style={styles.hanbokTitle}>👘 한복 혜택</Text>
+              <Text style={styles.hanbokTitle}>{t('venue.hanbokBenefit')}</Text>
               <Text style={styles.hanbokDesc}>{v.hanbokDiscountDesc}</Text>
             </View>
           )}
@@ -162,7 +165,7 @@ export default function VenueDetailScreen() {
               <Text style={styles.overview} numberOfLines={overviewOpen ? undefined : 5}>
                 {v.liveInfo.overview}
               </Text>
-              <Text style={styles.overviewMore}>{overviewOpen ? '접기' : '더보기'}</Text>
+              <Text style={styles.overviewMore}>{overviewOpen ? t('venue.less') : t('venue.more')}</Text>
             </Pressable>
           )}
 
@@ -170,28 +173,28 @@ export default function VenueDetailScreen() {
               실시간 조회값을 우선 쓰고, 없을 때만 저장된 값으로 채운다. */}
           <View style={styles.info}>
             {!!(v.liveInfo?.useTime || v.operatingHours) && (
-              <InfoRow label="운영시간" value={(v.liveInfo?.useTime || v.operatingHours) as string} />
+              <InfoRow label={t('venue.info.hours')} value={(v.liveInfo?.useTime || v.operatingHours) as string} />
             )}
-            {!!v.liveInfo?.restDate && <InfoRow label="휴무일" value={v.liveInfo.restDate} />}
+            {!!v.liveInfo?.restDate && <InfoRow label={t('venue.info.closed')} value={v.liveInfo.restDate} />}
             {!!(v.liveInfo?.infoCenter || v.phone) && (
-              <InfoRow label="문의" value={(v.liveInfo?.infoCenter || v.phone) as string} />
+              <InfoRow label={t('venue.info.contact')} value={(v.liveInfo?.infoCenter || v.phone) as string} />
             )}
-            {!!v.liveInfo?.parking && <InfoRow label="주차" value={v.liveInfo.parking} />}
+            {!!v.liveInfo?.parking && <InfoRow label={t('venue.info.parking')} value={v.liveInfo.parking} />}
             {!!(v.liveInfo?.homepage || v.homepageUrl) && (
-              <InfoRow label="웹사이트" value={(v.liveInfo?.homepage || v.homepageUrl) as string} />
+              <InfoRow label={t('venue.info.website')} value={(v.liveInfo?.homepage || v.homepageUrl) as string} />
             )}
           </View>
           {/* 공공데이터 출처 표기 — 기관명 기준(API 서비스명 단독 표기 불가) */}
           {(v.source === 'KOPIS' || v.source === 'TOURAPI') && (
             <Text style={styles.source}>
-              출처: ⓒ{v.source === 'KOPIS' ? '공연예술통합전산망(KOPIS)' : '한국관광공사'}
+              {t('venue.source', { name: t(v.source === 'KOPIS' ? 'venue.source.kopis' : 'venue.source.tourapi') })}
             </Text>
           )}
 
           {/* 이 장소의 행사 — 서버가 끝난 건 빼고 준다(진행 중·예정만). */}
           {!!perfs.data?.length && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>진행 중·예정 행사</Text>
+              <Text style={styles.sectionTitle}>{t('venue.perfs')}</Text>
               <PerformanceCarousel items={perfs.data} caption={stateCaption} />
             </View>
           )}
@@ -203,7 +206,7 @@ export default function VenueDetailScreen() {
             if (!around.length) return null;
             return (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>주변에서 열리는 행사</Text>
+                <Text style={styles.sectionTitle}>{t('venue.perfsNearby')}</Text>
                 <PerformanceCarousel items={around} caption={stateCaption} />
               </View>
             );
@@ -215,7 +218,7 @@ export default function VenueDetailScreen() {
 
       <ReportDialog
         visible={reporting}
-        title="장소 신고"
+        title={t('report.venueTitle')}
         pending={reportVenue.isPending}
         onSelect={submitReport}
         onClose={() => setReporting(false)}

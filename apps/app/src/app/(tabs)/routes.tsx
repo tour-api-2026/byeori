@@ -17,6 +17,8 @@ import LoginRequired from "@/components/LoginRequired";
 import { Refresh } from "@/components/Refresh";
 import { useTabBarHeight } from "@/components/TabBar";
 import { ItinerarySummary, shareItinerary } from "@/lib/api/itineraries";
+import { useT } from "@/lib/i18n";
+import type { TFn } from "@/lib/i18n/labels";
 import { useAiStatusQuery, useMyItinerariesQuery } from "@/lib/hooks/queries";
 import { useAuthStore } from "@/lib/store/authStore";
 import { colors, fonts, radius, shadow, space } from "@/lib/theme";
@@ -27,8 +29,12 @@ import { segmentColor } from "@/lib/routeColors";
  *
  * 웹에서는 지금 열려 있는 오리진을 그대로 쓴다 — 로컬에서 띄워 보면 로컬 주소가 나와야
  * 눌러서 확인할 수 있다. 앱에는 주소창이 없으니 배포 도메인을 적는다.
+ *
+ * 상수가 아니라 함수인 이유: 모듈 수준에서 `window` 를 읽으면 정적 웹 렌더링(서버 쪽,
+ * window 없음) 중에 던져 `expo start --web` 의 `/` 가 500 이 된다. 쓰는 순간(공유를
+ * 누를 때, 항상 브라우저)에 읽어야 한다. 배포본은 expo export 라 이 문제를 가려 준다.
  */
-const SITE_ORIGIN =
+const siteOrigin = () =>
   Platform.OS === "web" ? window.location.origin : "https://byeori.ernebi.org";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -60,23 +66,24 @@ function sortKey(it: ItinerarySummary, today: string): [number, number] {
   return [2, t - +new Date(it.endDate)];
 }
 
-function dayLabel(start: string, end: string) {
-  const t = todayIso();
-  if (t < start)
+function dayLabel(t: TFn, start: string, end: string) {
+  const today = todayIso();
+  if (today < start)
     return {
-      big: "D-" + Math.round((+new Date(start) - +new Date(t)) / 86400000),
-      small: "여행 전",
+      big: "D-" + Math.round((+new Date(start) - +new Date(today)) / 86400000),
+      small: t("routes.phase.before"),
     };
-  if (t > end) return { big: "완료", small: "지난 여행" };
+  if (today > end) return { big: t("routes.phase.done"), small: t("routes.phase.past") };
   const n =
     Math.round(
-      (+new Date(t + "T00:00:00") - +new Date(start + "T00:00:00")) / 86400000,
+      (+new Date(today + "T00:00:00") - +new Date(start + "T00:00:00")) / 86400000,
     ) + 1;
-  return { big: `${n}일차`, small: "오늘" };
+  return { big: t("routes.phase.day", { n }), small: t("routes.phase.today") };
 }
 
 export default function RoutesScreen() {
   const router = useRouter();
+  const t = useT();
   const tabH = useTabBarHeight();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const mine = useMyItinerariesQuery();
@@ -93,15 +100,15 @@ export default function RoutesScreen() {
   if (!isLoggedIn) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
-        <Text style={styles.h1}>내 여행 루트</Text>
-        <LoginRequired description="나만의 여행 루트는 로그인 후에 만들 수 있어요." />
+        <Text style={styles.h1}>{t("routes.title")}</Text>
+        <LoginRequired description={t("routes.login.desc")} />
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <Text style={styles.h1}>내 여행 루트</Text>
+      <Text style={styles.h1}>{t("routes.title")}</Text>
       <ScrollView
         refreshControl={<Refresh />}
         contentContainerStyle={{
@@ -114,13 +121,13 @@ export default function RoutesScreen() {
           <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
         ) : (
           <>
-            <Text style={styles.lead}>지금 나의 여행 루트는?</Text>
+            <Text style={styles.lead}>{t("routes.lead")}</Text>
             {featured ? (
               <Featured summary={featured} />
             ) : (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyText}>
-                  아직 만든 여행 루트가 없어요
+                  {t("routes.empty")}
                 </Text>
               </View>
             )}
@@ -130,9 +137,9 @@ export default function RoutesScreen() {
                   <Ionicons name="sparkles" size={20} color={colors.white} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.aiTitle}>AI로 하루 코스 만들기</Text>
+                  <Text style={styles.aiTitle}>{t("routes.ai.title")}</Text>
                   <Text style={styles.aiDesc}>
-                    지역과 테마만 고르면 벼리의 장소·행사로 코스를 짜 드려요
+                    {t("routes.ai.desc")}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.primary} />
@@ -140,13 +147,13 @@ export default function RoutesScreen() {
             ) : null}
             <View style={styles.makeCard}>
               <Text style={styles.makeText}>
-                나만의 새로운 루트를{"\n"}만들어 보세요!
+                {t("routes.make.text")}
               </Text>
               <Pressable
                 style={styles.makeBtn}
                 onPress={() => router.push("/itinerary/new")}
               >
-                <Text style={styles.makeBtnText}>새 루트 만들기</Text>
+                <Text style={styles.makeBtnText}>{t("routes.make.btn")}</Text>
                 <Ionicons
                   name="chevron-forward"
                   size={13}
@@ -155,7 +162,7 @@ export default function RoutesScreen() {
               </Pressable>
             </View>
             {list.length > 0 && (
-              <Text style={styles.listLabel}>내 여행 루트 목록</Text>
+              <Text style={styles.listLabel}>{t("routes.list")}</Text>
             )}
             {list.map((it) => (
               <RouteCard key={it.id} summary={it} />
@@ -169,10 +176,11 @@ export default function RoutesScreen() {
 
 function Featured({ summary }: { summary: ItinerarySummary }) {
   const router = useRouter();
+  const t = useT();
   // 목록이 앞 몇 곳을 함께 준다 — 상단 카드가 상세를 따로 받으면 제목·기간은 먼저 뜨고
   // 1-2-3 방문지 줄만 뒤늦게 나타난다.
   const stops = (summary.stops ?? []).slice(0, 3);
-  const d = dayLabel(summary.startDate, summary.endDate);
+  const d = dayLabel(t, summary.startDate, summary.endDate);
 
   return (
     <View style={styles.featured}>
@@ -188,7 +196,7 @@ function Featured({ summary }: { summary: ItinerarySummary }) {
           style={styles.confirmBtn}
           onPress={() => router.push(`/itinerary/${summary.id}`)}
         >
-          <Text style={styles.confirmText}>전체 루트 확인</Text>
+          <Text style={styles.confirmText}>{t("routes.confirm")}</Text>
           <Ionicons name="chevron-forward" size={13} color={colors.white} />
         </Pressable>
       </View>
@@ -206,12 +214,12 @@ function Featured({ summary }: { summary: ItinerarySummary }) {
                 </View>
               </View>
               <Text style={styles.tlName} numberOfLines={1}>
-                {s.name ?? "장소"}
+                {s.name ?? t("routes.stop.unnamed")}
               </Text>
             </View>
           ))
         ) : (
-          <Text style={styles.tlEmpty}>장소를 추가해보세요</Text>
+          <Text style={styles.tlEmpty}>{t("routes.stops.empty")}</Text>
         )}
       </View>
     </View>
@@ -220,6 +228,7 @@ function Featured({ summary }: { summary: ItinerarySummary }) {
 
 function RouteCard({ summary }: { summary: ItinerarySummary }) {
   const router = useRouter();
+  const t = useT();
   // 목록이 앞 몇 곳을 함께 준다. 카드마다 상세를 또 받으면 제목만 먼저 뜨고 방문지 줄이
   // 뒤늦게 나타난다(루트 다섯이면 요청 여섯 번). 전체 개수는 summary.itemCount 를 본다.
   const stops = summary.stops ?? [];
@@ -242,8 +251,8 @@ function RouteCard({ summary }: { summary: ItinerarySummary }) {
     setShareState("working");
     try {
       const { token } = await shareItinerary(summary.id);
-      const url = `${SITE_ORIGIN}/s/${token}`;
-      const text = `[벼리] '${summary.title}' 여행 루트 (${summary.startDate} ~ ${summary.endDate})`;
+      const url = `${siteOrigin()}/s/${token}`;
+      const text = t("routes.share.text", { title: summary.title, start: summary.startDate, end: summary.endDate });
 
       if (Platform.OS === "web" && !(navigator as any).share) {
         await navigator.clipboard.writeText(url);
@@ -260,7 +269,7 @@ function RouteCard({ summary }: { summary: ItinerarySummary }) {
     } catch (e: any) {
       // 네이티브에서는 Alert 가 보이고, 웹에서는 버튼 글자가 유일한 통로다.
       if (Platform.OS !== "web") {
-        Alert.alert("공유하지 못했어요", e?.message ?? "잠시 후 다시 시도해 주세요.");
+        Alert.alert(t("routes.share.failTitle"), e?.message ?? t("common.tryLater"));
         setShareState("idle");
       } else {
         setShareState("failed");
@@ -270,14 +279,14 @@ function RouteCard({ summary }: { summary: ItinerarySummary }) {
   };
 
   const shareLabel =
-    shareState === "working" ? "준비 중…"
-    : shareState === "copied" ? "복사됨"
-    : "실패";
+    shareState === "working" ? t("routes.share.working")
+    : shareState === "copied" ? t("routes.share.copied")
+    : t("routes.share.failed");
 
   // 방문지는 한 줄로 줄인다 — 번호 레일은 루트 편집 화면에 이미 있다.
   // 남은 개수(+N)는 붙이지 않는다. 한 줄에 네댓 곳이면 말줄임에 걸려 잘려 나가고,
   // 총 개수는 바로 윗줄의 "11곳"이 이미 말해 준다.
-  const stopLine = stops.map((x) => x.name ?? "장소").join(" · ");
+  const stopLine = stops.map((x) => x.name ?? t("routes.stop.unnamed")).join(" · ");
 
   return (
     <Pressable
@@ -289,15 +298,15 @@ function RouteCard({ summary }: { summary: ItinerarySummary }) {
           {summary.title}
         </Text>
         <Text style={styles.cardMeta} numberOfLines={1}>
-          {past ? "지난 여행 · " : ""}
-          {summary.itemCount}곳 · {shortDate(summary.startDate)} ~ {shortDate(summary.endDate)}
+          {past ? `${t("routes.phase.past")} · ` : ""}
+          {t("common.placeCount", { n: summary.itemCount })} · {shortDate(summary.startDate)} ~ {shortDate(summary.endDate)}
         </Text>
         {stops.length ? (
           <Text style={styles.cardStops} numberOfLines={1}>
             {stopLine}
           </Text>
         ) : (
-          <Text style={styles.cardEmpty}>아직 담은 장소가 없어요</Text>
+          <Text style={styles.cardEmpty}>{t("routes.card.empty")}</Text>
         )}
       </View>
 

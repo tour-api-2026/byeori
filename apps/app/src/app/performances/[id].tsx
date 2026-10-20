@@ -7,14 +7,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ContentComments } from '@/components/ContentComments';
 import { Rating } from '@/components/Rating';
 import { usePerformanceQuery } from '@/lib/hooks/queries';
+import { useT } from '@/lib/i18n';
 import { sized } from '@/lib/img';
 import { colors, fonts, radius, space } from '@/lib/theme';
-
-const STATE_LABEL: Record<string, string> = {
-  ONGOING: '진행 중',
-  UPCOMING: '예정',
-  ENDED: '종료',
-};
 
 /**
  * 행사 상세.
@@ -24,6 +19,7 @@ const STATE_LABEL: Record<string, string> = {
  * 예매처가 있으면 그때 내보낸다.
  */
 export default function PerformanceDetailScreen() {
+  const t = useT();
   const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -39,7 +35,7 @@ export default function PerformanceDetailScreen() {
   if (!p) {
     return (
       <SafeAreaView style={styles.safe}>
-        <Text style={styles.empty}>행사를 찾을 수 없어요</Text>
+        <Text style={styles.empty}>{t('performance.notFound')}</Text>
       </SafeAreaView>
     );
   }
@@ -71,7 +67,7 @@ export default function PerformanceDetailScreen() {
           <View style={styles.badges}>
             <View style={[styles.badge, p.state === 'ONGOING' && styles.badgeOn]}>
               <Text style={[styles.badgeText, p.state === 'ONGOING' && styles.badgeTextOn]}>
-                {STATE_LABEL[p.state] ?? p.state}
+                {['ONGOING', 'UPCOMING', 'ENDED'].includes(p.state) ? t(`performance.state.${p.state}`) : p.state}
               </Text>
             </View>
             {p.genre ? (
@@ -79,7 +75,7 @@ export default function PerformanceDetailScreen() {
             ) : null}
             {p.traditional ? (
               <View style={[styles.badge, styles.badgeTrad]}>
-                <Text style={[styles.badgeText, styles.badgeTextTrad]}>전통</Text>
+                <Text style={[styles.badgeText, styles.badgeTextTrad]}>{t('performance.traditional')}</Text>
               </View>
             ) : null}
           </View>
@@ -87,7 +83,7 @@ export default function PerformanceDetailScreen() {
           <View style={styles.titleRow}>
             <Text style={[styles.title, { flex: 1 }]}>{p.title}</Text>
             <Pressable style={styles.addBtn} onPress={() => router.push('/itinerary')}>
-              <Text style={styles.addBtnText}>내 여행에 추가</Text>
+              <Text style={styles.addBtnText}>{t('common.addToTrip')}</Text>
             </Pressable>
           </View>
 
@@ -96,24 +92,24 @@ export default function PerformanceDetailScreen() {
           </View>
 
           <View style={styles.rows}>
-            <Row icon="calendar-outline" label="기간" value={period} />
+            <Row icon="calendar-outline" label={t('performance.period')} value={period} />
             {p.lat != null && p.lng != null ? (
-              <Row icon="location-outline" label="위치" value="지도에서 보기" onPress={openMap} />
+              <Row icon="location-outline" label={t('performance.location')} value={t('performance.viewOnMap')} onPress={openMap} />
             ) : null}
           </View>
 
           {p.overview ? (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>소개</Text>
+              <Text style={styles.sectionTitle}>{t('performance.intro')}</Text>
               <Text style={styles.overview}>{p.overview}</Text>
-              <Text style={styles.source}>출처: ⓒ한국관광공사</Text>
+              <Text style={styles.source}>{t('venue.source', { name: t('venue.source.tourapi') })}</Text>
             </View>
           ) : null}
 
           {p.venueId ? (
             <Pressable style={styles.linkBtn} onPress={() => router.push(`/venue/${p.venueId}`)}>
               <Ionicons name="business-outline" size={17} color={colors.primary} />
-              <Text style={styles.linkText}>이 행사가 열리는 장소 보기</Text>
+              <Text style={styles.linkText}>{t('performance.viewVenue')}</Text>
               <Ionicons name="chevron-forward" size={17} color={colors.textFaint} />
             </Pressable>
           ) : null}
@@ -123,7 +119,7 @@ export default function PerformanceDetailScreen() {
               style={styles.bookBtn}
               onPress={() => WebBrowser.openBrowserAsync(p.externalBookingUrl as string)}
             >
-              <Text style={styles.bookText}>예매하기</Text>
+              <Text style={styles.bookText}>{t('performance.book')}</Text>
             </Pressable>
           ) : null}
 
@@ -134,7 +130,7 @@ export default function PerformanceDetailScreen() {
               onPress={() => WebBrowser.openBrowserAsync(p.infoUrl as string)}
             >
               <Text style={[styles.bookText, p.externalBookingUrl ? styles.subText : null]}>
-                {p.source === 'KOPIS' ? '공연 정보 자세히 보기' : '주최 측 홈페이지'}
+                {p.source === 'KOPIS' ? t('performance.kopisInfo') : t('performance.organizer')}
               </Text>
             </Pressable>
           ) : null}
@@ -174,7 +170,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: '800', color: colors.text, lineHeight: 28 },
   rows: { marginTop: 14, gap: 10 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rowLabel: { fontSize: 13, color: colors.textFaint, width: 40 },
+  rowLabel: { fontSize: 13, color: colors.textFaint, width: 64 },
   rowValue: { fontSize: 14, color: colors.text, flex: 1 },
   rowLink: { color: colors.accent, fontWeight: '700' },
   section: { marginTop: 22 },

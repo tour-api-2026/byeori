@@ -5,11 +5,13 @@ import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LoginRequired from '@/components/LoginRequired';
 import { useCreateReviewMutation } from '@/lib/hooks/queries';
+import { useT } from '@/lib/i18n';
 import { useAuthStore } from '@/lib/store/authStore';
 import { colors, radius, space } from '@/lib/theme';
 
 export default function ReviewWriteScreen() {
   const router = useRouter();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const { targetType = 'VENUE', targetId, targetName } = useLocalSearchParams<{ targetType: string; targetId: string; targetName: string }>();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
@@ -20,8 +22,8 @@ export default function ReviewWriteScreen() {
   if (!isLoggedIn) {
     return (
       <View style={styles.safe}>
-        <Stack.Screen options={{ title: '리뷰 작성' }} />
-        <LoginRequired description="리뷰 작성은 로그인 후에 이용할 수 있어요." />
+        <Stack.Screen options={{ title: t('review.title') }} />
+        <LoginRequired description={t('review.loginDesc')} />
       </View>
     );
   }
@@ -29,16 +31,16 @@ export default function ReviewWriteScreen() {
   const submit = () => {
     create.mutate(
       { targetType: String(targetType), targetId: Number(targetId), rating, content },
-      { onSuccess: () => router.back(), onError: (e: any) => Alert.alert('실패', e?.message ?? '오류') },
+      { onSuccess: () => router.back(), onError: (e: any) => Alert.alert(t('review.failTitle'), e?.message ?? t('common.error.unknown')) },
     );
   };
 
   return (
     <View style={[styles.safe, { paddingBottom: space.lg + insets.bottom }]}>
-      <Stack.Screen options={{ title: '리뷰 작성' }} />
+      <Stack.Screen options={{ title: t('review.title') }} />
       {!!targetName && <Text style={styles.target}>{targetName}</Text>}
 
-      <Text style={styles.label}>별점</Text>
+      <Text style={styles.label}>{t('review.rating')}</Text>
       <View style={styles.stars}>
         {[1, 2, 3, 4, 5].map((n) => (
           <Pressable key={n} onPress={() => setRating(n)} hitSlop={6}>
@@ -47,18 +49,18 @@ export default function ReviewWriteScreen() {
         ))}
       </View>
 
-      <Text style={styles.label}>내용</Text>
+      <Text style={styles.label}>{t('review.content')}</Text>
       <TextInput
         style={styles.input}
         value={content}
         onChangeText={setContent}
-        placeholder="방문 경험을 남겨주세요"
+        placeholder={t('review.placeholder')}
         placeholderTextColor={colors.textFaint}
         multiline
       />
 
       <Pressable style={[styles.submit, create.isPending && styles.disabled]} disabled={create.isPending} onPress={submit}>
-        <Text style={styles.submitText}>{create.isPending ? '등록 중...' : '리뷰 등록'}</Text>
+        <Text style={styles.submitText}>{create.isPending ? t('review.submitting') : t('review.submit')}</Text>
       </Pressable>
     </View>
   );

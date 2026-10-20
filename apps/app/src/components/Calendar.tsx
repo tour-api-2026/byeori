@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useT } from '@/lib/i18n';
 import { colors, fonts, radius } from '@/lib/theme';
 
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+// 요일 이름은 사전 키 common.weekday.N 이다(0=일요일).
+const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6];
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 const pad = (n: number) => String(n).padStart(2, '0');
 const iso = (y: number, m: number, d: number) => `${y}-${pad(m + 1)}-${pad(d)}`;
@@ -28,9 +30,10 @@ export interface CalendarProps {
 }
 
 export function Calendar({
-  rangeStart, rangeEnd, marked = [], markedLabel = '일정이 있는 날',
+  rangeStart, rangeEnd, marked = [], markedLabel,
   min, max, initialMonth, onSelectDate,
 }: CalendarProps) {
+  const t = useT();
   const today = new Date();
   const todayIso = iso(today.getFullYear(), today.getMonth(), today.getDate());
   const seed = initialMonth ?? rangeStart ?? todayIso;
@@ -63,7 +66,7 @@ export function Calendar({
       {/* 제목은 왼쪽, 넘기는 화살표는 오른쪽에 모은다 */}
       <View style={styles.header}>
         <Pressable style={styles.titleBtn} hitSlop={8} onPress={() => setPicking((v) => !v)}>
-          <Text style={styles.title}>{cursor.year}년 {cursor.month + 1}월</Text>
+          <Text style={styles.title}>{t('calendar.title', { y: cursor.year, month: t(`calendar.m.${cursor.month + 1}`) })}</Text>
           <Ionicons name={picking ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textSub} />
         </Pressable>
         <View style={styles.navs}>
@@ -86,7 +89,7 @@ export function Calendar({
                 key={m}
                 style={[styles.month, on && styles.monthOn]}
                 onPress={() => { setCursor((c) => ({ ...c, month: m - 1 })); setPicking(false); }}>
-                <Text style={[styles.monthText, on && styles.monthTextOn]}>{m}월</Text>
+                <Text style={[styles.monthText, on && styles.monthTextOn]}>{t(`calendar.m.${m}`)}</Text>
               </Pressable>
             );
           })}
@@ -94,7 +97,7 @@ export function Calendar({
       ) : (
         <>
           <View style={styles.weekRow}>
-            {WEEKDAYS.map((w) => <Text key={w} style={styles.weekday}>{w}</Text>)}
+            {WEEKDAYS.map((w) => <Text key={w} style={styles.weekday}>{t(`common.weekday.${w}`)}</Text>)}
           </View>
           <View style={styles.grid}>
             {cells.map((d, i) => {
@@ -148,7 +151,7 @@ export function Calendar({
           {marked.length > 0 && (
             <View style={styles.legend}>
               <View style={styles.legendDot} />
-              <Text style={styles.legendText}>{markedLabel}</Text>
+              <Text style={styles.legendText}>{markedLabel ?? t('calendar.markedDefault')}</Text>
             </View>
           )}
         </>

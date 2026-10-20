@@ -4,13 +4,16 @@ import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import LoginRequired from '@/components/LoginRequired';
+import { CountLine } from '@/components/CountLine';
 import { Review } from '@/lib/api/reviews';
 import { useDeleteReviewMutation, useMyReviewsQuery, useVenueDetailQuery } from '@/lib/hooks/queries';
+import { useT } from '@/lib/i18n';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 export default function MyReviewsScreen() {
+  const t = useT();
   const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const { data, isLoading } = useMyReviewsQuery();
@@ -19,8 +22,8 @@ export default function MyReviewsScreen() {
   if (!isLoggedIn) {
     return (
       <View style={styles.safe}>
-        <Stack.Screen options={{ title: '내가 쓴 리뷰' }} />
-        <LoginRequired description="내가 쓴 리뷰는 로그인 후에 확인할 수 있어요." />
+        <Stack.Screen options={{ title: t('profile.menu.reviews') }} />
+        <LoginRequired description={t('myReviews.loginDesc')} />
       </View>
     );
   }
@@ -30,19 +33,19 @@ export default function MyReviewsScreen() {
 
   return (
     <View style={styles.safe}>
-      <Stack.Screen options={{ title: '내가 쓴 리뷰' }} />
+      <Stack.Screen options={{ title: t('profile.menu.reviews') }} />
 
       {/* 세그먼트 탭 */}
       <View style={styles.tabs}>
-        <Tab label="장소리뷰" active={tab === 'place'} onPress={() => setTab('place')} />
-        <Tab label="루트리뷰" active={tab === 'route'} onPress={() => setTab('route')} />
+        <Tab label={t('myReviews.tabPlace')} active={tab === 'place'} onPress={() => setTab('place')} />
+        <Tab label={t('myReviews.tabRoute')} active={tab === 'route'} onPress={() => setTab('route')} />
       </View>
 
       {isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
       ) : shown.length ? (
         <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 28 + insets.bottom }}>
-          <Text style={styles.count}>총 <Text style={styles.countNum}>{shown.length}</Text>개의 리뷰를 작성했어요</Text>
+          <CountLine k="myReviews.count" n={shown.length} style={styles.count} numStyle={styles.countNum} />
           {shown.map((r) => <ReviewCard key={r.id} review={r} />)}
         </ScrollView>
       ) : <Empty />}
@@ -60,6 +63,7 @@ function Tab({ label, active, onPress }: { label: string; active: boolean; onPre
 }
 
 function ReviewCard({ review }: { review: Review }) {
+  const t = useT();
   const router = useRouter();
   const del = useDeleteReviewMutation();
   const { data: v } = useVenueDetailQuery(review.targetId);
@@ -72,12 +76,12 @@ function ReviewCard({ review }: { review: Review }) {
         <Image source={v?.imageUrl} style={styles.thumb} contentFit="cover" />
         <View style={{ flex: 1 }}>
           <View style={styles.nameRow}>
-            <Text style={styles.name} numberOfLines={1}>{v?.name ?? '장소'}</Text>
+            <Text style={styles.name} numberOfLines={1}>{v?.name ?? t('common.stopType.venue')}</Text>
             {!!region && <View style={styles.badge}><Text style={styles.badgeText}>{region}</Text></View>}
           </View>
           <View style={styles.starRow}>
             {[1, 2, 3, 4, 5].map((n) => <Ionicons key={n} name={n <= review.rating ? 'star' : 'star-outline'} size={12} color={colors.star} />)}
-            <Text style={styles.date}>등록일 : {date}</Text>
+            <Text style={styles.date}>{t('myReviews.date', { date })}</Text>
           </View>
           {!!review.content && <Text style={styles.content} numberOfLines={3}>{review.content}</Text>}
         </View>
@@ -85,12 +89,12 @@ function ReviewCard({ review }: { review: Review }) {
       <View style={styles.actions}>
         <Pressable style={styles.action} onPress={() => router.push(`/review/write?targetType=VENUE&targetId=${review.targetId}&targetName=${encodeURIComponent(v?.name ?? '')}`)}>
           <Ionicons name="create-outline" size={15} color={colors.textSub} />
-          <Text style={styles.actionText}>수정하기</Text>
+          <Text style={styles.actionText}>{t('myReviews.edit')}</Text>
         </Pressable>
         <View style={styles.actionDivider} />
         <Pressable style={styles.action} onPress={() => del.mutate(review.id)}>
           <Ionicons name="trash-outline" size={15} color={colors.textSub} />
-          <Text style={styles.actionText}>삭제하기</Text>
+          <Text style={styles.actionText}>{t('myReviews.delete')}</Text>
         </Pressable>
       </View>
     </View>
@@ -98,10 +102,11 @@ function ReviewCard({ review }: { review: Review }) {
 }
 
 function Empty() {
+  const t = useT();
   return (
     <View style={styles.empty}>
       <Image source={require('../../../assets/images/empty-reviews.png')} style={styles.emptyImg} contentFit="contain" />
-      <Text style={styles.emptyText}>아직 리뷰를 작성하지 않았어요.{'\n'}내가 다녀온 곳에 대해{'\n'}다른 사람들과 의견을 나눠보세요!</Text>
+      <Text style={styles.emptyText}>{t('myReviews.empty')}</Text>
     </View>
   );
 }

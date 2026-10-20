@@ -4,11 +4,10 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMyInterestsQuery, useSaveInterestsMutation } from '@/lib/hooks/queries';
+import { TOPICS, REGIONS } from '@/lib/interestOptions';
+import { useT } from '@/lib/i18n';
 import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius, space } from '@/lib/theme';
-
-const TOPICS = ['관람', '체험', '공연', '한복', '음식', '공예'];
-const REGIONS = ['서울', '경기', '부산', '대전', '대구', '제주', '전주', '여수', '인천', '광주'];
 
 /**
  * 관심 주제·지역 고르기.
@@ -22,6 +21,7 @@ const REGIONS = ['서울', '경기', '부산', '대전', '대구', '제주', '�
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const t = useT();
   const { edit } = useLocalSearchParams<{ edit?: string }>();
   const editing = edit === '1';
   const signedIn = useAuthStore((s) => !!s.accessToken);
@@ -43,8 +43,8 @@ export default function OnboardingScreen() {
     set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
   const isTopic = step === 0;
-  // '주제를' / '지역을' — 받침에 따라 조사가 갈린다. 붙여 쓰면 한쪽이 늘 틀린다.
-  const whatObj = isTopic ? '주제를' : '지역을';
+  // 문장째 사전에 둔다 — '주제를' / '지역을' 처럼 조사가 갈리고 어순도 언어마다 달라서 붙여 쓰면 늘 어긋난다.
+  const kind = isTopic ? 'topic' : 'region';
   const items = isTopic ? TOPICS : REGIONS;
   const selected = isTopic ? topics : regions;
   const onToggle = (v: string) => (isTopic ? toggle(topics, setTopics, v) : toggle(regions, setRegions, v));
@@ -63,8 +63,8 @@ export default function OnboardingScreen() {
     if (!signedIn) { leave(); return; }
     save.mutate({ topics, regions }, {
       onSuccess: leave,
-      onError: (e: any) => Alert.alert('관심사를 저장하지 못했어요', e?.message ?? '잠시 후 다시 시도해 주세요.', [
-        { text: '다시 시도' }, { text: '그냥 시작', onPress: leave },
+      onError: (e: any) => Alert.alert(t('onboarding.saveFail'), e?.message ?? t('common.tryLater'), [
+        { text: t('common.retry') }, { text: t('onboarding.startAnyway'), onPress: leave },
       ]),
     });
   };
@@ -90,7 +90,7 @@ export default function OnboardingScreen() {
               key={i}
               hitSlop={12}
               accessibilityRole="button"
-              accessibilityLabel={`${i + 1}번째 단계로`}
+              accessibilityLabel={t('onboarding.stepLabel', { n: i + 1 })}
               onPress={() => setStep(i)}>
               <View style={[styles.dot, step === i && styles.dotActive]} />
             </Pressable>
@@ -98,8 +98,8 @@ export default function OnboardingScreen() {
         </View>
       </View>
 
-      <Text style={styles.title}>관심있는 {whatObj} 선택해주세요!</Text>
-      <Text style={styles.sub}>나의 관심 {whatObj} 선택하면{'\n'}나에게 맞는 내용들을 추천해드릴게요!</Text>
+      <Text style={styles.title}>{t(`onboarding.${kind}.title`)}</Text>
+      <Text style={styles.sub}>{t(`onboarding.${kind}.sub`)}</Text>
 
       <ScrollView contentContainerStyle={styles.gridWrap} showsVerticalScrollIndicator={false}>
         <View style={styles.grid}>
@@ -110,7 +110,7 @@ export default function OnboardingScreen() {
                 key={v}
                 style={[isTopic ? styles.topicCard : styles.regionCard, on && styles.cardOn]}
                 onPress={() => onToggle(v)}>
-                <Text style={[styles.cardText, on && styles.cardTextOn]}>{v}</Text>
+                <Text style={[styles.cardText, on && styles.cardTextOn]}>{t(`onboarding.${kind}.${v}`)}</Text>
               </Pressable>
             );
           })}
@@ -122,7 +122,7 @@ export default function OnboardingScreen() {
           {save.isPending
             ? <ActivityIndicator color={colors.white} />
             : <>
-                <Text style={styles.ctaText}>{isTopic ? '다음' : editing ? '저장' : '시작하기'}</Text>
+                <Text style={styles.ctaText}>{isTopic ? t('onboarding.next') : editing ? t('onboarding.save') : t('onboarding.start')}</Text>
                 <Ionicons name="chevron-forward" size={16} color={colors.white} />
               </>}
         </Pressable>
@@ -134,7 +134,7 @@ export default function OnboardingScreen() {
           이 버튼이 유일한 나가는 길이기도 하다.
         */}
         <Pressable hitSlop={8} disabled={save.isPending} onPress={leave}>
-          <Text style={styles.skip}>{editing ? '취소' : '건너뛰기 ›'}</Text>
+          <Text style={styles.skip}>{editing ? t('common.cancel') : t('onboarding.skip')}</Text>
         </Pressable>
       </View>
     </SafeAreaView>

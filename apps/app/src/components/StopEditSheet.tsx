@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TimeWheel } from '@/components/TimeWheel';
 import type { ItineraryItem } from '@/lib/api/itineraries';
+import { useT } from '@/lib/i18n';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 /**
@@ -52,6 +53,7 @@ export function StopEditSheet({
   onRemove: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const t = useT();
   // 입력 중에는 아직 시각이 아닌 글자('9')도 들고 있어야 한다. 다 치면 그때 보낸다.
   const [timeText, setTimeText] = useState('');
   useEffect(() => { setTimeText(item?.plannedTime ?? ''); }, [item?.id, item?.plannedTime]);
@@ -81,12 +83,12 @@ export function StopEditSheet({
         {/* 장소 바꾸기 */}
         <Pressable style={styles.swap} onPress={onReplacePlace} disabled={pending}>
           <Ionicons name="swap-horizontal" size={16} color={colors.primary} />
-          <Text style={styles.swapText}>다른 장소로 바꾸기</Text>
+          <Text style={styles.swapText}>{t('stopEdit.swap')}</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
         </Pressable>
 
         {/* 시간 — 직접 치거나 아래에서 고른다 */}
-        <Text style={styles.label}>시간</Text>
+        <Text style={styles.label}>{t('stopEdit.time')}</Text>
         <View style={styles.timeRow}>
           <TextInput
             style={[styles.timeInput, timeBad && styles.timeInputBad]}
@@ -94,7 +96,7 @@ export function StopEditSheet({
             onChangeText={setTimeText}
             onBlur={() => { if (typed && typed !== item.plannedTime) onChange({ plannedTime: typed }); }}
             onSubmitEditing={() => { if (typed && typed !== item.plannedTime) onChange({ plannedTime: typed }); }}
-            placeholder="예) 0930"
+            placeholder={t('stopEdit.timePlaceholder')}
             placeholderTextColor={colors.textFaint}
             keyboardType="numbers-and-punctuation"
             returnKeyType="done"
@@ -104,18 +106,18 @@ export function StopEditSheet({
             style={[styles.timeApply, (!typed || typed === item.plannedTime) && styles.timeApplyOff]}
             disabled={!typed || typed === item.plannedTime || pending}
             onPress={() => onChange({ plannedTime: typed })}>
-            <Text style={styles.timeApplyText}>적용</Text>
+            <Text style={styles.timeApplyText}>{t('stopEdit.apply')}</Text>
           </Pressable>
           {/* 시간을 정하지 않은 상태로 되돌리기. 휠에는 '없음'을 둘 자리가 없다. */}
           <Pressable
             style={[styles.undecided, !item.plannedTime && styles.undecidedOn]}
             disabled={pending}
             onPress={() => { setTimeText(''); onChange({ plannedTime: '' }); }}>
-            <Text style={[styles.undecidedText, !item.plannedTime && styles.undecidedTextOn]}>미정</Text>
+            <Text style={[styles.undecidedText, !item.plannedTime && styles.undecidedTextOn]}>{t('stopEdit.undecided')}</Text>
           </Pressable>
         </View>
         <Text style={[styles.hint, timeBad && styles.hintBad]}>
-          {timeBad ? '0930 · 9:30 처럼 적어 주세요 (00:00~23:59)' : '숫자만 쳐도 됩니다. 예) 930 → 09:30'}
+          {timeBad ? t('stopEdit.timeBad') : t('stopEdit.timeHint')}
         </Text>
 
         <TimeWheel
@@ -126,7 +128,7 @@ export function StopEditSheet({
         {/* 일차 — 하루짜리 루트에서는 옮길 곳이 없다 */}
         {dayList.length > 1 && (
           <>
-            <Text style={styles.label}>일차</Text>
+            <Text style={styles.label}>{t('stopEdit.day')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
               {dayList.map((d) => (
                 <Pressable
@@ -134,7 +136,7 @@ export function StopEditSheet({
                   style={[styles.chip, item.visitDate === d && styles.chipOn]}
                   onPress={() => onChange({ visitDate: d })}>
                   <Text style={[styles.chipText, item.visitDate === d && styles.chipTextOn]}>
-                    {dayNo(startDate, d)}일차
+                    {t('route.day', { n: dayNo(startDate, d) })}
                   </Text>
                 </Pressable>
               ))}
@@ -143,27 +145,27 @@ export function StopEditSheet({
         )}
 
         {/* 순서 — 목록에서 손잡이를 끌어도 되고, 여기서 한 칸씩 움직여도 된다 */}
-        <Text style={styles.label}>순서</Text>
+        <Text style={styles.label}>{t('stopEdit.order')}</Text>
         <View style={styles.row}>
           <Pressable
             style={[styles.moveBtn, first && styles.moveOff]}
             disabled={first || pending}
             onPress={() => onMove(-1)}>
             <Ionicons name="arrow-up" size={16} color={first ? colors.border : colors.text} />
-            <Text style={[styles.moveText, first && { color: colors.border }]}>위로</Text>
+            <Text style={[styles.moveText, first && { color: colors.border }]}>{t('stopEdit.up')}</Text>
           </Pressable>
           <Pressable
             style={[styles.moveBtn, last && styles.moveOff]}
             disabled={last || pending}
             onPress={() => onMove(1)}>
             <Ionicons name="arrow-down" size={16} color={last ? colors.border : colors.text} />
-            <Text style={[styles.moveText, last && { color: colors.border }]}>아래로</Text>
+            <Text style={[styles.moveText, last && { color: colors.border }]}>{t('stopEdit.down')}</Text>
           </Pressable>
         </View>
 
         <Pressable style={styles.removeBtn} disabled={pending} onPress={onRemove}>
           <Ionicons name="trash-outline" size={16} color={colors.danger} />
-          <Text style={styles.removeText}>이 장소 제거</Text>
+          <Text style={styles.removeText}>{t('stopEdit.remove')}</Text>
         </Pressable>
       </View>
     </Modal>

@@ -1,4 +1,9 @@
 import { Alert, Platform } from 'react-native';
+import { translate } from '@/lib/i18n';
+import { useLocaleStore } from '@/lib/store/localeStore';
+
+// 훅이 아니라 호출 시점의 언어를 스토어에서 꺼낸다 — 이 모듈은 이벤트 핸들러에서 불린다.
+const currentT = (key: string) => translate(useLocaleStore.getState().locale, key);
 
 /**
  * 어느 쪽에서든 보이는 알림과 확인창.
@@ -21,13 +26,13 @@ export function notify(title: string, message?: string) {
 }
 
 /** 되돌릴 수 없는 동작을 묻는다. 눌렀는지를 true/false 로 돌려준다. */
-export function confirmDestructive(title: string, message: string, confirmLabel = '확인'): Promise<boolean> {
+export function confirmDestructive(title: string, message: string, confirmLabel = currentT('common.ok')): Promise<boolean> {
   if (Platform.OS === 'web') {
     return Promise.resolve(window.confirm(`${title}\n\n${message}`));
   }
   return new Promise((resolve) => {
     Alert.alert(title, message, [
-      { text: '취소', style: 'cancel', onPress: () => resolve(false) },
+      { text: currentT('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
       { text: confirmLabel, style: 'destructive', onPress: () => resolve(true) },
     ]);
   });

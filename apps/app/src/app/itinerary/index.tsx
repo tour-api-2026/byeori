@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useT } from '@/lib/i18n';
 import { useDeleteItineraryMutation, useMyItinerariesQuery } from '@/lib/hooks/queries';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, shadow, space } from '@/lib/theme';
@@ -8,40 +9,41 @@ import { colors, radius, shadow, space } from '@/lib/theme';
 export default function ItinerariesScreen() {
   const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const router = useRouter();
+  const t = useT();
   const { data, isLoading } = useMyItinerariesQuery();
   const del = useDeleteItineraryMutation();
 
   // 만들기만 되고 지울 수단이 없었다. 서버·API·훅은 이미 있었고 화면만 비어 있었다.
   const confirmDelete = (id: number, title: string) =>
-    Alert.alert('여행 일지 삭제', `'${title}'을(를) 삭제할까요? 되돌릴 수 없습니다.`, [
-      { text: '취소', style: 'cancel' },
+    Alert.alert(t('itinerary.list.deleteTitle'), t('itinerary.list.deleteBody', { title }), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: '삭제',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: () => del.mutate(id, {
-          onError: (e: any) => Alert.alert('삭제 실패', e?.message ?? '오류가 발생했습니다.'),
+          onError: (e: any) => Alert.alert(t('itinerary.list.deleteFail'), e?.message ?? t('common.error.unknown')),
         }),
       },
     ]);
 
   return (
     <View style={styles.safe}>
-      <Stack.Screen options={{ title: '내 여행 일지' }} />
+      <Stack.Screen options={{ title: t('itinerary.list.title') }} />
       <Pressable style={styles.addBtn} onPress={() => router.push('/itinerary/new')}>
         <Ionicons name="add" size={18} color={colors.white} />
-        <Text style={styles.addText}>새 여행 일지 만들기</Text>
+        <Text style={styles.addText}>{t('itinerary.list.add')}</Text>
       </Pressable>
       {isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
       ) : !data?.length ? (
-        <View style={styles.empty}><Text style={styles.emptyText}>아직 여행 일지가 없어요</Text></View>
+        <View style={styles.empty}><Text style={styles.emptyText}>{t('itinerary.list.empty')}</Text></View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: 28 + insets.bottom }}>
           {data.map((it) => (
             <Pressable key={it.id} style={styles.card} onPress={() => router.push(`/itinerary/${it.id}`)}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.title}>{it.title}</Text>
-                <Text style={styles.meta}>{it.startDate} ~ {it.endDate} · {it.itemCount}곳 · {it.sourceType === 'CURATED' ? '추천코스 복사' : it.sourceType === 'AI' ? 'AI 추천' : '직접 구성'}</Text>
+                <Text style={styles.meta}>{it.startDate} ~ {it.endDate} · {t('common.placeCount', { n: it.itemCount })} · {it.sourceType === 'CURATED' ? t('itinerary.source.curated') : it.sourceType === 'AI' ? t('itinerary.source.ai') : t('itinerary.source.custom')}</Text>
               </View>
               <Pressable
                 hitSlop={10}

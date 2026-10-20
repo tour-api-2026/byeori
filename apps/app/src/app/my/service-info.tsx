@@ -3,6 +3,8 @@ import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useT } from '@/lib/i18n';
+import type { TFn } from '@/lib/i18n/labels';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 const PRIVACY_URL = 'https://byeori.seoulride.site/privacy';
@@ -29,57 +31,55 @@ function LinkRow({ icon, label, onPress }: { icon: string; label: string; onPres
  * 끌어 쓰면 지문이 흔들릴 수 있고, 무엇보다 runtimeVersion 이 더 쓸모 있다 —
  * OTA 가 그 설치본에 닿는지를 결정하는 값이 바로 이것이다.
  */
-function buildLine(): string | null {
+function buildLine(t: TFn): string | null {
   if (!Updates.isEnabled) return null;        // 개발 중에는 의미 없는 값이라 숨긴다
   const rt = Updates.runtimeVersion?.slice(0, 8);
-  const src = Updates.isEmbeddedLaunch ? '내장' : 'OTA';
+  const src = Updates.isEmbeddedLaunch ? t('service.build.embedded') : 'OTA';
   const id = Updates.updateId?.slice(0, 8);
   const at = Updates.createdAt
-    ? `${Updates.createdAt.getMonth() + 1}월 ${Updates.createdAt.getDate()}일`
+    ? t('service.build.date', { m: Updates.createdAt.getMonth() + 1, d: Updates.createdAt.getDate() })
     : null;
-  return [rt && `빌드 ${rt}`, `${src}${id ? ` ${id}` : ''}`, at].filter(Boolean).join(' · ');
+  return [rt && t('service.build.runtime', { rt }), `${src}${id ? ` ${id}` : ''}`, at].filter(Boolean).join(' · ');
 }
 
 export default function ServiceInfoScreen() {
   const version = Constants.expoConfig?.version ?? '1.0.0';
-  const build = buildLine();
+  const t = useT();
+  const build = buildLine(t);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 40 }}>
         <View style={styles.hero}>
-          <Text style={styles.appName}>벼리</Text>
-          <Text style={styles.version}>버전 {version}</Text>
+          <Text style={styles.appName}>{t('app.name')}</Text>
+          <Text style={styles.version}>{t('service.version', { v: version })}</Text>
           {!!build && <Text style={styles.build}>{build}</Text>}
-          <Text style={styles.tagline}>전통이 살아있는 여행을 잇다</Text>
+          <Text style={styles.tagline}>{t('service.tagline')}</Text>
         </View>
 
-        <Text style={styles.sectionLabel}>약관 및 정책</Text>
+        <Text style={styles.sectionLabel}>{t('service.terms')}</Text>
         <View style={styles.card}>
-          <LinkRow icon="shield-checkmark" label="개인정보처리방침" onPress={() => Linking.openURL(PRIVACY_URL)} />
+          <LinkRow icon="shield-checkmark" label={t('service.privacy')} onPress={() => Linking.openURL(PRIVACY_URL)} />
           <View style={styles.divider} />
-          <LinkRow icon="trash" label="계정 삭제 안내" onPress={() => Linking.openURL(DELETION_URL)} />
+          <LinkRow icon="trash" label={t('service.deletion')} onPress={() => Linking.openURL(DELETION_URL)} />
         </View>
 
-        <Text style={styles.sectionLabel}>문의</Text>
+        <Text style={styles.sectionLabel}>{t('service.contact')}</Text>
         <View style={styles.card}>
           <LinkRow
             icon="mail"
             label={CONTACT_EMAIL}
-            onPress={() => Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=[벼리] 문의`)}
+            onPress={() => Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(t('service.contactSubject'))}`)}
           />
         </View>
 
-        <Text style={styles.sectionLabel}>데이터 출처</Text>
+        <Text style={styles.sectionLabel}>{t('service.sources')}</Text>
         <View style={styles.card}>
           <View style={styles.sourceBox}>
-            <Text style={styles.sourceText}>출처: ⓒ한국관광공사</Text>
-            <Text style={styles.sourceText}>출처: ⓒ공연예술통합전산망(KOPIS)</Text>
-            <Text style={styles.sourceText}>출처: ⓒ서울특별시 서울열린데이터광장</Text>
-            <Text style={styles.sourceNote}>
-              본 서비스는 위 기관이 제공하는 공공데이터를 활용해 제작되었으며, 해당 기관이 직접 운영하는
-              서비스가 아닙니다.
-            </Text>
+            <Text style={styles.sourceText}>{t('service.src.tour')}</Text>
+            <Text style={styles.sourceText}>{t('service.src.kopis')}</Text>
+            <Text style={styles.sourceText}>{t('service.src.seoul')}</Text>
+            <Text style={styles.sourceNote}>{t('service.sourceNote')}</Text>
           </View>
         </View>
       </ScrollView>

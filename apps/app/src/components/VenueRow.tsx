@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Venue } from '@/lib/api/types';
 import { useToggleWishlistMutation } from '@/lib/hooks/queries';
+import { useT } from '@/lib/i18n';
+import { categoryLabel } from '@/lib/i18n/labels';
 import { useBookmarkStore } from '@/lib/store/bookmarkStore';
 import { colors, radius } from '@/lib/theme';
 import { Rating } from './Rating';
@@ -11,6 +13,7 @@ import { Rating } from './Rating';
 // 세로 리스트 행 (검색·즐겨찾기)
 export function VenueRow({ venue }: { venue: Venue }) {
   const router = useRouter();
+  const t = useT();
   const has = useBookmarkStore((s) => s.venueIds.includes(venue.id));
   const toggleLocal = useBookmarkStore((s) => s.toggle);
   const { add, remove } = useToggleWishlistMutation();
@@ -29,9 +32,9 @@ export function VenueRow({ venue }: { venue: Venue }) {
         <Text style={styles.addr} numberOfLines={1}>{venue.address}</Text>
         <View style={styles.metaRow}>
           <Rating value={venue.avgRating} count={venue.reviewCount} />
-          {!!venue.category && <Text style={styles.cat}>· {venue.category}</Text>}
+          {!!venue.category && <Text style={styles.cat}>· {categoryLabel(t, venue.category)}</Text>}
           {venue.hanbokDiscount && (
-            <View style={styles.hanbok}><Text style={styles.hanbokText}>한복할인</Text></View>
+            <View style={styles.hanbok}><Text style={styles.hanbokText}>{t('venue.hanbokDiscount')}</Text></View>
           )}
         </View>
       </View>

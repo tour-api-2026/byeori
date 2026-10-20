@@ -7,6 +7,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import LoginRequired from '@/components/LoginRequired';
 import { updateProfile } from '@/lib/api/account';
 import { uploadImage, type PickedImage } from '@/lib/api/uploads';
+import { useT } from '@/lib/i18n';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, space } from '@/lib/theme';
@@ -21,6 +22,7 @@ const NAME_MAX = 20;
  * 오류는 화면 안에 적는다. 웹에서는 Alert 가 아무것도 띄우지 않는다.
  */
 export default function ProfileEditScreen() {
+  const t = useT();
   const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -37,8 +39,8 @@ export default function ProfileEditScreen() {
   if (!isLoggedIn || !user) {
     return (
       <View style={styles.safe}>
-        <Stack.Screen options={{ title: '프로필 수정' }} />
-        <LoginRequired description="프로필은 로그인 후에 고칠 수 있어요." />
+        <Stack.Screen options={{ title: t('profile.edit.title') }} />
+        <LoginRequired description={t('myProfile.loginDesc')} />
       </View>
     );
   }
@@ -51,7 +53,7 @@ export default function ProfileEditScreen() {
   const pickPhoto = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      setError('사진을 바꾸려면 갤러리 접근을 허용해 주세요.');
+      setError(t('myProfile.permDenied'));
       return;
     }
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -84,7 +86,7 @@ export default function ProfileEditScreen() {
       await setUser({ ...user, ...updated, profileImageUrl: updated.profileImageUrl ?? undefined });
       router.back();
     } catch (e: any) {
-      setError(e?.message ?? '저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      setError(e?.message ?? t('myProfile.saveFail'));
     } finally {
       setSaving(false);
     }
@@ -92,10 +94,10 @@ export default function ProfileEditScreen() {
 
   return (
     <View style={styles.safe}>
-      <Stack.Screen options={{ title: '프로필 수정' }} />
+      <Stack.Screen options={{ title: t('profile.edit.title') }} />
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 40 + insets.bottom }} keyboardShouldPersistTaps="handled">
         <View style={styles.photoWrap}>
-          <Pressable onPress={pickPhoto} accessibilityLabel="프로필 사진 바꾸기">
+          <Pressable onPress={pickPhoto} accessibilityLabel={t('myProfile.photoA11y')}>
             {preview ? (
               <Image source={preview} style={styles.avatar} contentFit="cover" />
             ) : (
@@ -109,33 +111,33 @@ export default function ProfileEditScreen() {
           </Pressable>
           {preview ? (
             <Pressable hitSlop={8} onPress={removePhoto}>
-              <Text style={styles.removeText}>사진 삭제</Text>
+              <Text style={styles.removeText}>{t('myProfile.removePhoto')}</Text>
             </Pressable>
           ) : null}
         </View>
 
-        <Text style={styles.label}>닉네임</Text>
+        <Text style={styles.label}>{t('myProfile.nameLabel')}</Text>
         <TextInput
           style={[styles.input, !nameValid && trimmed.length > 0 && styles.inputError]}
           value={name}
           onChangeText={setName}
           maxLength={NAME_MAX}
-          placeholder="리뷰에 표시될 이름"
+          placeholder={t('myProfile.namePh')}
           placeholderTextColor={colors.textFaint}
           returnKeyType="done"
           onSubmitEditing={save}
         />
         <Text style={styles.hint}>
-          {NAME_MIN}~{NAME_MAX}자 · {trimmed.length}/{NAME_MAX}
+          {t('myProfile.nameHint', { min: NAME_MIN, max: NAME_MAX, len: trimmed.length })}
         </Text>
 
         {user.email ? (
           <>
-            <Text style={styles.label}>로그인 계정</Text>
+            <Text style={styles.label}>{t('myProfile.accountLabel')}</Text>
             <View style={[styles.input, styles.readonly]}>
               <Text style={styles.readonlyText}>{user.email}</Text>
             </View>
-            <Text style={styles.hint}>카카오·구글 계정의 이메일이라 여기서는 바꿀 수 없어요.</Text>
+            <Text style={styles.hint}>{t('myProfile.emailHint')}</Text>
           </>
         ) : null}
 
@@ -146,7 +148,7 @@ export default function ProfileEditScreen() {
           disabled={!nameValid || !changed || saving}
           onPress={save}
         >
-          {saving ? <ActivityIndicator color={colors.white} /> : <Text style={styles.submitText}>저장</Text>}
+          {saving ? <ActivityIndicator color={colors.white} /> : <Text style={styles.submitText}>{t('common.save')}</Text>}
         </Pressable>
       </ScrollView>
     </View>

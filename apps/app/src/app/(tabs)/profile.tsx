@@ -7,28 +7,32 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTabBarHeight } from '@/components/TabBar';
 import { deleteAccount } from '@/lib/api/account';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useT } from '@/lib/i18n';
+import { languageLabel } from '@/lib/i18n/labels';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 const CONTACT_EMAIL = 'alstjq1012@gmail.com';
 
-type MenuItem = { icon: string; label: string; route?: string; action?: 'contact'; tint: string; soft: string };
+type MenuItem = { icon: string; labelKey: string; route?: string; action?: 'contact'; tint: string; soft: string };
 const GROUP1: MenuItem[] = [
   // 온보딩에서 한 번 고르고 끝이면 바꿀 길이 없다. 취향은 변한다.
-  { icon: 'sparkles', label: '관심 주제·지역', route: '/onboarding?edit=1', tint: colors.primary, soft: colors.primarySoft },
+  { icon: 'sparkles', labelKey: 'profile.menu.interests', route: '/onboarding?edit=1', tint: colors.primary, soft: colors.primarySoft },
   // 카카오·구글을 둘 다 쓰는 사람은 계정이 갈려 있다. 여기서 이어 붙인다.
-  { icon: 'link', label: '연결된 계정', route: '/my/accounts', tint: colors.accent, soft: colors.accentSoft },
-  { icon: 'chatbubble-ellipses', label: '내가 쓴 리뷰', route: '/my/reviews', tint: colors.accent, soft: colors.accentSoft },
-  { icon: 'location', label: '내가 등록한 장소', route: '/my/venues', tint: colors.primary, soft: colors.primarySoft },
-  { icon: 'heart', label: '찜한 장소', route: '/bookmarks', tint: colors.hanbok, soft: '#FDECEC' },
+  { icon: 'link', labelKey: 'profile.menu.accounts', route: '/my/accounts', tint: colors.accent, soft: colors.accentSoft },
+  { icon: 'chatbubble-ellipses', labelKey: 'profile.menu.reviews', route: '/my/reviews', tint: colors.accent, soft: colors.accentSoft },
+  { icon: 'location', labelKey: 'profile.menu.venues', route: '/my/venues', tint: colors.primary, soft: colors.primarySoft },
+  { icon: 'heart', labelKey: 'profile.menu.bookmarks', route: '/bookmarks', tint: colors.hanbok, soft: '#FDECEC' },
 ];
 const GROUP2: MenuItem[] = [
-  { icon: 'help-circle', label: '문의하기', action: 'contact', tint: colors.textSub, soft: colors.bgSoft },
-  { icon: 'person-remove', label: '차단한 사용자', route: '/my/blocked', tint: colors.textSub, soft: colors.bgSoft },
-  { icon: 'information-circle', label: '서비스 정보', route: '/my/service-info', tint: colors.textSub, soft: colors.bgSoft },
+  { icon: 'help-circle', labelKey: 'profile.menu.contact', action: 'contact', tint: colors.textSub, soft: colors.bgSoft },
+  { icon: 'person-remove', labelKey: 'profile.menu.blocked', route: '/my/blocked', tint: colors.textSub, soft: colors.bgSoft },
+  { icon: 'language', labelKey: 'language.title', route: '/my/language', tint: colors.textSub, soft: colors.bgSoft },
+  { icon: 'information-circle', labelKey: 'profile.menu.serviceInfo', route: '/my/service-info', tint: colors.textSub, soft: colors.bgSoft },
 ];
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const t = useT();
   const tabH = useTabBarHeight();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const user = useAuthStore((s) => s.user);
@@ -44,12 +48,12 @@ export default function ProfileScreen() {
   // 계정 삭제: 되돌릴 수 없으므로 2단계 확인
   const onDeleteAccount = () => {
     Alert.alert(
-      '계정을 삭제할까요?',
-      '즐겨찾기·여행 일정·작성한 리뷰가 모두 삭제되며 되돌릴 수 없습니다.\n등록하신 장소는 다른 이용자를 위해 남지만 작성자 정보는 익명 처리됩니다.',
+      t('profile.delete.title'),
+      t('profile.delete.body'),
       [
-        { text: '취소', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '삭제',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             if (deleting) return;
@@ -57,10 +61,10 @@ export default function ProfileScreen() {
             try {
               await deleteAccount();
               await logout();
-              Alert.alert('계정이 삭제되었습니다', '그동안 벼리를 이용해 주셔서 감사합니다.');
+              Alert.alert(t('profile.delete.doneTitle'), t('profile.delete.doneBody'));
               router.replace('/login');
             } catch (e: any) {
-              Alert.alert('삭제하지 못했어요', e?.message ?? '잠시 후 다시 시도해 주세요.');
+              Alert.alert(t('profile.delete.failTitle'), e?.message ?? t('common.tryLater'));
             } finally {
               setDeleting(false);
             }
@@ -72,7 +76,7 @@ export default function ProfileScreen() {
 
   const onMenuPress = (m: MenuItem) => {
     if (m.action === 'contact') {
-      Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=[벼리] 문의`);
+      Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(t('profile.mail.subject'))}`);
       return;
     }
     if (m.route) router.push(m.route as any);
@@ -81,7 +85,7 @@ export default function ProfileScreen() {
   const Row = ({ m }: { m: MenuItem }) => (
     <Pressable style={styles.menuRow} onPress={() => onMenuPress(m)}>
       <View style={[styles.iconCircle, { backgroundColor: m.soft }]}><Ionicons name={m.icon as any} size={18} color={m.tint} /></View>
-      <Text style={styles.menuLabel}>{m.label}</Text>
+      <Text style={styles.menuLabel}>{m.labelKey === 'language.title' ? languageLabel(t) : t(m.labelKey)}</Text>
       <Ionicons name="chevron-forward" size={18} color={colors.textFaint} style={{ marginLeft: 'auto' }} />
     </Pressable>
   );
@@ -89,11 +93,11 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView contentContainerStyle={{ paddingBottom: tabH + 28, paddingHorizontal: space.lg }}>
-        <Text style={styles.h1}>마이페이지</Text>
+        <Text style={styles.h1}>{t('profile.title')}</Text>
 
-        <Text style={styles.sectionLabel}>내 정보</Text>
+        <Text style={styles.sectionLabel}>{t('profile.section.info')}</Text>
         {isLoggedIn ? (
-          <Pressable style={styles.profile} onPress={() => router.push('/my/profile')} accessibilityLabel="프로필 수정">
+          <Pressable style={styles.profile} onPress={() => router.push('/my/profile')} accessibilityLabel={t('profile.edit.a11y')}>
             {user?.profileImageUrl ? (
               <Image source={user.profileImageUrl} style={styles.avatar} contentFit="cover" />
             ) : (
@@ -102,41 +106,41 @@ export default function ProfileScreen() {
               </View>
             )}
             <View style={{ flex: 1 }}>
-              <Text style={styles.name} numberOfLines={1}>{user?.name ?? '벼리 회원'}</Text>
+              <Text style={styles.name} numberOfLines={1}>{user?.name ?? t('profile.defaultName')}</Text>
               {!!user?.email && <Text style={styles.email} numberOfLines={1}>{user.email}</Text>}
             </View>
             <View style={styles.editChip}>
               <Ionicons name="pencil" size={12} color={colors.primary} />
-              <Text style={styles.editChipText}>수정</Text>
+              <Text style={styles.editChipText}>{t('profile.edit')}</Text>
             </View>
           </Pressable>
         ) : (
           <Pressable style={styles.loginCard} onPress={() => router.push('/login')}>
             <View style={styles.loginIcon}><Ionicons name="person" size={20} color={colors.primary} /></View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.name}>로그인이 필요해요</Text>
-              <Text style={styles.email}>로그인하고 벼리의 모든 기능을 이용해보세요</Text>
+              <Text style={styles.name}>{t('profile.loginNeeded')}</Text>
+              <Text style={styles.email}>{t('profile.loginHint')}</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textFaint} />
           </Pressable>
         )}
 
-        <Text style={styles.sectionLabel}>메뉴</Text>
-        <View style={styles.card}>{GROUP1.map((m, i) => <View key={m.label}>{i > 0 && <View style={styles.divider} />}<Row m={m} /></View>)}</View>
-        <View style={[styles.card, { marginTop: 12 }]}>{GROUP2.map((m, i) => <View key={m.label}>{i > 0 && <View style={styles.divider} />}<Row m={m} /></View>)}</View>
+        <Text style={styles.sectionLabel}>{t('profile.section.menu')}</Text>
+        <View style={styles.card}>{GROUP1.map((m, i) => <View key={m.labelKey}>{i > 0 && <View style={styles.divider} />}<Row m={m} /></View>)}</View>
+        <View style={[styles.card, { marginTop: 12 }]}>{GROUP2.map((m, i) => <View key={m.labelKey}>{i > 0 && <View style={styles.divider} />}<Row m={m} /></View>)}</View>
 
         {isLoggedIn ? (
           <>
             <Pressable style={styles.logout} onPress={onLogout}>
-              <Text style={styles.logoutText}>로그아웃</Text>
+              <Text style={styles.logoutText}>{t('profile.logout')}</Text>
             </Pressable>
             <Pressable style={styles.deleteAccount} onPress={onDeleteAccount} disabled={deleting}>
-              <Text style={styles.deleteAccountText}>{deleting ? '삭제 중…' : '계정 삭제'}</Text>
+              <Text style={styles.deleteAccountText}>{deleting ? t('profile.deleting') : t('profile.delete')}</Text>
             </Pressable>
           </>
         ) : (
           <Pressable style={styles.loginBtn} onPress={() => router.push('/login')}>
-            <Text style={styles.loginBtnText}>로그인하기</Text>
+            <Text style={styles.loginBtnText}>{t('profile.login')}</Text>
           </Pressable>
         )}
       </ScrollView>

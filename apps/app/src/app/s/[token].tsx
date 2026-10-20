@@ -7,6 +7,8 @@ import { Image } from '@/components/Image';
 import KakaoMapView, { type KakaoMapHandle } from '@/components/KakaoMapView';
 import type { SharedStop } from '@/lib/api/itineraries';
 import { useSharedItineraryQuery } from '@/lib/hooks/queries';
+import { useT } from '@/lib/i18n';
+import { useMapLabels } from '@/lib/map/useMapLabels';
 import { sized } from '@/lib/img';
 import { ROUTE_SEGMENT_COLORS } from '@/lib/routeColors';
 import { useAuthStore } from '@/lib/store/authStore';
@@ -35,6 +37,8 @@ const md = (d: string) => d.slice(5).replace('-', '.');
 export default function SharedItineraryScreen() {
   const { token } = useLocalSearchParams<{ token: string }>();
   const router = useRouter();
+  const t = useT();
+  const mapLabels = useMapLabels();
   const insets = useSafeAreaInsets();
   const { data, isLoading, isError } = useSharedItineraryQuery(String(token ?? ''));
   const signedIn = useAuthStore((s) => !!s.accessToken);
@@ -77,12 +81,12 @@ export default function SharedItineraryScreen() {
   if (isError || !data) {
     return (
       <View style={[styles.center, { padding: space.lg }]}>
-        <Stack.Screen options={{ title: '공유된 루트' }} />
+        <Stack.Screen options={{ title: t('shared.title') }} />
         <Ionicons name="link-outline" size={40} color={colors.border} />
-        <Text style={styles.errorTitle}>링크를 열 수 없어요</Text>
-        <Text style={styles.errorBody}>주소가 잘못되었거나, 만든 사람이 루트를 지웠을 수 있어요.</Text>
+        <Text style={styles.errorTitle}>{t('shared.error.title')}</Text>
+        <Text style={styles.errorBody}>{t('shared.error.body')}</Text>
         <Pressable style={styles.errorBtn} onPress={() => router.replace('/')}>
-          <Text style={styles.errorBtnText}>벼리 둘러보기</Text>
+          <Text style={styles.errorBtnText}>{t('shared.error.cta')}</Text>
         </Pressable>
       </View>
     );
@@ -96,12 +100,17 @@ export default function SharedItineraryScreen() {
 
   return (
     <View style={styles.safe}>
-      <Stack.Screen options={{ title: '공유된 루트' }} />
+      <Stack.Screen options={{ title: t('shared.title') }} />
       <ScrollView contentContainerStyle={{ paddingBottom: 28 + insets.bottom }}>
         <View style={styles.head}>
           <Text style={styles.title}>{data.title}</Text>
           <Text style={styles.meta}>
-            {md(data.startDate)} ~ {md(data.endDate)} · {nights > 0 ? `${nights}박 ${nights + 1}일` : '당일'} · {data.stops.length}곳
+            {t('shared.meta', {
+              start: md(data.startDate),
+              end: md(data.endDate),
+              span: nights > 0 ? t('common.trip.nights', { n: nights, d: nights + 1 }) : t('common.trip.dayTrip'),
+              n: data.stops.length,
+            })}
           </Text>
         </View>
 
@@ -112,6 +121,7 @@ export default function SharedItineraryScreen() {
               jsKey={KAKAO_JS_KEY}
               segColors={ROUTE_SEGMENT_COLORS}
               baseUrl={KAKAO_WEB_ORIGIN}
+              labels={mapLabels}
               onMessage={(e) => {
                 try {
                   if (JSON.parse(e.nativeEvent.data)?.type === 'ready') setMapReady(true);
@@ -124,7 +134,7 @@ export default function SharedItineraryScreen() {
         {dates.map((date) => (
           <View key={date} style={styles.daySection}>
             <View style={styles.dayBar}>
-              <Text style={styles.dayBarText}>{dayNo(data.startDate, date)}일차</Text>
+              <Text style={styles.dayBarText}>{t('route.day', { n: dayNo(data.startDate, date) })}</Text>
               <Text style={styles.dayBarDate}>{date}</Text>
             </View>
             <View style={styles.card}>
@@ -148,9 +158,9 @@ export default function SharedItineraryScreen() {
                     </View>
                   )}
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.stopName} numberOfLines={2}>{s.name ?? '장소'}</Text>
+                    <Text style={styles.stopName} numberOfLines={2}>{s.name ?? t('routes.stop.unnamed')}</Text>
                     <Text style={styles.stopMeta}>
-                      {s.targetType === 'PERFORMANCE' ? '행사' : '장소'}{s.plannedTime ? ` · ${s.plannedTime}` : ''}
+                      {s.targetType === 'PERFORMANCE' ? t('common.stopType.performance') : t('common.stopType.venue')}{s.plannedTime ? ` · ${s.plannedTime}` : ''}
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
@@ -166,7 +176,7 @@ export default function SharedItineraryScreen() {
           onPress={() => router.push(signedIn ? '/(tabs)/routes' : '/login')}>
           <Ionicons name={signedIn ? 'map-outline' : 'log-in-outline'} size={18} color={colors.white} />
           <Text style={styles.ctaText}>
-            {signedIn ? '내 루트 보러 가기' : '벼리 시작하고 내 루트 만들기'}
+            {signedIn ? t('shared.cta.signedIn') : t('shared.cta.signedOut')}
           </Text>
         </Pressable>
       </ScrollView>

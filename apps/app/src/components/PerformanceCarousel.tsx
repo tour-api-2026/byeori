@@ -2,6 +2,8 @@ import { Image } from '@/components/Image';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { Performance } from '@/lib/api/types';
+import { useT } from '@/lib/i18n';
+import type { TFn } from '@/lib/i18n/labels';
 import { sized } from '@/lib/img';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
@@ -19,9 +21,10 @@ export function PerformanceCarousel({
   caption = genreCaption,
 }: {
   items: Performance[];
-  caption?: (p: Performance) => string;
+  caption?: (p: Performance, t: TFn) => string;
 }) {
   const router = useRouter();
+  const t = useT();
   return (
     <ScrollView
       horizontal
@@ -38,7 +41,7 @@ export function PerformanceCarousel({
             cachePolicy="memory-disk"
           />
           <Text style={styles.title} numberOfLines={2}>{p.title}</Text>
-          <Text style={styles.sub} numberOfLines={1}>{caption(p)}</Text>
+          <Text style={styles.sub} numberOfLines={1}>{caption(p, t)}</Text>
         </Pressable>
       ))}
     </ScrollView>
@@ -46,13 +49,14 @@ export function PerformanceCarousel({
 }
 
 /** 홈 기본값 — 장르 · 시작일. */
-function genreCaption(p: Performance) {
-  return `${p.genre ?? '전통 행사'}${p.startDate ? ` · ${md(p.startDate)}~` : ''}`;
+function genreCaption(p: Performance, t: TFn) {
+  return `${p.genre ?? t('performance.defaultGenre')}${p.startDate ? ` · ${md(p.startDate)}~` : ''}`;
 }
 
 /** 장소 상세용 — 진행 상태 · 기간. */
-export function stateCaption(p: Performance) {
-  const label = p.state === 'ONGOING' ? '진행중' : p.state === 'UPCOMING' ? '예정' : '종료';
+export function stateCaption(p: Performance, t: TFn) {
+  const label = t(p.state === 'ONGOING' ? 'performance.caption.ongoing'
+    : p.state === 'UPCOMING' ? 'performance.caption.upcoming' : 'performance.caption.ended');
   if (!p.startDate) return label;
   const period = p.endDate && p.endDate !== p.startDate
     ? `${md(p.startDate)}~${md(p.endDate)}`

@@ -8,6 +8,7 @@ import { DraggableStops } from '@/components/DraggableStops';
 import { HeaderRight } from '@/components/HeaderRight';
 import { StopEditSheet } from '@/components/StopEditSheet';
 import PlacePicker from '@/components/PlacePicker';
+import { useT } from '@/lib/i18n';
 import {
   useCreateItineraryMutation, useItineraryItemMutation, useItineraryQuery,
   useUpdateItineraryMutation,
@@ -41,6 +42,7 @@ export default function ItineraryEditScreen() {
 
 function CreateForm() {
   const router = useRouter();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const create = useCreateItineraryMutation();
   const [title, setTitle] = useState('');
@@ -64,16 +66,19 @@ function CreateForm() {
 
   return (
     <View style={styles.safe}>
-      <Stack.Screen options={{ title: '루트 만들기' }} />
+      <Stack.Screen options={{ title: t('itinerary.create.title') }} />
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 40 + insets.bottom }}>
-        <Text style={styles.label}>루트 이름</Text>
-        <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="예) 서울 1박 2일 한복 나들이" placeholderTextColor={colors.textFaint} />
+        <Text style={styles.label}>{t('itinerary.create.nameLabel')}</Text>
+        <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder={t('itinerary.create.namePlaceholder')} placeholderTextColor={colors.textFaint} />
 
-        <Text style={styles.label}>여행 기간</Text>
+        <Text style={styles.label}>{t('itinerary.create.period')}</Text>
         <Text style={styles.rangeHint}>
-          {!startDate ? '달력에서 시작일을 선택하세요'
-            : !endDate ? '종료일을 선택하세요'
-            : `${startDate} ~ ${endDate} · ${nights}박 ${dayIndex(startDate, endDate)}일`}
+          {!startDate ? t('itinerary.create.hintStart')
+            : !endDate ? t('itinerary.create.hintEnd')
+            : t('itinerary.create.range', {
+              start: startDate, end: endDate,
+              span: t('common.trip.nights', { n: nights, d: dayIndex(startDate, endDate) }),
+            })}
         </Text>
         <Calendar rangeStart={startDate} rangeEnd={endDate} onSelectDate={onSelect} />
 
@@ -84,7 +89,7 @@ function CreateForm() {
             { title, startDate: startDate!, endDate: endDate!, sourceType: 'CUSTOM' },
             { onSuccess: (d) => router.replace(`/itinerary/${d.id}`) },
           )}>
-          <Text style={styles.ctaText}>{create.isPending ? '생성 중...' : '루트 만들기'}</Text>
+          <Text style={styles.ctaText}>{create.isPending ? t('itinerary.create.creating') : t('itinerary.create.title')}</Text>
         </Pressable>
       </ScrollView>
     </View>
@@ -93,6 +98,7 @@ function CreateForm() {
 
 function Editor({ id }: { id: number }) {
   const router = useRouter();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const { data, isLoading } = useItineraryQuery(id);
   const { add, addPlace, remove, reorder, replacePlace, update: updateItem } = useItineraryItemMutation(id);
@@ -152,13 +158,13 @@ function Editor({ id }: { id: number }) {
           setEditing(false);
           if (selectedDay && (selectedDay < start || selectedDay > end)) setSelectedDay(start);
         },
-        onError: (e: any) => Alert.alert('저장 실패', e?.message ?? '잠시 후 다시 시도해 주세요.'),
+        onError: (e: any) => Alert.alert(t('itinerary.saveFail'), e?.message ?? t('common.tryLater')),
       });
     };
     if (dropped.length) {
-      Alert.alert('기간 밖 장소가 있어요',
-        `${dropped.length}곳이 새 기간을 벗어나 목록에서 보이지 않게 됩니다.`,
-        [{ text: '취소', style: 'cancel' }, { text: '계속', onPress: commit }]);
+      Alert.alert(t('itinerary.droppedTitle'),
+        t('itinerary.droppedBody', { n: dropped.length }),
+        [{ text: t('common.cancel'), style: 'cancel' }, { text: t('common.continue'), onPress: commit }]);
       return;
     }
     commit();
@@ -167,14 +173,14 @@ function Editor({ id }: { id: number }) {
   return (
     <View style={styles.safe}>
       <Stack.Screen options={{
-        title: '루트 만들기',
+        title: t('itinerary.create.title'),
         headerRight: () => (
           <HeaderRight>
             {/* 편집은 저장 왼쪽에 둔다. 이름 줄의 연필은 이쪽으로 옮겼다. */}
             {!editing && (
               <Pressable style={styles.editBtn} hitSlop={8} onPress={openEdit}>
                 <Ionicons name="create-outline" size={18} color={colors.text} />
-                <Text style={styles.editBtnText}>편집</Text>
+                <Text style={styles.editBtnText}>{t('itinerary.edit')}</Text>
               </Pressable>
             )}
             {/*
@@ -184,7 +190,7 @@ function Editor({ id }: { id: number }) {
               dismissTo 는 AI 루트 저장·추천 코스 담기가 쓰는 것과 같다.
             */}
             <Pressable style={styles.saveBtn} onPress={() => router.dismissTo('/routes')}>
-              <Text style={styles.saveText}>저장</Text>
+              <Text style={styles.saveText}>{t('itinerary.save')}</Text>
             </Pressable>
           </HeaderRight>
         ),
@@ -193,20 +199,20 @@ function Editor({ id }: { id: number }) {
         {/* 이름 */}
         {editing ? (
           <View style={styles.nameBox}>
-            <Text style={styles.namePrefix}>이름</Text>
+            <Text style={styles.namePrefix}>{t('itinerary.nameLabel')}</Text>
             <TextInput
               style={styles.nameInput}
               value={draftTitle}
               onChangeText={setDraftTitle}
               maxLength={40}
-              placeholder="루트 이름"
+              placeholder={t('itinerary.namePlaceholder')}
               placeholderTextColor={colors.textFaint}
               returnKeyType="done"
             />
           </View>
         ) : (
           <Pressable style={styles.nameBox} onPress={openEdit}>
-            <Text style={styles.namePrefix}>이름</Text>
+            <Text style={styles.namePrefix}>{t('itinerary.nameLabel')}</Text>
             <Text style={styles.nameValue} numberOfLines={1}>{data.title}</Text>
           </Pressable>
         )}
@@ -216,7 +222,7 @@ function Editor({ id }: { id: number }) {
           {editing && draftRange ? (
             <>
               <Text style={styles.editHint}>
-                {picking === 'start' ? '시작일을 고르세요' : '마지막 날을 고르세요'}
+                {picking === 'start' ? t('itinerary.pickStart') : t('itinerary.pickEnd')}
                 {'  '}
                 <Text style={styles.editRange}>{draftRange.start} ~ {draftRange.end}</Text>
               </Text>
@@ -225,7 +231,7 @@ function Editor({ id }: { id: number }) {
                 rangeStart={draftRange.start}
                 rangeEnd={draftRange.end}
                 marked={dates}
-                markedLabel="장소를 담은 날"
+                markedLabel={t('itinerary.markedLabel')}
                 onSelectDate={(d) => {
                   if (picking === 'start') {
                     // 시작일이 기존 종료일을 넘으면 하루짜리로 맞춘다
@@ -241,13 +247,13 @@ function Editor({ id }: { id: number }) {
               />
               <View style={styles.editRow}>
                 <Pressable style={styles.editCancel} onPress={() => setEditing(false)}>
-                  <Text style={styles.editCancelText}>취소</Text>
+                  <Text style={styles.editCancelText}>{t('common.cancel')}</Text>
                 </Pressable>
                 <Pressable
                   style={[styles.editSave, update.isPending && { opacity: 0.6 }]}
                   disabled={update.isPending}
                   onPress={saveEdit}>
-                  <Text style={styles.editSaveText}>{update.isPending ? '저장 중…' : '기간 저장'}</Text>
+                  <Text style={styles.editSaveText}>{update.isPending ? t('itinerary.saving') : t('itinerary.saveRange')}</Text>
                 </Pressable>
               </View>
             </>
@@ -259,7 +265,7 @@ function Editor({ id }: { id: number }) {
               rangeStart={activeDay}
               rangeEnd={activeDay}
               marked={dates}
-              markedLabel="장소를 담은 날"
+              markedLabel={t('itinerary.markedLabel')}
               onSelectDate={setSelectedDay}
             />
           )}
@@ -268,7 +274,7 @@ function Editor({ id }: { id: number }) {
         {/* 선택한 일차 (네이비 바) */}
         <View style={styles.dayBar}>
           <Text style={styles.dayBarText}>
-            {dayIndex(data.startDate, activeDay)}일차  ({activeDay})
+            {t('itinerary.dayBar', { n: dayIndex(data.startDate, activeDay), date: activeDay })}
           </Text>
           <Ionicons name="chevron-down" size={18} color={colors.white} />
         </View>
@@ -281,15 +287,15 @@ function Editor({ id }: { id: number }) {
               pending={reorder.isPending}
               onPressItem={setEditingItem}
               onReorder={(itemIds) => reorder.mutate({ visitDate: activeDay, itemIds }, {
-                onError: (e: any) => Alert.alert('순서를 바꾸지 못했어요', e?.message ?? '잠시 후 다시 시도해 주세요.'),
+                onError: (e: any) => Alert.alert(t('itinerary.reorderFail'), e?.message ?? t('common.tryLater')),
               })}
             />
-          ) : <Text style={styles.empty}>이 날짜에 담은 장소가 없어요</Text>}
+          ) : <Text style={styles.empty}>{t('itinerary.dayEmpty')}</Text>}
         </View>
 
         {/* 추가하기 */}
         <Pressable style={styles.addStop} onPress={() => setPickerOpen(true)}>
-          <Text style={styles.addStopText}>추가하기</Text>
+          <Text style={styles.addStopText}>{t('itinerary.addStop')}</Text>
         </Pressable>
       </ScrollView>
 
@@ -317,7 +323,7 @@ function Editor({ id }: { id: number }) {
           if (at < 0 || to < 0 || to >= ids.length) return;
           [ids[at], ids[to]] = [ids[to], ids[at]];
           reorder.mutate({ visitDate: editingStop?.visitDate as string, itemIds: ids }, {
-            onError: (e: any) => Alert.alert('순서를 바꾸지 못했어요', e?.message ?? '잠시 후 다시 시도해 주세요.'),
+            onError: (e: any) => Alert.alert(t('itinerary.reorderFail'), e?.message ?? t('common.tryLater')),
           });
         }}
         onRemove={() => {
@@ -339,7 +345,7 @@ function Editor({ id }: { id: number }) {
         onPickVenue={(venueId) => {
           if (replacingItem != null) {
             updateItem.mutate({ itemId: replacingItem, targetType: 'VENUE', targetId: venueId }, {
-              onError: (e: any) => Alert.alert('장소를 바꾸지 못했어요', e?.message ?? '잠시 후 다시 시도해 주세요.'),
+              onError: (e: any) => Alert.alert(t('itinerary.replaceFail'), e?.message ?? t('common.tryLater')),
             });
           } else {
             add.mutate({ targetType: 'VENUE', targetId: venueId, visitDate: activeDay, sortOrder: dayItems.length });
@@ -350,7 +356,7 @@ function Editor({ id }: { id: number }) {
         onPickPlace={(place) => {
           if (replacingItem != null) {
             replacePlace.mutate({ itemId: replacingItem, place }, {
-              onError: (e: any) => Alert.alert('장소를 바꾸지 못했어요', e?.message ?? '잠시 후 다시 시도해 주세요.'),
+              onError: (e: any) => Alert.alert(t('itinerary.replaceFail'), e?.message ?? t('common.tryLater')),
             });
           } else {
             addPlace.mutate({ place, visitDate: activeDay, sortOrder: dayItems.length });

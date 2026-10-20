@@ -1,4 +1,6 @@
 import { Platform } from 'react-native';
+import { translate } from '@/lib/i18n';
+import { useLocaleStore } from '@/lib/store/localeStore';
 import { api, API_BASE, type ApiEnvelope } from './client';
 
 export type PickedImage = { uri: string; mimeType?: string | null; fileName?: string | null };
@@ -27,7 +29,7 @@ export async function uploadImage(img: PickedImage): Promise<string> {
 
   const res = await api.post<ApiEnvelope<{ url: string }>>('/uploads/images', form);
   if (!res.data.success || !res.data.data?.url) {
-    throw new Error(res.data.error?.message ?? '이미지 업로드에 실패했습니다.');
+    throw new Error(res.data.error?.message ?? translate(useLocaleStore.getState().locale, 'upload.failed'));
   }
   return toAbsolute(res.data.data.url);
 }
