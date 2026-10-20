@@ -49,11 +49,20 @@ public class OpenAiClient {
      * @param schema     JSON Schema. strict 모드라 모든 객체에 additionalProperties=false, 전 필드 required.
      */
     public JsonNode completeJson(String system, String user, String schemaName, Map<String, Object> schema) {
+        return completeJson(system, user, schemaName, schema, 0.8);
+    }
+
+    /**
+     * 온도를 고르는 판. 루트 추천은 다양성이 필요해 0.8 이지만, 번역은 같은 이름이 늘 같은
+     * 표기로 나와야 하므로 낮게 준다.
+     */
+    public JsonNode completeJson(String system, String user, String schemaName, Map<String, Object> schema,
+                                 double temperature) {
         if (!enabled()) return null;
         try {
             Map<String, Object> body = Map.of(
                     "model", model,
-                    "temperature", 0.8,
+                    "temperature", temperature,
                     "messages", List.of(
                             Map.of("role", "system", "content", system),
                             Map.of("role", "user", "content", user)),

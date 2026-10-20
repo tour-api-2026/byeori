@@ -26,8 +26,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Slf4j
 public class TranslationBatch {
 
-    /** 한 번에 AI 에 보내는 이름 수. 너무 크면 응답이 잘리고, 너무 작으면 호출이 잦다. */
-    private static final int CHUNK = 100;
+    /**
+     * 한 번에 AI 에 보내는 이름 수. 너무 크면 응답이 잘리고, 너무 작으면 호출이 잦다.
+     * 100개는 응답에 15~20초가 걸려 OpenAiClient 의 읽기 제한(20초)에 걸렸다(행사 제목은
+     * 더 길어 세 번 모두 시간 초과). 40개면 7초 안팎이라 여유가 있다.
+     */
+    private static final int CHUNK = 40;
     /** 정기 작업이 언어·종류별로 한 번에 처리할 최대 행 수. 하룻밤에 안 끝나도 다음 날 이어간다. */
     public static final int MAX_PER_RUN = 5_000;
 

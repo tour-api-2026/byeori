@@ -54,4 +54,13 @@ class TranslationClientTest {
         assertThat(TranslationClient.parse(null, List.of("경복궁"))).isEmpty();
         assertThat(TranslationClient.parse(om.readTree("{\"items\":\"x\"}"), List.of("경복궁"))).isEmpty();
     }
+
+    @Test
+    @DisplayName("한글이 섞인 번역은 일본어·중국어에서 쓰지 않는다")
+    void 한글_섞임() {
+        assertThat(TranslationClient.hasHangul("고척동 고인돌")).isTrue();
+        assertThat(TranslationClient.hasHangul("寺(서울)")).isTrue();
+        assertThat(TranslationClient.hasHangul("景福宮")).isFalse();
+        assertThat(TranslationClient.hasHangul("Gyeongbokgung Palace")).isFalse();
+    }
 }
