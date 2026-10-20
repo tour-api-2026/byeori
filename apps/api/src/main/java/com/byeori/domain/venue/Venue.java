@@ -3,6 +3,7 @@ package com.byeori.domain.venue;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import com.byeori.global.i18n.Lang;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -52,6 +53,41 @@ public class Venue {
     private String kakaoPlaceId;
     private String visibility;
     private LocalDateTime createdAt;
+
+    /**
+     * 이름·설명의 번역본. 사용자 요청 경로는 읽기만 하고, 쓰기는 번역 배치뿐이다.
+     *
+     * 컬럼 이름을 명시한다 — 스프링 네이밍은 대문자 앞에만 밑줄을 넣는 규칙이 어긋나면
+     * (distanceM 이 distancem 이 된 적이 있다) 컬럼을 못 찾는다. 이름을 못 박아 두면 안전하다.
+     */
+    @Column(name = "name_en") private String nameEn;
+    @Column(name = "name_ja") private String nameJa;
+    @Column(name = "name_zh") private String nameZh;
+    @Column(name = "desc_en", columnDefinition = "text") private String descEn;
+    @Column(name = "desc_ja", columnDefinition = "text") private String descJa;
+    @Column(name = "desc_zh", columnDefinition = "text") private String descZh;
+    /** 원본 이름의 sha256. 이름이 바뀐 행만 다시 번역하려고 둔다. */
+    @Column(name = "name_hash") private String nameHash;
+    /** AI | TOURAPI. 나중에 공식 번역으로 덮어쓸 때 고르는 기준. */
+    @Column(name = "tr_source") private String trSource;
+
+    public void applyTranslation(Lang lang, String text) {
+        switch (lang) {
+            case EN -> this.nameEn = text;
+            case JA -> this.nameJa = text;
+            case ZH -> this.nameZh = text;
+            case KO -> { }   // 원본이 한국어다 — 덮어쓸 것이 없다
+        }
+        this.trSource = "AI";
+    }
+
+    public void markHash(String hash) { this.nameHash = hash; }
+
+    /** 선택한 언어의 이름. 번역이 없으면 한국어 원본. */
+    public String nameIn(Lang lang) {
+        String t = switch (lang) { case EN -> nameEn; case JA -> nameJa; case ZH -> nameZh; case KO -> null; };
+        return (t == null || t.isBlank()) ? name : t;
+    }
 
     /** USER 등록 장소(거지맵식 공유) 생성 */
     public static Venue userVenue(Long userId, String name, String address, BigDecimal lat, BigDecimal lng,

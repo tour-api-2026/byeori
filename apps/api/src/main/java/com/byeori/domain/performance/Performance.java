@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import com.byeori.global.i18n.Lang;
 import lombok.Getter;
 
 @Entity
@@ -45,6 +46,36 @@ public class Performance {
      * 값은 {@link com.byeori.domain.sync.PerformanceDeduper}가 동기화마다 다시 계산한다.
      */
     private Long duplicateOf;
+
+    /**
+     * 제목의 번역본. 설명은 저장하지 않는다(상세는 실시간 조회).
+     * 컬럼 이름은 Hibernate 네이밍에 맡기지 않고 명시한다.
+     */
+    @Column(name = "title_en") private String titleEn;
+    @Column(name = "title_ja") private String titleJa;
+    @Column(name = "title_zh") private String titleZh;
+    /** 원본 제목의 sha256. 제목이 바뀐 행만 다시 번역하려고 둔다. */
+    @Column(name = "name_hash") private String nameHash;
+    /** AI | TOURAPI. */
+    @Column(name = "tr_source") private String trSource;
+
+    public void applyTranslation(Lang lang, String text) {
+        switch (lang) {
+            case EN -> this.titleEn = text;
+            case JA -> this.titleJa = text;
+            case ZH -> this.titleZh = text;
+            case KO -> { }   // 원본이 한국어다
+        }
+        this.trSource = "AI";
+    }
+
+    public void markHash(String hash) { this.nameHash = hash; }
+
+    /** 선택한 언어의 제목. 번역이 없으면 한국어 원본. */
+    public String titleIn(Lang lang) {
+        String t = switch (lang) { case EN -> titleEn; case JA -> titleJa; case ZH -> titleZh; case KO -> null; };
+        return (t == null || t.isBlank()) ? title : t;
+    }
 
     /**
      * 기준일로 본 행사 상태.
