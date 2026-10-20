@@ -20,7 +20,7 @@ import { useRecentStore } from '@/lib/store/recentStore';
 import { REGIONS, regionSpot } from '@/lib/regions';
 import { ALL, HOME_KEYWORDS } from '@/lib/categories';
 import { useT } from '@/lib/i18n';
-import { categoryLabel, regionLabel, type TFn } from '@/lib/i18n/labels';
+import { categoryLabel, genreLabel, regionLabel, type TFn } from '@/lib/i18n/labels';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
 export default function HomeScreen() {
@@ -122,7 +122,7 @@ export default function HomeScreen() {
               <Image source={sized(top.posterImageUrl, 760, 380)} style={styles.heroImg} contentFit="cover" transition={250} cachePolicy="memory-disk" />
               <View style={styles.heroOverlay}>
                 <Text style={styles.heroTitle} numberOfLines={1}>{top.title}</Text>
-                <Text style={styles.heroSub} numberOfLines={1}>{t('home.hero.sub', { genre: top.genre ?? t('home.hero.genreFallback') })}</Text>
+                <Text style={styles.heroSub} numberOfLines={1}>{t('home.hero.sub', { genre: top.genre ? genreLabel(t, top.genre) : t('home.hero.genreFallback') })}</Text>
                 <View style={styles.heroBtn}><Text style={styles.heroBtnText}>{t('home.hero.cta')}</Text></View>
               </View>
             </Pressable>

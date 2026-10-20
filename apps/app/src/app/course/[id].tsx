@@ -5,6 +5,7 @@ import { Alert, ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCourseDetailQuery, useCreateItineraryMutation } from '@/lib/hooks/queries';
 import { useT } from '@/lib/i18n';
+import { themeLabel } from '@/lib/i18n/labels';
 import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
@@ -48,7 +49,7 @@ export default function CourseDetailScreen() {
         <ScrollView contentContainerStyle={{ paddingBottom: 24 + insets.bottom }}>
           <Image source={data.coverImageUrl} style={styles.cover} contentFit="cover" />
           <View style={styles.head}>
-            <View style={styles.themeBadge}><Text style={styles.themeText}>{data.theme}</Text></View>
+            {data.theme ? <View style={styles.themeBadge}><Text style={styles.themeText}>{themeLabel(t, data.theme)}</Text></View> : null}
             <Text style={styles.title}>{data.title}</Text>
             <Text style={styles.desc}>{data.description}</Text>
             <Text style={styles.meta}>{t('course.meta', { h: data.durationHours, n: data.items.length })}</Text>

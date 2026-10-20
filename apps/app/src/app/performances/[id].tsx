@@ -8,6 +8,7 @@ import { ContentComments } from '@/components/ContentComments';
 import { Rating } from '@/components/Rating';
 import { usePerformanceQuery } from '@/lib/hooks/queries';
 import { useT } from '@/lib/i18n';
+import { genreLabel } from '@/lib/i18n/labels';
 import { sized } from '@/lib/img';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
@@ -71,7 +72,7 @@ export default function PerformanceDetailScreen() {
               </Text>
             </View>
             {p.genre ? (
-              <View style={styles.badge}><Text style={styles.badgeText}>{p.genre}</Text></View>
+              <View style={styles.badge}><Text style={styles.badgeText}>{genreLabel(t, p.genre)}</Text></View>
             ) : null}
             {p.traditional ? (
               <View style={[styles.badge, styles.badgeTrad]}>
