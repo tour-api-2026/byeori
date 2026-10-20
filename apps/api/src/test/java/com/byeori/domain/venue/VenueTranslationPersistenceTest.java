@@ -4,7 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.byeori.global.i18n.Lang;
 import jakarta.persistence.EntityManager;
+import com.byeori.domain.performance.Performance;
+import com.byeori.domain.performance.PerformanceRepository;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +34,7 @@ class VenueTranslationPersistenceTest {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Autowired VenueRepository repo;
+    @Autowired PerformanceRepository perfRepo;
     @Autowired EntityManager em;
 
     @Test
@@ -41,7 +45,7 @@ class VenueTranslationPersistenceTest {
         v.applyTranslation(Lang.EN, "Gyeongbokgung Palace");
         v.applyTranslation(Lang.JA, "景福宮");
         v.applyTranslation(Lang.ZH, "景福宫");
-        // CHAR(64) 는 짧은 값을 공백으로 채워 돌려주므로 실제 sha256 길이(64)로 넣는다.
+        // 실제 sha256 hex 와 같은 길이(64)의 값으로 계약을 보여 준다.
         String hash = "a".repeat(64);
         v.markHash(hash);
 
@@ -61,15 +65,27 @@ class VenueTranslationPersistenceTest {
     }
 
     @Test
-    @DisplayName("행사 번역 컬럼도 DB 를 오간다")
+    @DisplayName("행사 번역 컬럼도 엔티티로 저장되고 다시 읽힌다")
     void 행사_컬럼() {
-        em.createNativeQuery("insert into performances (title, start_date, end_date, title_en, title_ja, title_zh, name_hash, tr_source) "
-                        + "values ('공연', date '2026-01-01', date '2026-01-02', 'Show', 'ショー', '演出', :h, 'AI')")
-                .setParameter("h", "b".repeat(64)).executeUpdate();
-        Object[] r = (Object[]) em.createNativeQuery(
-                "select title_en, title_ja, title_zh, name_hash from performances where title = '공연'")
-                .getResultList().get(0);
-        assertThat(r[0]).isEqualTo("Show");
-        assertThat(r[3].toString().trim()).hasSize(64);
+        Performance p = Performance.fromKopis("TR_PF_1", "공연", "연극", null,
+                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 2), "UPCOMING", null);
+        p.applyTranslation(Lang.EN, "Show");
+        p.applyTranslation(Lang.JA, "ショー");
+        p.applyTranslation(Lang.ZH, "演出");
+        String hash = "b".repeat(64);
+        p.markHash(hash);
+
+        Long id = perfRepo.saveAndFlush(p).getId();
+        em.clear();
+
+        Performance read = perfRepo.findById(id).orElseThrow();
+        assertThat(read).isNotSameAs(p);
+        assertThat(read.getTitleEn()).isEqualTo("Show");
+        assertThat(read.getTitleJa()).isEqualTo("ショー");
+        assertThat(read.getTitleZh()).isEqualTo("演出");
+        assertThat(read.getNameHash()).isEqualTo(hash);
+        assertThat(read.getTrSource()).isEqualTo("AI");
+        assertThat(read.titleIn(Lang.ZH)).isEqualTo("演出");
+        assertThat(read.titleIn(Lang.KO)).isEqualTo("공연");
     }
 }

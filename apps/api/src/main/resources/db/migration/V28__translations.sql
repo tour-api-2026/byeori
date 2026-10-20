@@ -15,14 +15,14 @@ ALTER TABLE venues
     ADD COLUMN desc_en   TEXT,
     ADD COLUMN desc_ja   TEXT,
     ADD COLUMN desc_zh   TEXT,
-    ADD COLUMN name_hash CHAR(64),
+    ADD COLUMN name_hash VARCHAR(64),
     ADD COLUMN tr_source VARCHAR(10);
 
 ALTER TABLE performances
     ADD COLUMN title_en  VARCHAR(255),
     ADD COLUMN title_ja  VARCHAR(255),
     ADD COLUMN title_zh  VARCHAR(255),
-    ADD COLUMN name_hash CHAR(64),
+    ADD COLUMN name_hash VARCHAR(64),
     ADD COLUMN tr_source VARCHAR(10);
 
 -- 번역 대상을 고르는 조건: name_hash IS NULL OR name_hash <> sha256(name).
