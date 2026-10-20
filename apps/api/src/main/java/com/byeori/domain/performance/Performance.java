@@ -71,6 +71,13 @@ public class Performance {
 
     public void markHash(String hash) { this.nameHash = hash; }
 
+    /** 제목이 바뀌었을 때 옛 제목의 번역을 모두 비운다. 비워야 세 언어가 모두 다시 대상이 된다. */
+    public void clearTranslations() {
+        this.titleEn = null;
+        this.titleJa = null;
+        this.titleZh = null;
+    }
+
     /** 선택한 언어의 제목. 번역이 없으면 한국어 원본. */
     public String titleIn(Lang lang) {
         String t = switch (lang) { case EN -> titleEn; case JA -> titleJa; case ZH -> titleZh; case KO -> null; };

@@ -208,4 +208,26 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
                                    @Param("lng") BigDecimal lng,
                                    @Param("liked") int liked,
                                    @Param("other") int other);
+
+    /**
+     * 번역이 필요한 장소. 해당 언어 번역이 비었거나, 이름이 바뀌어 해시가 어긋난 행이다.
+     *
+     * 해시가 맞고 해당 언어 번역이 있는 행은 영원히 다시 번역하지 않는다 — 이 조건이
+     * 뒤집히면 매일 34,728 행을 세 언어로 다시 번역해 비용이 수백 배가 된다.
+     * digest() 는 V28 이 만든 pgcrypto 확장이다.
+     *
+     * id 순으로 고정한다. 순서가 없으면 한도에 걸릴 때 매번 다른 행을 집어 일부가 영영 밀린다.
+     */
+    @Query(value = """
+            SELECT * FROM venues
+             WHERE name IS NOT NULL AND name <> ''
+               AND (name_hash IS NULL
+                    OR name_hash <> encode(digest(name, 'sha256'), 'hex')
+                    OR (:lang = 'EN' AND name_en IS NULL)
+                    OR (:lang = 'JA' AND name_ja IS NULL)
+                    OR (:lang = 'ZH' AND name_zh IS NULL))
+             ORDER BY id
+             LIMIT :limit
+            """, nativeQuery = true)
+    List<Venue> findNeedingTranslation(@Param("lang") String lang, @Param("limit") int limit);
 }

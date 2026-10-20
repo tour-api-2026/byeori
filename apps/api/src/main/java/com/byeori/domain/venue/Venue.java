@@ -83,6 +83,13 @@ public class Venue {
 
     public void markHash(String hash) { this.nameHash = hash; }
 
+    /** 이름이 바뀌었을 때 옛 이름의 번역을 모두 비운다. 비워야 세 언어가 모두 다시 대상이 된다. */
+    public void clearTranslations() {
+        this.nameEn = null;
+        this.nameJa = null;
+        this.nameZh = null;
+    }
+
     /** 선택한 언어의 이름. 번역이 없으면 한국어 원본. */
     public String nameIn(Lang lang) {
         String t = switch (lang) { case EN -> nameEn; case JA -> nameJa; case ZH -> nameZh; case KO -> null; };

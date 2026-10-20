@@ -1,5 +1,6 @@
 package com.byeori.domain.sync;
 
+import com.byeori.domain.translation.TranslationBatch;
 import com.byeori.global.response.ApiResponse;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -19,18 +20,28 @@ public class SyncController {
 
     private final SyncService syncService;
     private final PerformanceDeduper deduper;
+    private final TranslationBatch translationBatch;
 
     /**
-     * only=all(기본)|incremental|venues|performances|festivals|seoul|dedupe 로 대상 선택.
+     * only=all(기본)|incremental|venues|performances|festivals|seoul|dedupe|translate 로 대상 선택.
      *
      * incremental = 변경분만(정기 동기화와 같은 경로, 약 3건 호출)
      * venues      = 전량 재수집(약 350건 호출) — 초기 적재·정합성 복구용
      * dedupe      = 외부 호출 없이 중복 쓸기만 다시 실행(판정 규칙을 고친 뒤 확인용)
+     * translate   = 이름 번역만 실행(외부는 OpenAI 만). limit 은 언어·종류별 최대 행 수로,
+     *               생략하면 정기 작업과 같은 5,000. 첫 전량 번역은 큰 값(예: 40000)을 주어
+     *               한 번에 끝내고, 품질 확인은 작은 값(예: 100)으로 한다.
      */
     @PostMapping("/trigger")
     public ApiResponse<Map<String, Integer>> trigger(
             @RequestParam(name = "only", defaultValue = "all") String only,
-            @RequestParam(name = "since", required = false) String since) {
+            @RequestParam(name = "since", required = false) String since,
+            @RequestParam(name = "limit", required = false) Integer limit) {
+        if (only.equals("translate")) {
+            // 사용자 경로가 아니라 관리자 트리거다. AI 를 부르는 곳은 이 배치뿐이다.
+            int cap = (limit == null || limit < 1) ? TranslationBatch.MAX_PER_RUN : limit;
+            return ApiResponse.ok(Map.of("translated", translationBatch.run(cap)));
+        }
         if (only.equals("incremental")) {
             // since(yyyyMMdd)를 주면 그 날짜부터 다시 받는다. 장애로 며칠 걸렀을 때
             // 구간을 지정해 따라잡거나, 동작을 확인할 때 쓴다.

@@ -163,4 +163,22 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
             order by p.startDate asc, p.endDate asc, p.id asc
             """)
     List<Performance> findDedupeCandidates(@Param("today") LocalDate today);
+
+    /**
+     * 번역이 필요한 행사. 장소와 같은 조건이며, 해시가 맞고 해당 언어 번역이 있는 행은 제외한다.
+     * 중복으로 가려진 행(duplicate_of)은 화면에 나가지 않으므로 번역 비용을 쓰지 않는다.
+     */
+    @Query(value = """
+            SELECT * FROM performances
+             WHERE title IS NOT NULL AND title <> ''
+               AND duplicate_of IS NULL
+               AND (name_hash IS NULL
+                    OR name_hash <> encode(digest(title, 'sha256'), 'hex')
+                    OR (:lang = 'EN' AND title_en IS NULL)
+                    OR (:lang = 'JA' AND title_ja IS NULL)
+                    OR (:lang = 'ZH' AND title_zh IS NULL))
+             ORDER BY id
+             LIMIT :limit
+            """, nativeQuery = true)
+    List<Performance> findNeedingTranslation(@Param("lang") String lang, @Param("limit") int limit);
 }
