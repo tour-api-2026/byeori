@@ -66,7 +66,12 @@ export const regionLabel = (t: TFn, value: string) => passthrough(t, 'region', v
 export function feedReasonText(t: TFn, code: string, param?: string | null): string {
   if (code === 'CATEGORY') return param ? categoryLabel(t, param) : '';
   if (code === 'GENRE') return param ? genreLabel(t, param) : '';
-  if (!/^[A-Z][A-Z_]*$/.test(code)) return code;
+  // 코드 꼴이 아니면 구버전 서버의 완성된 문장이거나 분류·장르 한 단어다. 분류값 사전을 한 번
+  // 태운다 — 문장("관심 주제 · 문화")은 어느 키와도 안 맞아 그대로 나온다.
+  if (!/^[A-Z][A-Z0-9_]*$/.test(code)) {
+    const asCategory = categoryLabel(t, code);
+    return asCategory !== code ? asCategory : genreLabel(t, code);
+  }
   // FAVORITE_TOPIC 의 값은 분류 또는 장르 — 분류 사전에 없으면 장르 사전을 본다.
   let p = param ?? '';
   if (code === 'FAVORITE_TOPIC' && p) {

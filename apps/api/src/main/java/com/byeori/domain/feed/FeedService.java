@@ -256,7 +256,8 @@ public class FeedService {
 
     // ── 왜 떴는지 ─────────────────────────────
 
-    private FeedReason venueReason(TasteProfile taste, Venue v, double match, double dist, Double lat, Double lng) {
+    /** 테스트가 어느 이유가 골라지는지 직접 확인하도록 패키지 공개 static 이다 — 상태를 쓰지 않는다. */
+    static FeedReason venueReason(TasteProfile taste, Venue v, double match, double dist, Double lat, Double lng) {
         if (lat != null && lng != null && v.getLat() != null && v.getLng() != null) {
             double km = haversineKm(lat, lng, v.getLat().doubleValue(), v.getLng().doubleValue());
             if (km <= 3) return FeedReason.nearby(km);
@@ -266,7 +267,7 @@ public class FeedService {
         return v.getCategory() == null ? FeedReason.recommended() : FeedReason.category(v.getCategory());
     }
 
-    private FeedReason performanceReason(Performance p, LocalDate today, double match) {
+    static FeedReason performanceReason(Performance p, LocalDate today, double match) {
         LocalDate start = p.getStartDate();
         if (start != null && !start.isAfter(today)) return FeedReason.ongoing();
         if (start != null) {
