@@ -66,8 +66,12 @@ public class Performance {
             case ZH -> this.titleZh = text;
             case KO -> { }   // 원본이 한국어다
         }
-        this.trSource = "AI";
+        // 사람이 번역한 행은 일부 언어만 AI 가 채워도 HUMAN 으로 남긴다. 이 표시가 "기계가 사람의
+        // 작업을 덮어쓰지 않게" 하는 유일한 근거라 내리면 안 된다.
+        if (!"HUMAN".equals(this.trSource)) this.trSource = "AI";
     }
+
+    public boolean isHumanTranslated() { return "HUMAN".equals(trSource); }
 
     public void markHash(String hash) { this.nameHash = hash; }
 
@@ -76,6 +80,7 @@ public class Performance {
         this.titleEn = null;
         this.titleJa = null;
         this.titleZh = null;
+        this.trSource = null;   // 옛 이름의 번역이 사라졌으니 출처도 비운다. 새로 쓰면 AI 가 된다
     }
 
     /** 선택한 언어의 제목. 번역이 없으면 한국어 원본. */

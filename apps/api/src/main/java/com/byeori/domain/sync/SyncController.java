@@ -10,8 +10,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 수동 백필 트리거(최초 적재용).
- * TODO: 실로그인 도입 시 ROLE_ADMIN 가드 추가(현재 무인증 임시 개방).
+ * 수동 백필 트리거(최초 적재용). SecurityConfig 가 /api/v1/admin/** 에 ADMIN 권한을 요구한다.
  */
 @RestController
 @RequestMapping("/api/v1/admin/sync")

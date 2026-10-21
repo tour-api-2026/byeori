@@ -131,4 +131,24 @@ class TranslationBatchFlowTest {
         assertThat(perfRepo.findNeedingTranslation("EN", 100000))
                 .extracting(Performance::getTitle).contains("행사제목");
     }
+
+    @Test
+    @DisplayName("사람이 번역한 행에 AI 가 다른 언어를 채워도 출처는 HUMAN 으로 남는다")
+    void 사람_표시_유지() {
+        FakeClient c = new FakeClient();
+        TranslationBatch b = new TranslationBatch(venueRepo, perfRepo, c, txm);
+        Venue v = venue("사람번역장소");
+        v.applyTranslation(Lang.EN, "Human Place");
+        v.markHash(TranslationBatch.hashOf("사람번역장소"));
+        em.createNativeQuery("update venues set tr_source='HUMAN' where id=:id").setParameter("id", v.getId()).executeUpdate();
+        em.clear();
+
+        b.translateVenues(Lang.JA, 100000);
+        em.flush(); em.clear();
+
+        Venue read = venueRepo.findById(v.getId()).orElseThrow();
+        assertThat(read.getNameJa()).isEqualTo("사람번역장소@JA");
+        assertThat(read.getNameEn()).isEqualTo("Human Place");
+        assertThat(read.getTrSource()).isEqualTo("HUMAN");
+    }
 }

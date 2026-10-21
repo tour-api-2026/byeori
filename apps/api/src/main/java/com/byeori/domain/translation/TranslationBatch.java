@@ -73,7 +73,11 @@ public class TranslationBatch {
                 String h = hashOf(v.getName());
                 // 해시가 어긋났다면 이름이 바뀐 것이다. 다른 언어의 옛 번역이 남아 있으면
                 // 해시만 새로 찍힌 뒤 "끝난 행" 으로 보이므로 여기서 함께 비운다.
-                if (!h.equals(v.getNameHash())) v.clearTranslations();
+                if (!h.equals(v.getNameHash())) {
+                    if (v.isHumanTranslated())
+                        log.warn("사람 번역을 비운다(이름이 바뀜) 장소 id={} 번역 시점 해시={} 새 이름={}", v.getId(), v.getNameHash(), v.getName());
+                    v.clearTranslations();
+                }
                 v.applyTranslation(lang, tr);
                 v.markHash(h);
                 changed.add(v);
@@ -96,7 +100,11 @@ public class TranslationBatch {
                 String tr = got.get(p.getTitle());
                 if (tr == null) continue;
                 String h = hashOf(p.getTitle());
-                if (!h.equals(p.getNameHash())) p.clearTranslations();
+                if (!h.equals(p.getNameHash())) {
+                    if (p.isHumanTranslated())
+                        log.warn("사람 번역을 비운다(제목이 바뀜) 행사 id={} 번역 시점 해시={} 새 제목={}", p.getId(), p.getNameHash(), p.getTitle());
+                    p.clearTranslations();
+                }
                 p.applyTranslation(lang, tr);
                 p.markHash(h);
                 changed.add(p);
