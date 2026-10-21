@@ -94,7 +94,10 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
             where v.status = 'ACTIVE' and v.visibility = 'PUBLIC'
               and (:category is null or v.category = :category)
               and (:hanbokDiscount is null or v.hanbokDiscount = :hanbokDiscount)
-              and (:keyword is null or v.name like %:keyword%)
+              and (:keyword is null or v.name like %:keyword%
+                   or lower(v.nameEn) like lower(concat('%', :keyword, '%'))
+                   or lower(v.nameJa) like lower(concat('%', :keyword, '%'))
+                   or lower(v.nameZh) like lower(concat('%', :keyword, '%')))
             order by case when v.imageUrl is null or v.imageUrl = '' then 1 else 0 end,
                      v.avgRating desc, v.reviewCount desc, v.id asc
             """)
@@ -119,7 +122,10 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
               and v.lat is not null and v.lng is not null
               and (:category is null or v.category = :category)
               and (:hanbokDiscount is null or v.hanbokDiscount = :hanbokDiscount)
-              and (:keyword is null or v.name like %:keyword%)
+              and (:keyword is null or v.name like %:keyword%
+                   or lower(v.nameEn) like lower(concat('%', :keyword, '%'))
+                   or lower(v.nameJa) like lower(concat('%', :keyword, '%'))
+                   or lower(v.nameZh) like lower(concat('%', :keyword, '%')))
             order by (v.lat - :lat) * (v.lat - :lat)
                    + (v.lng - :lng) * (v.lng - :lng) * 0.656,
                      v.id asc

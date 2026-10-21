@@ -52,7 +52,10 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
                        and (p.startDate is null or p.endDate is null or p.startDate > :today)))
               and (:genre is null or p.genre = :genre)
               and (:venueId is null or p.venueId = :venueId)
-              and (:keyword is null or p.title like %:keyword%)
+              and (:keyword is null or p.title like %:keyword%
+                   or lower(p.titleEn) like lower(concat('%', :keyword, '%'))
+                   or lower(p.titleJa) like lower(concat('%', :keyword, '%'))
+                   or lower(p.titleZh) like lower(concat('%', :keyword, '%')))
               and (:traditional is null or p.traditional = :traditional)
               and p.duplicateOf is null
             """)
