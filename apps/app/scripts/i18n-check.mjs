@@ -6,6 +6,7 @@
 //   3. 이미 번역한 화면에 한국어 리터럴이 남아 있지 않은지 (+ 어느 쪽 목록에도 없는 새 파일이 없는지)
 //   4. 서버가 저장하는 한국어 값마다 사전 키가 있는지
 //   5. 라벨 함수가 사전에 없는 값에 한국어 원문을 돌려주는지
+//   (4b. 서버 FeedReason 코드마다 feed.reason.* 키가 있는지)
 //
 // 2번은 index.ts 에서 함수 본문을 떼어내 타입 표기만 지우고 실제로 돌린다.
 // 베껴 쓰면 구현과 어긋나므로 그렇게 하지 않는다.
@@ -300,6 +301,30 @@ const TAGS = ['분위기 좋음', '야경 최고', '재방문 의사', '인생�
   ok(`댓글 태그 ${TAGS.length}개가 ko 사전에 tag.* 키로 있다`, missG.length === 0, missG.join(', '));
   const genres = [...keys.ko].filter((k) => k.startsWith('genre.'));
   ok('ko 사전에 genre.* 키가 있다', genres.length > 0, `${genres.length}개`);
+}
+
+// ── 4b. 피드 이유 코드 ──────────────────────────────────────
+// 우리 서버가 만드는 값이라 목록을 서버 소스에서 직접 읽는다. 서버가 코드를 더했는데 사전을
+// 안 더하면 사용자에게 'feed.reason.XXX' 키 문자열이 그대로 보인다. CATEGORY·GENRE 는 일부러
+// 사전 키가 없다 — 분류·장르 사전(category.*, genre.*)을 거쳐 번역한다.
+{
+  const FEED_REASON = join(ROOT, '../api/src/main/java/com/byeori/domain/feed/FeedReason.java');
+  if (!existsSync(FEED_REASON)) {
+    console.log('FAIL FeedReason.java 를 찾지 못했다 — 스크립트의 경로를 함께 고칠 것');
+    process.exit(1);
+  }
+  const codes = [...new Set([...readFileSync(FEED_REASON, 'utf8').matchAll(/new FeedReason\("([A-Z_]+)"/g)].map((m) => m[1]))];
+  const ROUTED = ['CATEGORY', 'GENRE'];
+  ok(`FeedReason 코드를 읽었다`, codes.length >= 8, `${codes.length}개`);
+  const need = codes.filter((c) => !ROUTED.includes(c));
+  for (const l of LOCALES) {
+    const miss = need.filter((c) => !keys[l].has('feed.reason.' + c));
+    ok(`${l} 사전에 FeedReason 코드 ${need.length}개의 feed.reason.* 키가 있다`, miss.length === 0, miss.join(', '));
+  }
+  const stale = [...keys.ko].filter((k) => k.startsWith('feed.reason.') && !codes.includes(k.slice('feed.reason.'.length)));
+  ok('서버가 더는 내지 않는 feed.reason.* 키가 없다', stale.length === 0, stale.join(', '));
+  const routedMissing = ROUTED.filter((c) => !codes.includes(c));
+  ok('제외한 CATEGORY·GENRE 가 실제로 서버에 있는 코드다', routedMissing.length === 0, routedMissing.join(', '));
 }
 
 // ── 5. passthrough ──────────────────────────────────────────

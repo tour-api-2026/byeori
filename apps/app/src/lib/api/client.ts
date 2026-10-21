@@ -46,7 +46,8 @@ export async function unwrap<T>(promise: Promise<{ data: ApiEnvelope<T> }>): Pro
 // 요청: 로그인 상태면 Authorization Bearer 첨부 (기존 기본 헤더는 유지)
 api.interceptors.request.use((config) => {
   config.headers = config.headers ?? {};
-  // 콘텐츠 번역(다음 계획)이 이 값을 보고 어느 컬럼을 줄지 고른다. 지금은 서버가 무시한다.
+  // 서버가 이 값을 보고 장소·행사 이름, 설명, 코스, AI 루트의 글을 어느 언어로 줄지 고른다.
+  // 알아듣는 값은 ko·en·ja·zh 뿐이고 그 밖은 한국어로 본다. 빼거나 틀리면 모든 콘텐츠의 언어가 바뀐다.
   // 기본 헤더의 'ko' 는 고정값이라 요청마다 현재 언어로 덮는다. 우리 4글자 로케일 그대로 보낸다.
   config.headers['Accept-Language'] = useLocaleStore.getState().locale;
   const token = useAuthStore.getState().accessToken;

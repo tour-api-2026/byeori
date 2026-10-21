@@ -13,7 +13,6 @@ const passthrough = (t: TFn, prefix: string, value: string) => {
   return out === key ? value : out;
 };
 
-
 /**
  * 카테고리·지역의 표시 이름.
  *

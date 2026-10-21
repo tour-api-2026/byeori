@@ -471,7 +471,7 @@ export const en: Record<string, string> = {
   'feed.reason.RECOMMENDED': 'Recommended',
   'feed.reason.ONGOING': 'On now',
   'feed.reason.STARTS_TODAY': 'Starts today',
-  'feed.reason.STARTS_IN_DAYS': 'Starts in {p} days',
+  'feed.reason.STARTS_IN_DAYS': 'Days until start: {p}',
   'feed.reason.UPCOMING': 'Coming soon',
   'app.name': 'Byeori',
   'nav.bookmarks': 'Favorites',
