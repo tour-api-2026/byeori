@@ -98,7 +98,7 @@ public class AiRouteService {
         }
         Plan plan = validate(req);
         // 앞서 만든 코스를 고쳐 달라는 요청이면 캐시를 쓰지도, 남기지도 않는다(요청마다 결과가 다르다)
-        Kept keep = previousCandidates(req.previous());
+        Kept keep = previousCandidates(req.previous(), lang);
         boolean refining = !keep.isEmpty();
 
         // 언어를 키에 넣는다. 캐시는 조건이 같은 모든 사용자가 나눠 쓰므로, 빼면 일본어로 만든 코스를
@@ -116,7 +116,7 @@ public class AiRouteService {
         int slotNo = 0;
         int candidateCount = 0;
         for (Day day : plan.days()) {
-            List<Candidate> dayCandidates = new ArrayList<>(candidates(day, plan.categories()));
+            List<Candidate> dayCandidates = new ArrayList<>(candidates(day, plan.categories(), lang));
             // 숙소는 마지막 날에 넣지 않는다(집으로 돌아가는 날)
             List<Slot> daySlots = new ArrayList<>();
             for (Slot sl : slots(plan.categories(), dayCandidates, day.no() < plan.days().size())) {
@@ -148,14 +148,14 @@ public class AiRouteService {
 
         String prompt = userPrompt(plan, frames, keep);
         JsonNode answer = ai.completeJson(systemPrompt(refining, lang), prompt, "day_route", schema());
-        Preview preview = answer == null ? null : localizeNames(toPreview(answer, frames, keep, lang), lang);
+        Preview preview = answer == null ? null : toPreview(answer, frames, keep, lang);
         // 다듬기인데 한 곳도 안 바뀌면 한 번만 더 부른다. "바꿨다"고 말하면서 같은 곳을 다시 고르는
         // 경우가 있었다(응답은 칸 하나뿐인데 id 가 지금과 같았다).
         if (refining && preview != null && unchanged(preview, keep)) {
             JsonNode retry = ai.completeJson(systemPrompt(true, lang),
                     prompt + "\n중요: 바꾸기로 한 칸의 id 는 \"지금 고른 곳\"과 반드시 달라야 한다.\n",
                     "day_route", schema());
-            Preview second = retry == null ? null : localizeNames(toPreview(retry, frames, keep, lang), lang);
+            Preview second = retry == null ? null : toPreview(retry, frames, keep, lang);
             if (second != null && !unchanged(second, keep)) preview = second;
         }
         if (preview == null) {
@@ -256,7 +256,7 @@ public class AiRouteService {
      * 다듬기 요청에서 넘어온 현재 코스. 후보에 넣어야 AI가 그대로 두기를 고를 수 있고,
      * 순서는 하루 틀의 칸 순서와 같아야 한다(칸 번호로 짝지어 쓴다).
      */
-    Kept previousCandidates(List<AiRouteDtos.PreviousStop> previous) {
+    Kept previousCandidates(List<AiRouteDtos.PreviousStop> previous, Lang lang) {
         if (previous == null || previous.isEmpty()) return Kept.NONE;
         Map<Long, Venue> venues = new LinkedHashMap<>();
         Map<Long, Performance> perfs = new LinkedHashMap<>();
@@ -273,8 +273,8 @@ public class AiRouteService {
         for (AiRouteDtos.PreviousStop p : previous) {
             if (p == null || p.targetId() == null || p.slot() <= 0) continue;
             Candidate c = "PERFORMANCE".equals(p.targetType())
-                    ? (perfs.containsKey(p.targetId()) ? of(perfs.get(p.targetId())) : null)
-                    : (venues.containsKey(p.targetId()) ? of(venues.get(p.targetId())) : null);
+                    ? (perfs.containsKey(p.targetId()) ? of(perfs.get(p.targetId()), lang) : null)
+                    : (venues.containsKey(p.targetId()) ? of(venues.get(p.targetId()), lang) : null);
             if (c == null) continue;
             stops.put(p.slot(), c);
             reasons.put(p.slot(), clipWords(p.reason(), 120));
@@ -283,7 +283,7 @@ public class AiRouteService {
     }
 
     /** 그 날 지역 반경 안의 후보. 날짜마다 따로 뽑는다(1일차 경주, 2일차 부산). */
-    List<Candidate> candidates(Day day, List<String> categories) {
+    List<Candidate> candidates(Day day, List<String> categories, Lang lang) {
         double dLat = RADIUS_M / 111_000.0;
         double dLng = RADIUS_M / (111_000.0 * Math.cos(Math.toRadians(day.lat())));
         BigDecimal minLat = BigDecimal.valueOf(day.lat() - dLat), maxLat = BigDecimal.valueOf(day.lat() + dLat);
@@ -293,22 +293,26 @@ public class AiRouteService {
         // 테마별로 나눠 뽑는다. 한꺼번에 뽑으면 수가 많은 문화·맛집이 공예·전통시장을 밀어낸다.
         int per = (int) Math.ceil((double) VENUE_CANDIDATES / categories.size());
         for (String cat : categories) {
-            for (Venue v : venueRepo.sampleForRoute(minLat, maxLat, minLng, maxLng, cat, per)) out.add(of(v));
+            for (Venue v : venueRepo.sampleForRoute(minLat, maxLat, minLng, maxLng, cat, per)) out.add(of(v, lang));
         }
         for (Performance p : performanceRepo.findOnDateInBounds(day.date(), minLat, maxLat, minLng, maxLng,
                 PageRequest.of(0, EVENT_CANDIDATES))) {
-            out.add(of(p));
+            out.add(of(p, lang));
         }
         return out;
     }
 
-    private static Candidate of(Venue v) {
-        return new Candidate("v" + v.getId(), "VENUE", v.getId(), v.getName(), v.getCategory(),
+    /**
+     * 후보 이름은 요청 언어의 DB 번역이고, 없으면 한국어다. 이 이름이 프롬프트에도, 카드 제목에도
+     * 그대로 쓰인다 — 한쪽만 번역하면 카드는 "Gyeongbokgung Palace" 인데 설명은 "경복궁에서 시작" 이 된다.
+     */
+    private static Candidate of(Venue v, Lang lang) {
+        return new Candidate("v" + v.getId(), "VENUE", v.getId(), v.nameIn(lang), v.getCategory(),
                 v.getImageUrl(), num(v.getLat()), num(v.getLng()));
     }
 
-    private static Candidate of(Performance p) {
-        return new Candidate("p" + p.getId(), "PERFORMANCE", p.getId(), p.getTitle(),
+    private static Candidate of(Performance p, Lang lang) {
+        return new Candidate("p" + p.getId(), "PERFORMANCE", p.getId(), p.titleIn(lang),
                 p.isTraditional() ? "전통 행사" : "행사", p.getPosterImageUrl(), num(p.getLat()), num(p.getLng()));
     }
 
@@ -405,11 +409,12 @@ public class AiRouteService {
     }
 
     /**
-     * 언어 지시. 루트의 글은 번역하되 장소 이름은 한국어를 유지한다.
+     * 언어 지시. 제목·요약·이유를 그 언어로 쓰게 한다.
      *
-     * 이름을 한국어로 두는 이유는 현장이다 — 외국인이 간판을 맞추거나 택시 기사에게 보여 주려면
-     * 한국어 이름이 필요하다. 화면에 보이는 이름은 응답에서 DB 의 번역값으로 바꾼다
-     * (localizeNames). 프롬프트에서 이름을 번역시키면 DB 와 어긋난 표기가 섞인다.
+     * 장소 이름은 후보 목록에 이미 그 언어의 DB 번역(없으면 한국어)으로 들어 있고, 카드 제목도 같은
+     * 이름이다. 모델에게 이름을 다시 번역시키면 DB 와 어긋난 표기가 섞이므로 목록의 이름을 그대로
+     * 쓰게 한다. (예전에는 "한국어 이름을 유지하라" 고 했는데, 카드는 번역명이고 설명은 한국어명이라
+     * 서로 맞지 않았다. 현장에서 한국어 이름이 필요한 문제는 장소 상세에서 풀 일이다.)
      */
     private static String languageClause(Lang lang) {
         if (lang == Lang.KO) {
@@ -425,34 +430,14 @@ public class AiRouteService {
              + "Write the route title and every description in " + name + ".\n"
              + "This replaces the instructions above to write in Korean (title, summary and every reason).\n"
              + "The character limits above were for Korean. In this language use: " + limits(lang) + ".\n"
-             + "But keep the Korean place names exactly as given — do not translate or romanize them.\n"
-             + "The traveller needs them to match the signs and to show a taxi driver.\n";
+             + "Refer to every place by exactly the name written in the candidate list, "
+             + "never by a name you translate or romanize yourself.\n";
     }
 
     private static String limits(Lang lang) {
         return lang == Lang.EN
                 ? "title at most 40 characters, each reason at most 75, summary at most 160"
                 : "title at most 24 characters, each reason at most 45, summary at most 100";
-    }
-
-    /**
-     * 미리보기의 장소 이름을 선택한 언어의 DB 번역으로 바꾼다. 프롬프트는 한국어 이름으로 돌았고,
-     * 화면에는 번역된 이름이 나가야 한다. 번역이 없으면 nameIn/titleIn 이 한국어로 떨어뜨린다.
-     */
-    private Preview localizeNames(Preview p, Lang lang) {
-        if (p == null || lang == Lang.KO) return p;
-        Map<Long, String> venues = new java.util.HashMap<>();
-        Map<Long, String> events = new java.util.HashMap<>();
-        venueRepo.findAllById(p.stops().stream().filter(s -> "VENUE".equals(s.targetType()))
-                .map(Stop::targetId).toList()).forEach(v -> venues.put(v.getId(), v.nameIn(lang)));
-        performanceRepo.findAllById(p.stops().stream().filter(s -> "PERFORMANCE".equals(s.targetType()))
-                .map(Stop::targetId).toList()).forEach(e -> events.put(e.getId(), e.titleIn(lang)));
-        List<Stop> stops = p.stops().stream().map(s -> {
-            String n = ("VENUE".equals(s.targetType()) ? venues : events).get(s.targetId());
-            return n == null ? s : new Stop(s.day(), s.date(), s.slot(), s.targetType(), s.targetId(), n,
-                    s.category(), s.imageUrl(), s.lat(), s.lng(), s.time(), s.reason());
-        }).toList();
-        return new Preview(p.title(), p.summary(), p.startDate(), p.endDate(), stops, p.remainingToday());
     }
 
     static String systemPromptNew(Lang lang) {
@@ -606,8 +591,18 @@ public class AiRouteService {
         String title = clipWords(answer.path("title").asText(""), lim.title());
         LocalDate start = frames.get(0).day().date();
         LocalDate end = frames.get(frames.size() - 1).day().date();
-        return new Preview(title.isEmpty() ? "AI 추천 코스" : title,
+        return new Preview(title.isEmpty() ? fallbackTitle(lang) : title,
                 clipWords(answer.path("summary").asText(""), lim.summary()), start, end, stops, 0);
+    }
+
+    /** AI 가 제목을 비워 보냈을 때의 제목. 요청 언어를 따른다 — 일본어 화면에 한국어 제목이 뜨면 안 된다. */
+    static String fallbackTitle(Lang lang) {
+        return switch (lang) {
+            case EN -> "AI-recommended route";
+            case JA -> "AIおすすめコース";
+            case ZH -> "AI推荐路线";
+            case KO -> "AI 추천 코스";
+        };
     }
 
     /** 넘치면 마지막 공백에서 자르고 …를 붙인다. 공백이 없으면(일본어·중국어) 그 자리에서 자른다. */

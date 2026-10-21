@@ -6,7 +6,7 @@ import com.byeori.global.i18n.Lang;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** 루트는 번역이 아니라 처음부터 그 언어로 만든다. 단 장소 이름은 한국어로 남는다. */
+/** 루트는 번역이 아니라 처음부터 그 언어로 만든다. 장소 이름은 후보 목록의 것을 그대로 쓴다. */
 class AiRoutePromptLangTest {
 
     @Test
@@ -19,11 +19,12 @@ class AiRoutePromptLangTest {
     }
 
     @Test
-    @DisplayName("장소 이름은 한국어 원본을 유지하라고 지시한다")
-    void 장소명_유지() {
-        // 현장에서 간판을 맞추려면 장소 이름은 한국어가 남아야 한다
+    @DisplayName("한국어 이름을 유지하라고 하지 않고, 목록의 이름을 그대로 쓰라고 한다")
+    void 장소명은_목록_그대로() {
+        // 카드 제목이 번역명이므로 설명도 같은 이름을 써야 한다. 한국어 이름 필요는 장소 상세에서 푼다.
         for (Lang l : new Lang[] {Lang.EN, Lang.JA, Lang.ZH}) {
-            assertThat(AiRouteService.systemPromptNew(l)).contains("keep the Korean place names");
+            assertThat(AiRouteService.systemPromptNew(l)).doesNotContain("keep the Korean place names")
+                    .contains("exactly the name written in the candidate list");
         }
     }
 

@@ -64,6 +64,7 @@ class AiRouteServiceTest {
         Venue v = org.mockito.Mockito.mock(Venue.class);
         when(v.getId()).thenReturn(id);
         when(v.getName()).thenReturn("장소" + id);
+        when(v.nameIn(any())).thenReturn("장소" + id);   // 번역이 없으면 한국어로 떨어진다
         when(v.getCategory()).thenReturn("문화");
         when(v.getLat()).thenReturn(BigDecimal.valueOf(37.57));
         when(v.getLng()).thenReturn(BigDecimal.valueOf(126.98));
@@ -255,22 +256,51 @@ class AiRouteServiceTest {
     }
 
     @Test
-    void 요청_언어가_시스템_프롬프트에_들어가고_장소_이름은_번역_이름으로_나간다() {
+    void 요청_언어가_시스템_프롬프트에_들어간다() {
         when(ai.completeJson(anyString(), anyString(), eq("day_route"), any())).thenReturn(answer("v1", "v2", "v3"));
-        Venue en = org.mockito.Mockito.mock(Venue.class);
-        when(en.getId()).thenReturn(1L);
-        when(en.nameIn(Lang.JA)).thenReturn("景福宮");
-        when(venueRepo.findAllById(any())).thenReturn(List.of(en));
 
-        Preview p = service.generate(7L, req(false), Lang.JA);
+        service.generate(7L, req(false), Lang.JA);
+
+        var system = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(ai).completeJson(system.capture(), anyString(), eq("day_route"), any());
+        assertThat(system.getValue()).contains("Japanese");
+    }
+
+    /**
+     * 프롬프트의 이름과 카드의 이름이 같아야 한다. 예전에는 모델에게 한국어 이름을 주고 카드만
+     * 번역해서 "Gyeongbokgung Palace" 카드 아래에 "경복궁에서 시작" 이라는 이유가 붙었다.
+     * 번역이 있는 곳은 번역명, 없는 곳은 한국어 — 둘이 섞인 한 번의 요청으로 확인한다.
+     */
+    @Test
+    void 번역이_있는_장소는_번역명이_프롬프트와_카드에_같이_나가고_없는_장소는_한국어다() {
+        Venue translated = venue(1);
+        when(translated.nameIn(Lang.EN)).thenReturn("Gyeongbokgung Palace");
+        List<Venue> all = List.of(translated, venue(2), venue(3), venue(4));   // 스텁 밖에서 만든다
+        when(venueRepo.sampleForRoute(any(), any(), any(), any(), anyString(), anyInt())).thenReturn(all);
+        when(ai.completeJson(anyString(), anyString(), eq("day_route"), any())).thenReturn(answer("v1", "v2", "v3"));
+
+        Preview p = service.generate(7L, req(false), Lang.EN);
 
         var system = org.mockito.ArgumentCaptor.forClass(String.class);
         var user = org.mockito.ArgumentCaptor.forClass(String.class);
         verify(ai).completeJson(system.capture(), user.capture(), eq("day_route"), any());
-        assertThat(system.getValue()).contains("Japanese");
-        assertThat(user.getValue()).contains("장소1");                        // 프롬프트의 이름은 한국어
-        assertThat(p.stops().get(0).name()).isEqualTo("景福宮");               // 화면 이름은 DB 번역
-        assertThat(p.stops().get(1).name()).isEqualTo("장소2");               // 번역 없는 곳은 한국어
+        assertThat(user.getValue()).contains("Gyeongbokgung Palace").doesNotContain("장소1");
+        assertThat(user.getValue()).contains("장소2");                          // 번역 없는 곳은 한국어
+        assertThat(system.getValue()).doesNotContain("keep the Korean place names");
+        assertThat(p.stops().get(0).name()).isEqualTo("Gyeongbokgung Palace");  // 카드 = 프롬프트의 이름
+        assertThat(p.stops().get(1).name()).isEqualTo("장소2");
+    }
+
+    @Test
+    void AI가_제목을_비우면_요청_언어의_대체_제목을_쓴다() {
+        var answer = (com.fasterxml.jackson.databind.node.ObjectNode) answer("v1", "v2", "v3");
+        answer.put("title", "");
+        var frames = frame(SIGHT_SLOTS.subList(0, 3));
+
+        assertThat(AiRouteService.toPreview(answer, frames, NONE, Lang.KO).title()).isEqualTo("AI 추천 코스");
+        assertThat(AiRouteService.toPreview(answer, frames, NONE, Lang.EN).title()).isEqualTo("AI-recommended route");
+        assertThat(AiRouteService.toPreview(answer, frames, NONE, Lang.JA).title()).isEqualTo("AIおすすめコース");
+        assertThat(AiRouteService.toPreview(answer, frames, NONE, Lang.ZH).title()).isEqualTo("AI推荐路线");
     }
 
     @Test
