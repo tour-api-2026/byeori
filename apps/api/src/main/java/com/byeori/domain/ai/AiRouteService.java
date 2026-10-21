@@ -148,14 +148,14 @@ public class AiRouteService {
 
         String prompt = userPrompt(plan, frames, keep);
         JsonNode answer = ai.completeJson(systemPrompt(refining, lang), prompt, "day_route", schema());
-        Preview preview = answer == null ? null : localizeNames(toPreview(answer, frames, keep), lang);
+        Preview preview = answer == null ? null : localizeNames(toPreview(answer, frames, keep, lang), lang);
         // 다듬기인데 한 곳도 안 바뀌면 한 번만 더 부른다. "바꿨다"고 말하면서 같은 곳을 다시 고르는
         // 경우가 있었다(응답은 칸 하나뿐인데 id 가 지금과 같았다).
         if (refining && preview != null && unchanged(preview, keep)) {
             JsonNode retry = ai.completeJson(systemPrompt(true, lang),
                     prompt + "\n중요: 바꾸기로 한 칸의 id 는 \"지금 고른 곳\"과 반드시 달라야 한다.\n",
                     "day_route", schema());
-            Preview second = retry == null ? null : localizeNames(toPreview(retry, frames, keep), lang);
+            Preview second = retry == null ? null : localizeNames(toPreview(retry, frames, keep, lang), lang);
             if (second != null && !unchanged(second, keep)) preview = second;
         }
         if (preview == null) {
@@ -277,7 +277,7 @@ public class AiRouteService {
                     : (venues.containsKey(p.targetId()) ? of(venues.get(p.targetId())) : null);
             if (c == null) continue;
             stops.put(p.slot(), c);
-            reasons.put(p.slot(), clip(p.reason(), 60));
+            reasons.put(p.slot(), clipWords(p.reason(), 120));
         }
         return new Kept(stops, reasons);
     }
@@ -424,8 +424,15 @@ public class AiRouteService {
         return "\n\n[Language]\n"
              + "Write the route title and every description in " + name + ".\n"
              + "This replaces the instructions above to write in Korean (title, summary and every reason).\n"
+             + "The character limits above were for Korean. In this language use: " + limits(lang) + ".\n"
              + "But keep the Korean place names exactly as given — do not translate or romanize them.\n"
              + "The traveller needs them to match the signs and to show a taxi driver.\n";
+    }
+
+    private static String limits(Lang lang) {
+        return lang == Lang.EN
+                ? "title at most 40 characters, each reason at most 75, summary at most 160"
+                : "title at most 24 characters, each reason at most 45, summary at most 100";
     }
 
     /**
@@ -549,6 +556,26 @@ public class AiRouteService {
      * 비운다. 시각은 AI가 아니라 틀에서 가져온다. 채운 칸이 MIN_STOPS 미만이면 null.
      */
     static Preview toPreview(JsonNode answer, List<DayFrame> frames, Kept keep) {
+        return toPreview(answer, frames, keep, Lang.KO);
+    }
+
+    /**
+     * 글자 수 상한은 언어마다 다르다. 같은 뜻이 영어로는 한국어의 두 배쯤 글자를 먹으므로
+     * 한국어 기준(30/60/120)으로 자르면 제목·이유·요약이 단어 중간에서 끊긴다.
+     * 프롬프트에 주는 목표(languageClause)보다 넉넉한 천장으로 두고, 그래도 넘으면 단어 경계에서 …로 자른다.
+     */
+    private record Limits(int title, int reason, int summary) {
+        static Limits of(Lang lang) {
+            return switch (lang) {
+                case EN -> new Limits(60, 120, 240);
+                case JA, ZH -> new Limits(36, 70, 160);   // 한자·가나는 한국어와 밀도가 비슷하다
+                case KO -> new Limits(30, 60, 120);
+            };
+        }
+    }
+
+    static Preview toPreview(JsonNode answer, List<DayFrame> frames, Kept keep, Lang lang) {
+        Limits lim = Limits.of(lang);
         Map<Integer, JsonNode> bySlot = new LinkedHashMap<>();
         for (JsonNode p : answer.path("picks")) bySlot.putIfAbsent(p.path("slot").asInt(-1), p);
 
@@ -560,7 +587,7 @@ public class AiRouteService {
             for (Candidate k : f.candidates()) byKey.put(k.key(), k);
             for (Slot sl : f.slots()) {
                 JsonNode p = bySlot.get(sl.no());
-                String reason = p == null ? null : clip(p.path("reason").asText(""), 60);
+                String reason = p == null ? null : clipWords(p.path("reason").asText(""), lim.reason());
                 Candidate k = p == null ? null : byKey.get(p.path("id").asText("").strip());
                 if (k != null && !sl.kinds().contains(k.category())) k = null; // 칸의 분류와 다르면 버린다
                 // 다듬기: AI가 담지 않은 칸은 지금 고른 곳을 이유까지 그대로 둔다
@@ -576,11 +603,21 @@ public class AiRouteService {
         }
         if (stops.size() < MIN_STOPS) return null;
 
-        String title = clip(answer.path("title").asText(""), 30);
+        String title = clipWords(answer.path("title").asText(""), lim.title());
         LocalDate start = frames.get(0).day().date();
         LocalDate end = frames.get(frames.size() - 1).day().date();
         return new Preview(title.isEmpty() ? "AI 추천 코스" : title,
-                clip(answer.path("summary").asText(""), 120), start, end, stops, 0);
+                clipWords(answer.path("summary").asText(""), lim.summary()), start, end, stops, 0);
+    }
+
+    /** 넘치면 마지막 공백에서 자르고 …를 붙인다. 공백이 없으면(일본어·중국어) 그 자리에서 자른다. */
+    static String clipWords(String s, int max) {
+        String t = s == null ? "" : s.strip();
+        if (t.length() <= max) return t;
+        String cut = t.substring(0, max - 1);
+        int sp = cut.lastIndexOf(' ');
+        if (sp > max / 2) cut = cut.substring(0, sp);
+        return cut.stripTrailing() + "…";
     }
 
     static String clip(String s, int max) {

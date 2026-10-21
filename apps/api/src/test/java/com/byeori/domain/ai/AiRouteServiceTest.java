@@ -274,6 +274,22 @@ class AiRouteServiceTest {
     }
 
     @Test
+    void 영어는_한국어_기준_길이로_자르지_않고_넘치면_단어_경계에서_줄임표로_자른다() {
+        String reason = "A pleasant walk from the previous stop through quiet streets with traditional houses";
+        var answer = answer("v1", "v2", "v3");
+        ((com.fasterxml.jackson.databind.node.ObjectNode) answer.get("picks").get(0)).put("reason", reason);
+
+        var frames = frame(SIGHT_SLOTS.subList(0, 3));
+        Preview en = AiRouteService.toPreview(answer, frames, NONE, Lang.EN);
+        Preview ko = AiRouteService.toPreview(answer, frames, NONE, Lang.KO);
+
+        assertThat(en.stops().get(0).reason()).isEqualTo(reason);          // 86자 — 영어 상한 안
+        assertThat(ko.stops().get(0).reason()).hasSizeLessThanOrEqualTo(60).endsWith("…");   // 한국어 기준은 그대로
+
+        assertThat(AiRouteService.clipWords("alpha beta gamma delta", 14)).isEqualTo("alpha beta…");
+    }
+
+    @Test
     void 요청이_다르면_캐시를_나눠_쓴다() {
         when(ai.completeJson(anyString(), anyString(), eq("day_route"), any())).thenReturn(answer("v1", "v2", "v3"));
 

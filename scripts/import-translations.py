@@ -27,6 +27,10 @@ TABLE = {
     "course_desc": ("curated_courses", "description", "desc_en", "desc_ja", "desc_zh"),
 }
 
+# 이름 해시·출처를 함께 쓰는 kind(번역 배치가 도는 테이블)와 그 컬럼.
+HASHED = ("venue", "perf")
+HASH_COLS = ["name_hash", "tr_source"]
+
 
 def psql(sql: str) -> str:
     """운영 DB 는 컨테이너 안에서만 열려 있다(호스트에 포트를 열지 않는다)."""
@@ -59,8 +63,10 @@ def main() -> None:
     have = set(psql("""select table_name || '.' || column_name
                        from information_schema.columns
                        where table_schema = 'public';""").split())
+    # 스크립트가 쓰는 컬럼 전부를 확인한다. 번역 컬럼만 보면 name_hash·tr_source 가 없는 테이블에서
+    # 첫 UPDATE 가 실패해 트랜잭션이 통째로 되돌아간다(코스에서 실제로 그랬다).
     ready = {k for k, (t, _src, *cols) in TABLE.items()
-             if all(f"{t}.{c}" in have for c in cols)}
+             if all(f"{t}.{c}" in have for c in cols + (HASH_COLS if k in HASHED else []))}
     missing = set(TABLE) - ready
     if missing:
         print("번역 컬럼이 없어 건너뛰는 kind: " + ", ".join(sorted(missing)))
@@ -98,7 +104,7 @@ def main() -> None:
         # 해시·출처 컬럼은 번역 배치가 도는 venues·performances 에만 있다. 설명 번역은 이름이
         # 아니라 설명이고, 코스는 배치 대상이 아니라 이 컬럼들이 없다(있다고 쓰면 psql 이 실패해
         # 트랜잭션 전체가 되돌아간다).
-        if kind in ("venue", "perf"):
+        if kind in HASHED:
             h = hashlib.sha256(r["ko"].encode("utf-8")).hexdigest()
             sets += [f"name_hash = {lit(h)}", "tr_source = 'HUMAN'"]
         updates.append(f"update {table} set {', '.join(sets)} where id = {rid};")

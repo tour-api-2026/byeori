@@ -106,7 +106,7 @@ public class TranslationClient {
     public String translateText(Lang lang, String text) {
         if (lang == Lang.KO || text == null || text.isBlank()) return null;
         try {
-            JsonNode res = openAi.completeJson(systemForProse(lang), text, "description", TEXT_SCHEMA, 0.2);
+            JsonNode res = openAi.completeJsonLive(systemForProse(lang), text, "description", TEXT_SCHEMA, 0.2);
             if (res == null || !res.path("text").isTextual()) return null;
             String tr = res.get("text").asText().trim();
             return tr.isEmpty() ? null : tr;

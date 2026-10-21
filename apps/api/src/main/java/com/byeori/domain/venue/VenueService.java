@@ -8,6 +8,7 @@ import com.byeori.domain.venue.dto.VenueResponse;
 import com.byeori.global.exception.BadRequestException;
 import com.byeori.global.exception.NotFoundException;
 import com.byeori.domain.sync.CategoryMapper;
+import com.byeori.domain.translation.DetailTranslationCap;
 import com.byeori.domain.translation.TranslationClient;
 import com.byeori.global.external.dto.TourDetail;
 import com.byeori.global.external.TourApiClient;
@@ -17,7 +18,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @Transactional(readOnly = true)
@@ -30,10 +34,15 @@ public class VenueService {
     private final VenueReportRepository reportRepo;
     private final TourApiClient tourClient;
     private final TranslationClient translationClient;
+    private final DetailTranslationCap translationCap;
+    private final TransactionTemplate tx;
 
     public VenueService(VenueRepository repo, VenueReportRepository reportRepo, TourApiClient tourClient,
-                        TranslationClient translationClient) {
+                        TranslationClient translationClient, DetailTranslationCap translationCap,
+                        PlatformTransactionManager txm) {
         this.translationClient = translationClient;
+        this.translationCap = translationCap;
+        this.tx = new TransactionTemplate(txm);
         this.repo = repo;
         this.reportRepo = reportRepo;
         this.tourClient = tourClient;
@@ -142,8 +151,9 @@ public class VenueService {
      * 상세 조회. 실시간 결과의 절반 가까이는 우리 DB에 없어(경복궁 반경 2km 기준 50건 중 24건)
      * 우리 id가 없다. 숫자면 우리 레코드, 아니면 공사 콘텐츠 ID로 본다.
      */
-    // 처음 열릴 때 번역을 저장하므로 클래스 기본(readOnly)을 풀어야 한다.
-    @Transactional
+    // 트랜잭션 밖에서 돈다. 처음 열릴 때의 AI 호출(최대 수 초)과 공사 API 호출 동안 DB 연결을
+    // 쥐고 있으면 풀(기본 10)이 말라 다른 모든 요청이 막힌다. 저장만 짧은 트랜잭션으로 한다(TranslationBatch 와 같다).
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public VenueDetailResponse detailByKey(Lang lang, String key) {
         if (key != null && key.chars().allMatch(Character::isDigit) && key.length() < 19) {
             Long id = Long.valueOf(key);
@@ -176,10 +186,15 @@ public class VenueService {
         if (lang == Lang.KO || koDescription == null || koDescription.isBlank()) return koDescription;
         String saved = v.descIn(lang);
         if (saved != null && !saved.isBlank()) return saved;      // 두 번째부터는 AI 를 부르지 않는다
+        // 로그인 없이 열리는 화면이라 하루 총량으로 막는다. 닿으면 한국어 — 번역 실패와 같은 길이다.
+        if (!translationCap.tryAcquire()) return koDescription;
         String tr = translationClient.translateText(lang, koDescription);
         if (tr == null || tr.isBlank()) return koDescription;     // 실패 — 한국어로 둔다
-        v.applyDescription(lang, tr);
-        repo.save(v);
+        // 낡은 사본을 통째로 저장하면 그 사이 바뀐 평점 등을 덮으므로 다시 읽어 설명만 바꾼다.
+        tx.executeWithoutResult(st -> repo.findById(v.getId()).ifPresent(fresh -> {
+            fresh.applyDescription(lang, tr);
+            repo.save(fresh);
+        }));
         return tr;
     }
 

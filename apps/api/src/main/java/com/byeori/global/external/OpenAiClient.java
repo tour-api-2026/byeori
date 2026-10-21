@@ -28,6 +28,12 @@ public class OpenAiClient {
     /** 사용자가 화면에서 기다리는 호출이라 길게 끌지 않는다. */
     private final RestClient http;
 
+    /**
+     * 화면이 기다리는 호출용. 상세 설명 번역이 쓴다. 실패해도 한국어를 즉시 줄 수 있으니(공짜)
+     * 길게 기다릴 이유가 없다 — 놓친 번역은 다음에 열 때 다시 시도된다. TourApiClient 의 liveHttp 와 같은 이유.
+     */
+    private final RestClient liveHttp;
+
     public OpenAiClient(@Value("${byeori.ai.openai-api-key:}") String apiKey,
                         @Value("${byeori.ai.openai-model:gpt-4o-mini}") String model) {
         this.apiKey = apiKey;
@@ -36,6 +42,10 @@ public class OpenAiClient {
         f.setConnectTimeout(Duration.ofSeconds(3));
         f.setReadTimeout(Duration.ofSeconds(20));
         this.http = RestClient.builder().requestFactory(f).build();
+        SimpleClientHttpRequestFactory live = new SimpleClientHttpRequestFactory();
+        live.setConnectTimeout(Duration.ofSeconds(2));
+        live.setReadTimeout(Duration.ofSeconds(8));
+        this.liveHttp = RestClient.builder().requestFactory(live).build();
     }
 
     public boolean enabled() {
@@ -58,6 +68,17 @@ public class OpenAiClient {
      */
     public JsonNode completeJson(String system, String user, String schemaName, Map<String, Object> schema,
                                  double temperature) {
+        return call(http, system, user, schemaName, schema, temperature);
+    }
+
+    /** 사용자가 화면에서 기다리는 호출. 짧은 시간 제한(liveHttp)으로 부른다. */
+    public JsonNode completeJsonLive(String system, String user, String schemaName, Map<String, Object> schema,
+                                     double temperature) {
+        return call(liveHttp, system, user, schemaName, schema, temperature);
+    }
+
+    private JsonNode call(RestClient http, String system, String user, String schemaName,
+                          Map<String, Object> schema, double temperature) {
         if (!enabled()) return null;
         try {
             Map<String, Object> body = Map.of(
