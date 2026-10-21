@@ -19,8 +19,9 @@ public class CuratedCourseController {
 
     @GetMapping
     public ApiResponse<List<CuratedCourseResponse>> list(
+            @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
             @RequestParam(name = "theme", required = false) String theme) {
-        return ApiResponse.ok(service.list(theme));
+        return ApiResponse.ok(service.list(Lang.of(acceptLanguage), theme));
     }
 
     @GetMapping("/{id}")

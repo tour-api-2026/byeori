@@ -95,8 +95,10 @@ def main() -> None:
         table, src, c_en, c_ja, c_zh = TABLE[kind]
         sets = [f"{col} = {lit(tr[k])}"
                 for col, k in ((c_en, "en"), (c_ja, "ja"), (c_zh, "zh")) if tr[k]]
-        # 설명 번역은 이름 해시와 무관하다 — 이름이 아니라 설명이다.
-        if kind != "course_desc":
+        # 해시·출처 컬럼은 번역 배치가 도는 venues·performances 에만 있다. 설명 번역은 이름이
+        # 아니라 설명이고, 코스는 배치 대상이 아니라 이 컬럼들이 없다(있다고 쓰면 psql 이 실패해
+        # 트랜잭션 전체가 되돌아간다).
+        if kind in ("venue", "perf"):
             h = hashlib.sha256(r["ko"].encode("utf-8")).hexdigest()
             sets += [f"name_hash = {lit(h)}", "tr_source = 'HUMAN'"]
         updates.append(f"update {table} set {', '.join(sets)} where id = {rid};")

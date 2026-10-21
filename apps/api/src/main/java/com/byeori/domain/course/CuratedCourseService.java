@@ -30,8 +30,8 @@ public class CuratedCourseService {
         this.performanceRepo = performanceRepo;
     }
 
-    public List<CuratedCourseResponse> list(String theme) {
-        return courseRepo.findActive(theme).stream().map(CuratedCourseResponse::from).toList();
+    public List<CuratedCourseResponse> list(Lang lang, String theme) {
+        return courseRepo.findActive(theme).stream().map(c -> CuratedCourseResponse.from(c, lang)).toList();
     }
 
     public CuratedCourseDetailResponse detail(Lang lang, Long id) {
@@ -39,7 +39,7 @@ public class CuratedCourseService {
                 .orElseThrow(() -> new NotFoundException("COURSE_NOT_FOUND", "추천 코스를 찾을 수 없습니다."));
         List<CourseItemResponse> items = itemRepo.findByCourseIdOrderBySortOrderAsc(id).stream()
                 .map(i -> toItemResponse(lang, i)).toList();
-        return CuratedCourseDetailResponse.from(course, items);
+        return CuratedCourseDetailResponse.from(course, lang, items);
     }
 
     private CourseItemResponse toItemResponse(Lang lang, CuratedCourseItem item) {
