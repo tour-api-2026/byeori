@@ -10,6 +10,7 @@ import com.byeori.domain.venue.Venue;
 import com.byeori.domain.venue.VenueRepository;
 import com.byeori.global.exception.BadRequestException;
 import com.byeori.global.external.OpenAiClient;
+import com.byeori.global.i18n.Lang;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -91,7 +92,7 @@ public class AiRouteService {
         return new Status(true, userId == null ? null : quota.remaining(userId));
     }
 
-    public Preview generate(Long userId, GenerateRequest req) {
+    public Preview generate(Long userId, GenerateRequest req, Lang lang) {
         if (!ai.enabled()) {
             throw new BadRequestException("AI_DISABLED", "AI 루트 만들기를 지금은 쓸 수 없어요.");
         }
@@ -100,7 +101,9 @@ public class AiRouteService {
         Kept keep = previousCandidates(req.previous());
         boolean refining = !keep.isEmpty();
 
-        String cacheKey = plan.cacheKey();
+        // 언어를 키에 넣는다. 캐시는 조건이 같은 모든 사용자가 나눠 쓰므로, 빼면 일본어로 만든 코스를
+        // 같은 조건의 영어 사용자가 받는다. 언어를 바꿔 다시 요청해도 이전 언어 결과가 돌아오지 않는다.
+        String cacheKey = plan.cacheKey() + "|" + lang;
         if (!refining && !Boolean.TRUE.equals(req.regenerate())) {
             Cached hit = cache.get(cacheKey);
             if (hit != null && hit.expiresAt().isAfter(Instant.now(clock))) {
@@ -144,15 +147,15 @@ public class AiRouteService {
         }
 
         String prompt = userPrompt(plan, frames, keep);
-        JsonNode answer = ai.completeJson(systemPrompt(refining), prompt, "day_route", schema());
-        Preview preview = answer == null ? null : toPreview(answer, frames, keep);
+        JsonNode answer = ai.completeJson(systemPrompt(refining, lang), prompt, "day_route", schema());
+        Preview preview = answer == null ? null : localizeNames(toPreview(answer, frames, keep), lang);
         // 다듬기인데 한 곳도 안 바뀌면 한 번만 더 부른다. "바꿨다"고 말하면서 같은 곳을 다시 고르는
         // 경우가 있었다(응답은 칸 하나뿐인데 id 가 지금과 같았다).
         if (refining && preview != null && unchanged(preview, keep)) {
-            JsonNode retry = ai.completeJson(systemPrompt(true),
+            JsonNode retry = ai.completeJson(systemPrompt(true, lang),
                     prompt + "\n중요: 바꾸기로 한 칸의 id 는 \"지금 고른 곳\"과 반드시 달라야 한다.\n",
                     "day_route", schema());
-            Preview second = retry == null ? null : toPreview(retry, frames, keep);
+            Preview second = retry == null ? null : localizeNames(toPreview(retry, frames, keep), lang);
             if (second != null && !unchanged(second, keep)) preview = second;
         }
         if (preview == null) {
@@ -374,7 +377,7 @@ public class AiRouteService {
 
     // ── 프롬프트 ─────────────────────────────────────────
 
-    private static String systemPrompt(boolean refining) {
+    private static String systemPrompt(boolean refining, Lang lang) {
         if (refining) {
             return """
                     너는 한국 전통문화 여행 서비스 '벼리'의 여행 코스 설계자다.
@@ -396,12 +399,60 @@ public class AiRouteService {
                       반영했는지 적는다. 근거는 이름·분류·시간대·거리·요청뿐이고, 메뉴·전시 내용·운영시간·
                       가격처럼 목록에 없는 사실은 쓰지 않는다.
                     - title 은 20자 이내, summary 는 코스 전체를 소개하는 한 문장 80자 이내.
-                    """;
+                    """ + languageClause(lang);
         }
-        return systemPromptNew();
+        return systemPromptNew(lang);
     }
 
-    private static String systemPromptNew() {
+    /**
+     * 언어 지시. 루트의 글은 번역하되 장소 이름은 한국어를 유지한다.
+     *
+     * 이름을 한국어로 두는 이유는 현장이다 — 외국인이 간판을 맞추거나 택시 기사에게 보여 주려면
+     * 한국어 이름이 필요하다. 화면에 보이는 이름은 응답에서 DB 의 번역값으로 바꾼다
+     * (localizeNames). 프롬프트에서 이름을 번역시키면 DB 와 어긋난 표기가 섞인다.
+     */
+    private static String languageClause(Lang lang) {
+        if (lang == Lang.KO) {
+            return "\n\n[언어]\n제목과 설명을 한국어로 쓴다.";
+        }
+        String name = switch (lang) {
+            case EN -> "English";
+            case JA -> "Japanese";
+            case ZH -> "Simplified Chinese";
+            case KO -> "Korean";
+        };
+        return "\n\n[Language]\n"
+             + "Write the route title and every description in " + name + ".\n"
+             + "This replaces the instructions above to write in Korean (title, summary and every reason).\n"
+             + "But keep the Korean place names exactly as given — do not translate or romanize them.\n"
+             + "The traveller needs them to match the signs and to show a taxi driver.\n";
+    }
+
+    /**
+     * 미리보기의 장소 이름을 선택한 언어의 DB 번역으로 바꾼다. 프롬프트는 한국어 이름으로 돌았고,
+     * 화면에는 번역된 이름이 나가야 한다. 번역이 없으면 nameIn/titleIn 이 한국어로 떨어뜨린다.
+     */
+    private Preview localizeNames(Preview p, Lang lang) {
+        if (p == null || lang == Lang.KO) return p;
+        Map<Long, String> venues = new java.util.HashMap<>();
+        Map<Long, String> events = new java.util.HashMap<>();
+        venueRepo.findAllById(p.stops().stream().filter(s -> "VENUE".equals(s.targetType()))
+                .map(Stop::targetId).toList()).forEach(v -> venues.put(v.getId(), v.nameIn(lang)));
+        performanceRepo.findAllById(p.stops().stream().filter(s -> "PERFORMANCE".equals(s.targetType()))
+                .map(Stop::targetId).toList()).forEach(e -> events.put(e.getId(), e.titleIn(lang)));
+        List<Stop> stops = p.stops().stream().map(s -> {
+            String n = ("VENUE".equals(s.targetType()) ? venues : events).get(s.targetId());
+            return n == null ? s : new Stop(s.day(), s.date(), s.slot(), s.targetType(), s.targetId(), n,
+                    s.category(), s.imageUrl(), s.lat(), s.lng(), s.time(), s.reason());
+        }).toList();
+        return new Preview(p.title(), p.summary(), p.startDate(), p.endDate(), stops, p.remainingToday());
+    }
+
+    static String systemPromptNew(Lang lang) {
+        return systemPromptNewBase() + languageClause(lang);
+    }
+
+    private static String systemPromptNewBase() {
         return """
                 너는 한국 전통문화 여행 서비스 '벼리'의 여행 코스 설계자다.
                 일정 틀(칸 목록)과 후보 목록이 주어진다. 칸마다 그 칸의 허용 분류에 속한 후보를

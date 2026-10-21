@@ -22,6 +22,7 @@ import com.byeori.global.external.OpenAiClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import com.byeori.global.i18n.Lang;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -185,9 +186,9 @@ class AiRouteServiceTest {
     void 같은_조건은_캐시로_응답하고_다시_만들기는_새로_부른다() {
         when(ai.completeJson(anyString(), anyString(), eq("day_route"), any())).thenReturn(answer("v1", "v2", "v3"));
 
-        service.generate(7L, req(false));
-        service.generate(7L, req(false));      // 캐시 적중 — 호출 없음, 한도 차감 없음
-        Preview third = service.generate(7L, req(true));
+        service.generate(7L, req(false), Lang.KO);
+        service.generate(7L, req(false), Lang.KO);      // 캐시 적중 — 호출 없음, 한도 차감 없음
+        Preview third = service.generate(7L, req(true), Lang.KO);
 
         verify(ai, times(2)).completeJson(anyString(), anyString(), eq("day_route"), any());
         assertThat(third.remainingToday()).isZero(); // 사용자 한도 2회를 다 씀
@@ -196,10 +197,10 @@ class AiRouteServiceTest {
     @Test
     void 하루_한도를_넘으면_거절한다() {
         when(ai.completeJson(anyString(), anyString(), eq("day_route"), any())).thenReturn(answer("v1", "v2", "v3"));
-        service.generate(7L, req(true));
-        service.generate(7L, req(true));
+        service.generate(7L, req(true), Lang.KO);
+        service.generate(7L, req(true), Lang.KO);
 
-        assertThatThrownBy(() -> service.generate(7L, req(true)))
+        assertThatThrownBy(() -> service.generate(7L, req(true), Lang.KO))
                 .isInstanceOf(BadRequestException.class)
                 .extracting("code").isEqualTo("AI_QUOTA_EXCEEDED");
     }
@@ -208,7 +209,7 @@ class AiRouteServiceTest {
     void AI가_실패하면_한도를_돌려준다() {
         when(ai.completeJson(anyString(), anyString(), eq("day_route"), any())).thenReturn(null);
 
-        assertThatThrownBy(() -> service.generate(7L, req(true))).isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> service.generate(7L, req(true), Lang.KO)).isInstanceOf(BadRequestException.class);
 
         assertThat(service.status(7L).remainingToday()).isEqualTo(2);
     }
@@ -218,7 +219,7 @@ class AiRouteServiceTest {
         List<Venue> one = List.of(venue(1));
         when(venueRepo.sampleForRoute(any(), any(), any(), any(), anyString(), anyInt())).thenReturn(one);
 
-        assertThatThrownBy(() -> service.generate(7L, req(true)))
+        assertThatThrownBy(() -> service.generate(7L, req(true), Lang.KO))
                 .isInstanceOf(BadRequestException.class)
                 .extracting("code").isEqualTo("AI_NOT_ENOUGH_PLACES");
         verify(ai, never()).completeJson(anyString(), anyString(), anyString(), any());
@@ -243,12 +244,42 @@ class AiRouteServiceTest {
     }
 
     @Test
+    void 언어가_다르면_캐시를_나눠_쓴다() {
+        when(ai.completeJson(anyString(), anyString(), eq("day_route"), any())).thenReturn(answer("v1", "v2", "v3"));
+
+        service.generate(7L, req(false), Lang.JA);
+        service.generate(7L, req(false), Lang.JA);   // 같은 언어 — 캐시 적중
+        service.generate(7L, req(false), Lang.EN);   // 언어를 바꾸면 이전 언어 결과를 주면 안 된다
+
+        verify(ai, times(2)).completeJson(anyString(), anyString(), eq("day_route"), any());
+    }
+
+    @Test
+    void 요청_언어가_시스템_프롬프트에_들어가고_장소_이름은_번역_이름으로_나간다() {
+        when(ai.completeJson(anyString(), anyString(), eq("day_route"), any())).thenReturn(answer("v1", "v2", "v3"));
+        Venue en = org.mockito.Mockito.mock(Venue.class);
+        when(en.getId()).thenReturn(1L);
+        when(en.nameIn(Lang.JA)).thenReturn("景福宮");
+        when(venueRepo.findAllById(any())).thenReturn(List.of(en));
+
+        Preview p = service.generate(7L, req(false), Lang.JA);
+
+        var system = org.mockito.ArgumentCaptor.forClass(String.class);
+        var user = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(ai).completeJson(system.capture(), user.capture(), eq("day_route"), any());
+        assertThat(system.getValue()).contains("Japanese");
+        assertThat(user.getValue()).contains("장소1");                        // 프롬프트의 이름은 한국어
+        assertThat(p.stops().get(0).name()).isEqualTo("景福宮");               // 화면 이름은 DB 번역
+        assertThat(p.stops().get(1).name()).isEqualTo("장소2");               // 번역 없는 곳은 한국어
+    }
+
+    @Test
     void 요청이_다르면_캐시를_나눠_쓴다() {
         when(ai.completeJson(anyString(), anyString(), eq("day_route"), any())).thenReturn(answer("v1", "v2", "v3"));
 
-        service.generate(7L, reqNote("아이와 함께"));
-        service.generate(7L, reqNote("아이와 함께"));   // 캐시 적중
-        service.generate(7L, reqNote("혼자 조용히"));   // 다른 요청 → 새로 만든다
+        service.generate(7L, reqNote("아이와 함께"), Lang.KO);
+        service.generate(7L, reqNote("아이와 함께"), Lang.KO);   // 캐시 적중
+        service.generate(7L, reqNote("혼자 조용히"), Lang.KO);   // 다른 요청 → 새로 만든다
 
         verify(ai, times(2)).completeJson(anyString(), anyString(), eq("day_route"), any());
     }
@@ -261,8 +292,8 @@ class AiRouteServiceTest {
         when(ai.completeJson(anyString(), anyString(), eq("day_route"), any())).thenReturn(answer("v900", "v1", "v2"));
 
         var r1 = days(List.of(day(TODAY, "종로구")), false, "2번을 바꿔줘", prev);
-        Preview p = service.generate(7L, r1);
-        service.generate(7L, r1);   // 다듬기는 매번 새로 만든다(캐시 없음)
+        Preview p = service.generate(7L, r1, Lang.KO);
+        service.generate(7L, r1, Lang.KO);   // 다듬기는 매번 새로 만든다(캐시 없음)
 
         assertThat(p.stops()).extracting(s -> s.targetId()).contains(900L); // 그대로 둔 곳
         verify(ai, times(2)).completeJson(anyString(), anyString(), eq("day_route"), any());
