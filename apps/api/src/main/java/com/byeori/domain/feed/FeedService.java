@@ -1,5 +1,6 @@
 package com.byeori.domain.feed;
 
+import com.byeori.global.i18n.Lang;
 import com.byeori.domain.activity.ViewLog;
 import com.byeori.domain.activity.ViewLogRepository;
 import com.byeori.domain.itinerary.ItineraryItem;
@@ -67,13 +68,13 @@ public class FeedService {
     }
 
     @Transactional(readOnly = true)
-    public List<FeedItem> forUser(Long userId, Double lat, Double lng, int size) {
+    public List<FeedItem> forUser(Lang lang, Long userId, Double lat, Double lng, int size) {
         TasteProfile taste = profileOf(userId);
         Set<Long> seenVenues = venuesAlreadyInRoutes(userId);
 
         List<FeedItem> scored = new ArrayList<>();
-        scored.addAll(scoreVenues(taste, seenVenues, lat, lng));
-        scored.addAll(scorePerformances(taste, lat, lng));
+        scored.addAll(scoreVenues(lang, taste, seenVenues, lat, lng));
+        scored.addAll(scorePerformances(lang, taste, lat, lng));
 
         scored.sort((a, b) -> Double.compare(b.score(), a.score()));
         return spread(scored, size);
@@ -130,7 +131,7 @@ public class FeedService {
 
     // ── 2~3. 후보와 점수 ─────────────────────────────
 
-    private List<FeedItem> scoreVenues(TasteProfile taste, Set<Long> exclude, Double lat, Double lng) {
+    private List<FeedItem> scoreVenues(Lang lang, TasteProfile taste, Set<Long> exclude, Double lat, Double lng) {
         List<Venue> candidates = venueRepo.findFeedCandidates(
                 likedCategories(taste), taste.regionRegex(),
                 lat == null ? null : BigDecimal.valueOf(lat),
@@ -149,7 +150,7 @@ public class FeedService {
             double score = props.getTaste() * match + props.getDistance() * dist
                     + props.getImminence() + props.getPopularity() * pop;
             FeedReason reason = venueReason(taste, v, match, dist, lat, lng);
-            out.add(new FeedItem("VENUE", v.getId(), v.getName(), v.getImageUrl(), v.getCategory(),
+            out.add(new FeedItem("VENUE", v.getId(), v.nameIn(lang), v.getImageUrl(), v.getCategory(),
                     num(v.getLat()), num(v.getLng()), reason.code(), reason.param(), score));
         }
         return out;
@@ -167,7 +168,7 @@ public class FeedService {
         return liked.isEmpty() ? Set.of("") : liked;
     }
 
-    private List<FeedItem> scorePerformances(TasteProfile taste, Double lat, Double lng) {
+    private List<FeedItem> scorePerformances(Lang lang, TasteProfile taste, Double lat, Double lng) {
         LocalDate today = LocalDate.now();
         List<Performance> candidates = performanceRepo.findUpcomingCandidates(
                 today, today.plusDays(UPCOMING_DAYS), PageRequest.of(0, props.getCandidatePerKind()));
@@ -181,7 +182,7 @@ public class FeedService {
             double score = props.getTaste() * match + props.getDistance() * dist
                     + props.getImminence() * imminence + props.getPopularity() * pop;
             FeedReason reason = performanceReason(p, today, match);
-            out.add(new FeedItem("PERFORMANCE", p.getId(), p.getTitle(), p.getPosterImageUrl(), p.getGenre(),
+            out.add(new FeedItem("PERFORMANCE", p.getId(), p.titleIn(lang), p.getPosterImageUrl(), p.getGenre(),
                     num(p.getLat()), num(p.getLng()), reason.code(), reason.param(), score));
         }
         return out;

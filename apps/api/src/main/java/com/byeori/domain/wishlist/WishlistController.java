@@ -1,5 +1,6 @@
 package com.byeori.domain.wishlist;
 
+import com.byeori.global.i18n.Lang;
 import com.byeori.domain.wishlist.dto.WishlistRequest;
 import com.byeori.domain.wishlist.dto.WishlistResponse;
 import com.byeori.global.response.ApiResponse;
@@ -19,15 +20,17 @@ public class WishlistController {
 
     @GetMapping("/users/me/wishlists")
     public ApiResponse<List<WishlistResponse>> list(
+            @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
             @AuthenticationPrincipal Long userId) {
-        return ApiResponse.ok(service.list(userId));
+        return ApiResponse.ok(service.list(Lang.of(acceptLanguage), userId));
     }
 
     @PostMapping("/wishlists")
     public ApiResponse<WishlistResponse> add(
+            @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
             @AuthenticationPrincipal Long userId,
             @RequestBody WishlistRequest req) {
-        return ApiResponse.ok(service.add(userId, req));
+        return ApiResponse.ok(service.add(Lang.of(acceptLanguage), userId, req));
     }
 
     @DeleteMapping("/wishlists")

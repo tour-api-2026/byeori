@@ -1,5 +1,6 @@
 package com.byeori.domain.performance;
 
+import com.byeori.global.i18n.Lang;
 import com.byeori.domain.performance.dto.PerformanceResponse;
 import com.byeori.global.exception.NotFoundException;
 import com.byeori.global.external.TourApiClient;
@@ -21,10 +22,10 @@ public class PerformanceService {
         this.tourClient = tourClient;
     }
 
-    public Page<PerformanceResponse> list(String state, String genre, Long venueId, String keyword,
+    public Page<PerformanceResponse> list(Lang lang, String state, String genre, Long venueId, String keyword,
                                           Boolean traditional, Pageable pageable) {
         return repo.search(state, java.time.LocalDate.now(), genre, venueId, keyword, traditional, pageable)
-                .map(PerformanceResponse::from);
+                .map(p -> PerformanceResponse.from(p, lang));
     }
 
     /**
@@ -32,10 +33,10 @@ public class PerformanceService {
      * KOPIS·서울 행사는 콘텐츠 ID가 없어 저장된 정보만으로 화면을 만든다.
      * 조회가 실패해도 화면은 떠야 하므로 소개글만 비워 응답한다.
      */
-    public PerformanceResponse detail(Long id) {
+    public PerformanceResponse detail(Lang lang, Long id) {
         Performance p = repo.findById(id)
                 .orElseThrow(() -> new NotFoundException("PERFORMANCE_NOT_FOUND", "공연을 찾을 수 없습니다."));
-        PerformanceResponse res = PerformanceResponse.from(p);
+        PerformanceResponse res = PerformanceResponse.from(p, lang);
         if (p.getTourContentId() == null) return res;
         var d = tourClient.detail(p.getTourContentId());
         return d == null ? res : res.withLive(d.overview(), firstUrl(d.homepage()));
@@ -48,14 +49,14 @@ public class PerformanceService {
      * 우리 DB 에 없어 못 이은 1,400여 건이 좌표는 갖고 있다. "여기서 열린다"고 단정하지
      * 않고 "이 근처에서 열린다"로 보여주면 틀릴 일이 없다.
      */
-    public List<PerformanceResponse> nearby(java.math.BigDecimal lat, java.math.BigDecimal lng,
+    public List<PerformanceResponse> nearby(Lang lang, java.math.BigDecimal lat, java.math.BigDecimal lng,
                                             int radiusMeters, int size) {
         // 위도 1도 ≈ 111km. 사각 범위로 먼저 줄이고 정렬은 질의가 한다.
         java.math.BigDecimal d = java.math.BigDecimal.valueOf(radiusMeters / 111_000.0);
         return repo.findNearbyOngoing(java.time.LocalDate.now(), lat, lng,
                         lat.subtract(d), lat.add(d), lng.subtract(d), lng.add(d),
                         org.springframework.data.domain.PageRequest.of(0, size))
-                .stream().map(PerformanceResponse::from).toList();
+                .stream().map(p -> PerformanceResponse.from(p, lang)).toList();
     }
 
     /** 공사 homepage 는 "www.example.com" 처럼 설명이 섞여 오기도 한다. 주소만 뽑는다. */
@@ -75,9 +76,9 @@ public class PerformanceService {
      */
     private static final int VENUE_PERFORMANCE_LIMIT = 10;
 
-    public List<PerformanceResponse> byVenue(Long venueId) {
+    public List<PerformanceResponse> byVenue(Lang lang, Long venueId) {
         return repo.findVisibleByVenue(venueId, java.time.LocalDate.now(),
                         org.springframework.data.domain.PageRequest.of(0, VENUE_PERFORMANCE_LIMIT))
-                .stream().map(PerformanceResponse::from).toList();
+                .stream().map(p -> PerformanceResponse.from(p, lang)).toList();
     }
 }

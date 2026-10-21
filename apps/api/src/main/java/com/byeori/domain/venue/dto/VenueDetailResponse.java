@@ -1,5 +1,6 @@
 package com.byeori.domain.venue.dto;
 
+import com.byeori.global.i18n.Lang;
 import com.byeori.domain.venue.Venue;
 import com.byeori.global.external.dto.TourBasic;
 import com.byeori.global.external.dto.TourDetail;
@@ -34,15 +35,15 @@ public record VenueDetailResponse(
                 lat, lng, "PUBLIC", live);
     }
 
-    public static VenueDetailResponse from(Venue v) {
-        return from(v, null);
+    public static VenueDetailResponse from(Venue v, Lang lang) {
+        return from(v, null, lang);
     }
 
-    public static VenueDetailResponse from(Venue v, TourDetail d) {
+    public static VenueDetailResponse from(Venue v, TourDetail d, Lang lang) {
         LiveInfo live = (d == null || d.isEmpty()) ? null
                 : new LiveInfo(d.overview(), d.useTime(), d.restDate(), d.infoCenter(), d.parking(), d.homepage());
         return new VenueDetailResponse(
-                v.getId(), v.getName(), v.getAddress(), v.getCategory(), v.getImageUrl(), v.getDescription(),
+                v.getId(), v.nameIn(lang), v.getAddress(), v.getCategory(), v.getImageUrl(), v.getDescription(),
                 v.getOperatingHours(), v.getPhone(), v.getHomepageUrl(),
                 v.isHanbokDiscount(), v.getHanbokDiscountDesc(),
                 v.getAvgRating(), v.getReviewCount() == null ? 0 : v.getReviewCount(), v.getSource(),

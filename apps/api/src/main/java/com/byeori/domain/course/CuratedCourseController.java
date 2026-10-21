@@ -1,5 +1,6 @@
 package com.byeori.domain.course;
 
+import com.byeori.global.i18n.Lang;
 import com.byeori.domain.course.dto.CuratedCourseDetailResponse;
 import com.byeori.domain.course.dto.CuratedCourseResponse;
 import com.byeori.global.response.ApiResponse;
@@ -23,7 +24,9 @@ public class CuratedCourseController {
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<CuratedCourseDetailResponse> detail(@PathVariable("id") Long id) {
-        return ApiResponse.ok(service.detail(id));
+    public ApiResponse<CuratedCourseDetailResponse> detail(
+            @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
+            @PathVariable("id") Long id) {
+        return ApiResponse.ok(service.detail(Lang.of(acceptLanguage), id));
     }
 }

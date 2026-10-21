@@ -1,5 +1,6 @@
 package com.byeori.domain.venue;
 
+import com.byeori.global.i18n.Lang;
 import com.byeori.domain.venue.dto.VenueCreateRequest;
 import com.byeori.domain.venue.dto.VenueDetailResponse;
 import com.byeori.domain.venue.dto.VenueReportRequest;
@@ -39,12 +40,12 @@ public class VenueService {
      * 정렬을 클라이언트에 맡기지 않는 이유는 응답이 잘리기 때문이다 — '카페'는 766건인데
      * 50건만 내려가므로, 받은 뒤 정렬해 봐야 진짜 가까운 곳은 이미 빠져 있다.
      */
-    public Page<VenueResponse> list(String category, Boolean hanbokDiscount, String keyword,
+    public Page<VenueResponse> list(Lang lang, String category, Boolean hanbokDiscount, String keyword,
                                     java.math.BigDecimal lat, java.math.BigDecimal lng, Pageable pageable) {
         Page<Venue> page = (lat != null && lng != null)
                 ? repo.searchNear(category, hanbokDiscount, keyword, lat, lng, pageable)
                 : repo.search(category, hanbokDiscount, keyword, pageable);
-        return page.map(VenueResponse::from);
+        return page.map(v -> VenueResponse.from(v, lang));
     }
 
     /**
@@ -66,10 +67,10 @@ public class VenueService {
      * 대신 상세 화면은 열 때마다 공사 API 를 호출한다(detail 참고). 이용시간·휴무일처럼
      * 자주 바뀌는 정보는 저장해 두면 금세 낡기 때문이다.
      */
-    public List<VenueResponse> nearby(double lat, double lng, int radius, String category) {
+    public List<VenueResponse> nearby(Lang lang, double lat, double lng, int radius, String category) {
         // 전국이 보이도록 축소한 구간은 한 지역이 목록을 독식하지 않게 고르게 흩뿌려 뽑는다.
-        if (radius > WIDE_RADIUS) return wideFromStore(lat, lng, radius, category, 300);
-        return nearbyFromStore(lat, lng, radius, category, 50);
+        if (radius > WIDE_RADIUS) return wideFromStore(lang, lat, lng, radius, category, 300);
+        return nearbyFromStore(lang, lat, lng, radius, category, 50);
     }
 
     /**
@@ -87,10 +88,10 @@ public class VenueService {
      * (관광지·문화시설·음식점·레포츠·전통시장·공예·한옥) 그 격차가 거의 사라졌다.
      * 검색은 입력할 때마다 도는 경로라 응답이 빠른 쪽이 낫다.
      */
-    public List<VenueResponse> searchLive(String keyword, String category, Boolean hanbokDiscount, int rows) {
+    public List<VenueResponse> searchLive(Lang lang, String keyword, String category, Boolean hanbokDiscount, int rows) {
         if (keyword == null || keyword.isBlank()) return List.of();
         var page = PageRequest.of(0, Math.min(rows, 100));
-        return toResponses(repo.search(nullIfBlank(category), hanbokDiscount, keyword.trim(), page).getContent());
+        return toResponses(lang, repo.search(nullIfBlank(category), hanbokDiscount, keyword.trim(), page).getContent());
     }
 
     /** 좌표·반경을 사각 영역으로. 위도 1도 ≈ 111km, 경도 1도 ≈ 88km(한국 위도 기준). */
@@ -110,21 +111,21 @@ public class VenueService {
      * 전국 뷰용 표본. 평점·id 순으로 뽑으면 수집 순서상 한 지역이 목록을 독식하므로
      * (실제로 300건이 전부 대구였다) 해시로 섞어 고르게 흩뿌린다.
      */
-    private List<VenueResponse> wideFromStore(double lat, double lng, int radius, String category, int limit) {
+    private List<VenueResponse> wideFromStore(Lang lang, double lat, double lng, int radius, String category, int limit) {
         Bounds b = Bounds.of(lat, lng, radius);
-        return toResponses(repo.sampleInBounds(
+        return toResponses(lang, repo.sampleInBounds(
                 b.minLat(), b.maxLat(), b.minLng(), b.maxLng(), nullIfBlank(category), limit));
     }
 
     /** 보고 있는 영역 안에서 좋은 것부터 준다. */
-    private List<VenueResponse> nearbyFromStore(double lat, double lng, int radius, String category, int limit) {
+    private List<VenueResponse> nearbyFromStore(Lang lang, double lat, double lng, int radius, String category, int limit) {
         Bounds b = Bounds.of(lat, lng, radius);
-        return toResponses(repo.findInBounds(
+        return toResponses(lang, repo.findInBounds(
                 b.minLat(), b.maxLat(), b.minLng(), b.maxLng(), nullIfBlank(category), PageRequest.of(0, limit)));
     }
 
-    private static List<VenueResponse> toResponses(List<Venue> venues) {
-        return venues.stream().map(VenueResponse::from).toList();
+    private static List<VenueResponse> toResponses(Lang lang, List<Venue> venues) {
+        return venues.stream().map(v -> VenueResponse.from(v, lang)).toList();
     }
 
     /**
@@ -136,22 +137,22 @@ public class VenueService {
      * 상세 조회. 실시간 결과의 절반 가까이는 우리 DB에 없어(경복궁 반경 2km 기준 50건 중 24건)
      * 우리 id가 없다. 숫자면 우리 레코드, 아니면 공사 콘텐츠 ID로 본다.
      */
-    public VenueDetailResponse detailByKey(String key) {
+    public VenueDetailResponse detailByKey(Lang lang, String key) {
         if (key != null && key.chars().allMatch(Character::isDigit) && key.length() < 19) {
             Long id = Long.valueOf(key);
             // 콘텐츠 ID도 숫자라 우리 id와 겹칠 수 있다. 우리 레코드가 먼저다.
             var mine = repo.findById(id);
-            if (mine.isPresent()) return VenueDetailResponse.from(mine.get(), tourClient.detail(mine.get().getDetailContentId()));
+            if (mine.isPresent()) return VenueDetailResponse.from(mine.get(), tourClient.detail(mine.get().getDetailContentId()), lang);
         }
-        return detailByContentId(key);
+        return detailByContentId(lang, key);
     }
 
-    private VenueDetailResponse detailByContentId(String contentId) {
+    private VenueDetailResponse detailByContentId(Lang lang, String contentId) {
         // 저장분이 있으면 자체 정보(한복 혜택·평점)까지 붙은 쪽을 쓴다.
         var stored = repo.findByTourContentId(contentId)
                 .or(() -> repo.findByDetailContentIdIn(List.of(contentId)).stream().findFirst());
         if (stored.isPresent()) {
-            return VenueDetailResponse.from(stored.get(), tourClient.detail(contentId));
+            return VenueDetailResponse.from(stored.get(), tourClient.detail(contentId), lang);
         }
         var basic = tourClient.basic(contentId);
         if (basic == null) {
@@ -162,32 +163,32 @@ public class VenueService {
         return VenueDetailResponse.fromTour(basic, tourClient.detail(contentId), category);
     }
 
-    public VenueDetailResponse detail(Long id) {
+    public VenueDetailResponse detail(Lang lang, Long id) {
         Venue v = repo.findById(id)
                 .orElseThrow(() -> new NotFoundException("VENUE_NOT_FOUND", "장소를 찾을 수 없습니다."));
-        return VenueDetailResponse.from(v, tourClient.detail(v.getDetailContentId()));
+        return VenueDetailResponse.from(v, tourClient.detail(v.getDetailContentId()), lang);
     }
 
-    public List<VenueResponse> listMine(Long userId) {
-        return repo.findByCreatedByUserIdAndSourceOrderByCreatedAtDesc(userId, "USER").stream().map(VenueResponse::from).toList();
+    public List<VenueResponse> listMine(Lang lang, Long userId) {
+        return repo.findByCreatedByUserIdAndSourceOrderByCreatedAtDesc(userId, "USER").stream().map(v -> VenueResponse.from(v, lang)).toList();
     }
 
     @Transactional
-    public VenueDetailResponse createUserVenue(Long userId, VenueCreateRequest req) {
+    public VenueDetailResponse createUserVenue(Lang lang, Long userId, VenueCreateRequest req) {
         if (req.name() == null || req.address() == null || req.lat() == null || req.lng() == null) {
             throw new BadRequestException("VENUE_INVALID", "이름·주소·좌표는 필수입니다.");
         }
         Venue v = repo.save(Venue.userVenue(userId, req.name(), req.address(), req.lat(), req.lng(),
                 req.category(), req.phone(), req.homepageUrl(), req.operatingHours(), req.imageUrl(), req.description()));
-        return VenueDetailResponse.from(v);
+        return VenueDetailResponse.from(v, lang);
     }
 
     @Transactional
-    public VenueDetailResponse updateUserVenue(Long userId, Long id, VenueCreateRequest req) {
+    public VenueDetailResponse updateUserVenue(Lang lang, Long userId, Long id, VenueCreateRequest req) {
         Venue v = own(userId, id);
         v.updateUserVenue(req.name(), req.address(), req.category(), req.phone(),
                 req.homepageUrl(), req.operatingHours(), req.imageUrl(), req.description());
-        return VenueDetailResponse.from(v);
+        return VenueDetailResponse.from(v, lang);
     }
 
     @Transactional

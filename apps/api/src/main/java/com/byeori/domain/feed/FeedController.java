@@ -1,9 +1,11 @@
 package com.byeori.domain.feed;
 
+import com.byeori.global.i18n.Lang;
 import com.byeori.global.response.ApiResponse;
 import java.util.List;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -27,10 +29,11 @@ public class FeedController {
     }
 
     @GetMapping
-    public ApiResponse<List<FeedItem>> feed(@AuthenticationPrincipal Long userId,
+    public ApiResponse<List<FeedItem>> feed(@RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
+                                            @AuthenticationPrincipal Long userId,
                                             @RequestParam(name = "lat", required = false) Double lat,
                                             @RequestParam(name = "lng", required = false) Double lng,
                                             @RequestParam(name = "size", defaultValue = "20") int size) {
-        return ApiResponse.ok(service.forUser(userId, lat, lng, Math.min(Math.max(size, 1), MAX_SIZE)));
+        return ApiResponse.ok(service.forUser(Lang.of(acceptLanguage), userId, lat, lng, Math.min(Math.max(size, 1), MAX_SIZE)));
     }
 }
