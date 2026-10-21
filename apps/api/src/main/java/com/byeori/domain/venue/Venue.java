@@ -68,8 +68,39 @@ public class Venue {
     @Column(name = "desc_zh", columnDefinition = "text") private String descZh;
     /** 원본 이름의 sha256. 이름이 바뀐 행만 다시 번역하려고 둔다. */
     @Column(name = "name_hash") private String nameHash;
-    /** AI | TOURAPI. 나중에 공식 번역으로 덮어쓸 때 고르는 기준. */
+    /**
+     * 번역의 출처. HUMAN = 사람이 번역해 scripts/import-translations.py 로 넣은 것(배치가 건드리지
+     * 않고, 일부 언어만 AI 가 채워도 HUMAN 으로 남는다). AI = 배치가 만든 것. TOURAPI = 공사 다국어
+     * 서비스용으로 계획만 해 둔 값이고 지금은 쓰지 않는다. 이름이 바뀌면 null 로 비워진다.
+     */
     @Column(name = "tr_source") private String trSource;
+
+    /**
+     * 언어별 연속 실패 횟수. TranslationBatch.MAX_ATTEMPTS 에 닿으면 그 언어는 큐에서 빠진다.
+     * 성공하면 0 으로 돌아간다. 컬럼은 V30.
+     */
+    @Column(name = "tr_fail_en") private short trFailEn;
+    @Column(name = "tr_fail_ja") private short trFailJa;
+    @Column(name = "tr_fail_zh") private short trFailZh;
+
+    /** 이번 배치에서 이 언어 번역을 못 받았다. */
+    public void recordTranslationFailure(Lang lang) {
+        switch (lang) {
+            case EN -> { if (trFailEn < Short.MAX_VALUE) trFailEn++; }
+            case JA -> { if (trFailJa < Short.MAX_VALUE) trFailJa++; }
+            case ZH -> { if (trFailZh < Short.MAX_VALUE) trFailZh++; }
+            case KO -> { }
+        }
+    }
+
+    private void resetFailure(Lang lang) {
+        switch (lang) {
+            case EN -> trFailEn = 0;
+            case JA -> trFailJa = 0;
+            case ZH -> trFailZh = 0;
+            case KO -> { }
+        }
+    }
 
     public void applyTranslation(Lang lang, String text) {
         switch (lang) {
@@ -81,6 +112,7 @@ public class Venue {
         // 사람이 번역한 행은 일부 언어만 AI 가 채워도 HUMAN 으로 남긴다. 이 표시가 "기계가 사람의
         // 작업을 덮어쓰지 않게" 하는 유일한 근거라 내리면 안 된다.
         if (!"HUMAN".equals(this.trSource)) this.trSource = "AI";
+        resetFailure(lang);
     }
 
     public boolean isHumanTranslated() { return "HUMAN".equals(trSource); }
@@ -92,6 +124,9 @@ public class Venue {
         this.nameEn = null;
         this.nameJa = null;
         this.nameZh = null;
+        this.trFailEn = 0;
+        this.trFailJa = 0;
+        this.trFailZh = 0;
         this.trSource = null;   // 옛 이름의 번역이 사라졌으니 출처도 비운다. 새로 쓰면 AI 가 된다
     }
 

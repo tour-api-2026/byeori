@@ -67,19 +67,29 @@ public class TranslationClient {
         return COMMON + switch (lang) { case JA -> JA; case ZH -> ZH; default -> EN; };
     }
 
-    /** 원문 → 번역. 실패하거나 AI 가 빠뜨린 항목은 결과에 없다. */
+    /** AI 를 부르지 못했다(꺼짐·시간 초과·거절). 모델이 일부 행을 빠뜨린 것과 구분하려고 따로 둔다. */
+    public static class UnavailableException extends RuntimeException {
+        public UnavailableException(String msg, Throwable cause) { super(msg, cause); }
+    }
+
+    /**
+     * 원문 → 번역. AI 가 빠뜨리거나 쓸 수 없어 버린 항목은 결과에 없다(정상 반환).
+     * 호출 자체가 실패하면 UnavailableException — 배치가 이것을 "행이 못 번역됨" 으로 세면
+     * 장애 하루에 멀쩡한 행이 전부 포기 상태로 넘어간다.
+     */
     public Map<String, String> translate(Lang lang, List<String> names) {
         if (lang == Lang.KO || names.isEmpty()) return Map.of();
         String user = String.join("\n", names);
         try {
             JsonNode res = openAi.completeJson(systemFor(lang), user, "translations", SCHEMA, 0.2);
+            if (res == null) throw new UnavailableException("응답 없음(비활성·실패·거절)", null);
             Map<String, String> got = parse(res, names);
             if (lang == Lang.JA || lang == Lang.ZH) got.values().removeIf(TranslationClient::hasHangul);
             return got;
+        } catch (UnavailableException e) {
+            throw e;
         } catch (Exception e) {
-            // 한 묶음이 실패해도 다음 묶음은 돌아야 한다. 못 한 행은 다음 배치에서 다시 집는다.
-            log.warn("번역 실패 lang={} 건수={} : {}", lang, names.size(), e.toString());
-            return Map.of();
+            throw new UnavailableException("번역 호출 실패 lang=" + lang + " 건수=" + names.size(), e);
         }
     }
 

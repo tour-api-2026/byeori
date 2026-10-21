@@ -168,8 +168,17 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
     List<Performance> findDedupeCandidates(@Param("today") LocalDate today);
 
     /**
-     * 번역이 필요한 행사. 장소와 같은 조건이며, 해시가 맞고 해당 언어 번역이 있는 행은 제외한다.
-     * 중복으로 가려진 행(duplicate_of)은 화면에 나가지 않으므로 번역 비용을 쓰지 않는다.
+     * 번역이 필요한 행 중 실패가 :max 번 미만인 것. 해당 언어 번역이 비었거나 이름이 바뀌어
+     * 해시가 어긋난 행이 "필요한" 행이다. 해시가 맞고 번역이 있는 행은 영원히 다시 번역하지
+     * 않는다 — 이 조건이 뒤집히면 매일 전량을 세 언어로 다시 번역해 비용이 수백 배가 된다.
+     * digest() 는 V28 이 만든 pgcrypto 확장이다.
+     *
+     * 아래는 그 위에 얹은 규칙이다. 실패가 적은 행이 먼저, 같으면 id 순이다.
+     *
+     * 모델이 끝내 못 하는 행(일·중 출력에 한글이 남거나 응답에서 빠지는 것)은 해시가 안 찍혀
+     * 큐 맨 앞에 영원히 남는다. 실패 횟수로 뒤로 보내고, :max 번 실패하면 이 언어에서는 뺀다 —
+     * 안 그러면 그런 행이 한도를 넘는 날부터 새 행에 순서가 오지 않는다. 이름이 바뀐 행
+     * (해시가 있는데 어긋남)은 실패 횟수와 무관하게 다시 대상이다.
      */
     @Query(value = """
             SELECT * FROM performances
@@ -180,8 +189,24 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
                     OR (:lang = 'EN' AND title_en IS NULL)
                     OR (:lang = 'JA' AND title_ja IS NULL)
                     OR (:lang = 'ZH' AND title_zh IS NULL))
-             ORDER BY id
+               AND (CASE WHEN :lang = 'EN' THEN tr_fail_en WHEN :lang = 'JA' THEN tr_fail_ja ELSE tr_fail_zh END < :max
+                    OR (name_hash IS NOT NULL AND name_hash <> encode(digest(title, 'sha256'), 'hex')))
+             ORDER BY CASE WHEN :lang = 'EN' THEN tr_fail_en WHEN :lang = 'JA' THEN tr_fail_ja ELSE tr_fail_zh END, id
              LIMIT :limit
             """, nativeQuery = true)
-    List<Performance> findNeedingTranslation(@Param("lang") String lang, @Param("limit") int limit);
+    List<Performance> findNeedingTranslation(@Param("lang") String lang, @Param("limit") int limit, @Param("max") int max);
+
+    /** 위 조건에서 실패 횟수 때문에 빠진 행 수. 배치가 "건너뛰는 중" 이라고 로그에 남기려고 센다. */
+    @Query(value = """
+            SELECT count(*) FROM performances
+             WHERE title IS NOT NULL AND title <> ''
+               AND duplicate_of IS NULL
+               AND (name_hash IS NULL
+                    OR (:lang = 'EN' AND title_en IS NULL)
+                    OR (:lang = 'JA' AND title_ja IS NULL)
+                    OR (:lang = 'ZH' AND title_zh IS NULL))
+               AND (name_hash IS NULL OR name_hash = encode(digest(title, 'sha256'), 'hex'))
+               AND CASE WHEN :lang = 'EN' THEN tr_fail_en WHEN :lang = 'JA' THEN tr_fail_ja ELSE tr_fail_zh END >= :max
+            """, nativeQuery = true)
+    long countGivenUp(@Param("lang") String lang, @Param("max") int max);
 }

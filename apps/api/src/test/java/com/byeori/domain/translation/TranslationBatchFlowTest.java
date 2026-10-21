@@ -72,7 +72,7 @@ class TranslationBatchFlowTest {
         assertThat(okRead.getNameHash()).isEqualTo(TranslationBatch.hashOf("성공장소"));
         assertThat(badRead.getNameEn()).isNull();
         assertThat(badRead.getNameHash()).isNull();
-        assertThat(venueRepo.findNeedingTranslation("EN", 100000))
+        assertThat(venueRepo.findNeedingTranslation("EN", 100000, TranslationBatch.MAX_ATTEMPTS))
                 .extracting(Venue::getName).contains("실패장소").doesNotContain("성공장소");
     }
 
@@ -126,9 +126,9 @@ class TranslationBatchFlowTest {
         Performance read = perfRepo.findById(p.getId()).orElseThrow();
         assertThat(read.getTitleJa()).isEqualTo("행사제목@JA");
         assertThat(read.getNameHash()).isEqualTo(TranslationBatch.hashOf("행사제목"));
-        assertThat(perfRepo.findNeedingTranslation("JA", 100000))
+        assertThat(perfRepo.findNeedingTranslation("JA", 100000, TranslationBatch.MAX_ATTEMPTS))
                 .extracting(Performance::getTitle).doesNotContain("행사제목");
-        assertThat(perfRepo.findNeedingTranslation("EN", 100000))
+        assertThat(perfRepo.findNeedingTranslation("EN", 100000, TranslationBatch.MAX_ATTEMPTS))
                 .extracting(Performance::getTitle).contains("행사제목");
     }
 
@@ -150,5 +150,104 @@ class TranslationBatchFlowTest {
         assertThat(read.getNameJa()).isEqualTo("사람번역장소@JA");
         assertThat(read.getNameEn()).isEqualTo("Human Place");
         assertThat(read.getTrSource()).isEqualTo("HUMAN");
+    }
+
+    @Test
+    @DisplayName("행사도 사람 번역은 HUMAN 으로 남는다 — Venue 와 같은 지킴을 따로 확인")
+    void 행사_사람_표시_유지() {
+        FakeClient c = new FakeClient();
+        TranslationBatch b = new TranslationBatch(venueRepo, perfRepo, c, txm);
+        Performance p = perfRepo.saveAndFlush(Performance.fromKopis("FLH" + (seq++), "사람번역행사", "연극",
+                null, java.time.LocalDate.of(2026, 1, 1), java.time.LocalDate.of(2026, 12, 31), "공연중", null));
+        p.applyTranslation(Lang.EN, "Human Show");
+        p.markHash(TranslationBatch.hashOf("사람번역행사"));
+        em.createNativeQuery("update performances set tr_source='HUMAN' where id=:id").setParameter("id", p.getId()).executeUpdate();
+        em.clear();
+
+        b.translatePerformances(Lang.JA, 100000);
+        em.flush(); em.clear();
+
+        Performance read = perfRepo.findById(p.getId()).orElseThrow();
+        assertThat(read.getTitleJa()).isEqualTo("사람번역행사@JA");
+        assertThat(read.getTitleEn()).isEqualTo("Human Show");
+        assertThat(read.getTrSource()).isEqualTo("HUMAN");
+    }
+
+    @Test
+    @DisplayName("끝내 못 번역되는 행이 한도를 채워도 뒤에 들어온 행은 결국 번역된다")
+    void 못하는_행이_큐를_막지_않는다() {
+        FakeClient c = new FakeClient();
+        TranslationBatch b = new TranslationBatch(venueRepo, perfRepo, c, txm);
+        b.translateVenues(Lang.EN, 100000);       // 마이그레이션이 넣어 둔 시드 행을 먼저 치운다 — 아래 한도 계산을 흐리지 않게
+        c.fail.add("불가A"); c.fail.add("불가B");
+        venue("불가A"); venue("불가B");           // id 가 앞서고, 한도(2)를 혼자 다 채운다
+        Venue late = venue("뒤늦게들어온장소");
+
+        for (int night = 0; night < TranslationBatch.MAX_ATTEMPTS + 1; night++) {
+            b.translateVenues(Lang.EN, 2);
+            em.flush(); em.clear();
+        }
+
+        assertThat(venueRepo.findById(late.getId()).orElseThrow().getNameEn()).isEqualTo("뒤늦게들어온장소@EN");
+        // 포기한 행은 큐에서 빠져 더 이상 AI 에 보내지 않는다
+        c.asked.clear();
+        b.translateVenues(Lang.EN, 2);
+        assertThat(c.asked).isEmpty();
+        assertThat(venueRepo.countGivenUp("EN", TranslationBatch.MAX_ATTEMPTS)).isGreaterThanOrEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("행사도 못 번역되는 행이 큐를 막지 않는다")
+    void 행사_큐() {
+        FakeClient c = new FakeClient();
+        TranslationBatch b = new TranslationBatch(venueRepo, perfRepo, c, txm);
+        b.translatePerformances(Lang.EN, 100000);   // 시드 행을 먼저 치운다
+        c.fail.add("불가행사");
+        perfRepo.saveAndFlush(Performance.fromKopis("FLQ" + (seq++), "불가행사", "연극", null,
+                java.time.LocalDate.of(2026, 1, 1), java.time.LocalDate.of(2026, 12, 31), "공연중", null));
+        Performance late = perfRepo.saveAndFlush(Performance.fromKopis("FLQ" + (seq++), "늦은행사", "연극", null,
+                java.time.LocalDate.of(2026, 1, 1), java.time.LocalDate.of(2026, 12, 31), "공연중", null));
+
+        for (int night = 0; night < TranslationBatch.MAX_ATTEMPTS + 1; night++) {
+            b.translatePerformances(Lang.EN, 1);
+            em.flush(); em.clear();
+        }
+
+        assertThat(perfRepo.findById(late.getId()).orElseThrow().getTitleEn()).isEqualTo("늦은행사@EN");
+    }
+
+    @Test
+    @DisplayName("AI 를 못 부른 밤은 행의 실패로 세지 않는다 — 장애 하루에 멀쩡한 행이 포기되면 안 된다")
+    void 장애는_실패로_세지_않는다() {
+        FakeClient c = new FakeClient() {
+            @Override public Map<String, String> translate(Lang lang, List<String> names) {
+                throw new TranslationClient.UnavailableException("down", null);
+            }
+        };
+        TranslationBatch b = new TranslationBatch(venueRepo, perfRepo, c, txm);
+        Venue v = venue("장애장소");
+
+        for (int night = 0; night < TranslationBatch.MAX_ATTEMPTS + 2; night++) {
+            b.translateVenues(Lang.EN, 100);
+            em.flush(); em.clear();
+        }
+
+        assertThat(venueRepo.findNeedingTranslation("EN", 100000, TranslationBatch.MAX_ATTEMPTS))
+                .extracting(Venue::getId).contains(v.getId());
+    }
+
+    @Test
+    @DisplayName("포기한 행도 이름이 바뀌면 다시 대상이 된다")
+    void 이름이_바뀐_포기_행() {
+        FakeClient c = new FakeClient();
+        TranslationBatch b = new TranslationBatch(venueRepo, perfRepo, c, txm);
+        Venue v = venue("한때불가");
+        em.createNativeQuery("update venues set tr_fail_en=:n, name_hash=:h where id=:id")
+                .setParameter("n", TranslationBatch.MAX_ATTEMPTS).setParameter("h", TranslationBatch.hashOf("옛이름"))
+                .setParameter("id", v.getId()).executeUpdate();
+        em.clear();
+
+        assertThat(venueRepo.findNeedingTranslation("EN", 100000, TranslationBatch.MAX_ATTEMPTS))
+                .extracting(Venue::getId).contains(v.getId());
     }
 }

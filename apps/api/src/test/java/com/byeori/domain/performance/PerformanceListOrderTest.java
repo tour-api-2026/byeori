@@ -79,7 +79,7 @@ class PerformanceListOrderTest {
     private int seq = 0;
 
     private List<String> titles(String state) {
-        return service.list(state, null, null, MARK, true, PageRequest.of(0, 20, sortFor(state)))
+        return service.list(com.byeori.global.i18n.Lang.KO, state, null, null, MARK, true, PageRequest.of(0, 20, sortFor(state)))
                 .getContent().stream()
                 .map(p -> p.title().replace(MARK + " ", ""))
                 .toList();

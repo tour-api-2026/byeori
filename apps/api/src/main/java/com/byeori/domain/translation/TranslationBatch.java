@@ -34,6 +34,13 @@ public class TranslationBatch {
     private static final int CHUNK = 40;
     /** 정기 작업이 언어·종류별로 한 번에 처리할 최대 행 수. 하룻밤에 안 끝나도 다음 날 이어간다. */
     public static final int MAX_PER_RUN = 5_000;
+    /**
+     * 한 행이 한 언어에서 이만큼 번역 못 받으면 그 언어 큐에서 뺀다(V30 의 tr_fail_*).
+     * 못 하는 행이 큐 맨 앞에 영원히 남아 새 행을 굶기는 것을 막는다. 3 이면 일시적 오답은
+     * 사흘 밤 다시 시도해 보고, 구조적으로 못 하는 행만 걸러진다. 다시 시도하게 하려면
+     * 해당 행의 tr_fail_* 를 0 으로 되돌린다.
+     */
+    public static final int MAX_ATTEMPTS = 3;
 
     private final VenueRepository venueRepo;
     private final PerformanceRepository perfRepo;
@@ -61,59 +68,98 @@ public class TranslationBatch {
     // 메서드 전체를 한 트랜잭션으로 묶지 않는다. AI 호출 내내 DB 연결을 잡고 있게 되고,
     // 묶음 하나가 터지면 앞에서 끝낸 번역까지 되돌아간다. 묶음마다 저장하고 커밋한다.
     int translateVenues(Lang lang, int limit) {
-        List<Venue> todo = venueRepo.findNeedingTranslation(lang.name(), limit);
+        List<Venue> todo = venueRepo.findNeedingTranslation(lang.name(), limit, MAX_ATTEMPTS);
         int done = 0;
+        int unavailable = 0;
+        List<Venue> failed = new ArrayList<>();
         for (List<Venue> chunk : partition(todo, CHUNK)) {
-            Map<String, String> got = client.translate(lang,
-                    chunk.stream().map(Venue::getName).distinct().toList());
+            Map<String, String> got;
+            try {
+                got = client.translate(lang, chunk.stream().map(Venue::getName).distinct().toList());
+            } catch (TranslationClient.UnavailableException e) {
+                // AI 가 안 닿은 것이지 행의 잘못이 아니다 — 실패로 세지 않고 다음 배치가 다시 집는다.
+                unavailable += chunk.size();
+                log.warn("장소 번역 호출 실패 lang={} 건수={} : {}", lang, chunk.size(), e.getMessage());
+                continue;
+            }
             List<Venue> changed = new ArrayList<>();
-            for (Venue v : chunk) {
-                String tr = got.get(v.getName());
-                if (tr == null) continue;                 // 이번에 못 한 것은 해시를 안 찍어 다음 배치가 집는다
-                String h = hashOf(v.getName());
+            for (Venue x : chunk) {
+                String tr = got.get(x.getName());
+                if (tr == null) { x.recordTranslationFailure(lang); failed.add(x); continue; }   // 해시를 안 찍어 다음 배치가 다시 집되, 실패 횟수가 쌓인다
+                String h = hashOf(x.getName());
                 // 해시가 어긋났다면 이름이 바뀐 것이다. 다른 언어의 옛 번역이 남아 있으면
                 // 해시만 새로 찍힌 뒤 "끝난 행" 으로 보이므로 여기서 함께 비운다.
-                if (!h.equals(v.getNameHash())) {
-                    if (v.isHumanTranslated())
-                        log.warn("사람 번역을 비운다(이름이 바뀜) 장소 id={} 번역 시점 해시={} 새 이름={}", v.getId(), v.getNameHash(), v.getName());
-                    v.clearTranslations();
+                if (!h.equals(x.getNameHash())) {
+                    if (x.isHumanTranslated())
+                        log.warn("사람 번역을 비운다(이름이 바뀜) 장소 id={} 번역 시점 해시={} 새 이름={}", x.getId(), x.getNameHash(), x.getName());
+                    x.clearTranslations();
                 }
-                v.applyTranslation(lang, tr);
-                v.markHash(h);
-                changed.add(v);
+                x.applyTranslation(lang, tr);
+                x.markHash(h);
+                changed.add(x);
             }
             if (!changed.isEmpty()) tx.executeWithoutResult(s -> venueRepo.saveAll(changed));
             done += changed.size();
         }
-        if (done > 0) log.info("장소 번역 lang={} {}건", lang, done);
+        if (!failed.isEmpty()) tx.executeWithoutResult(s -> venueRepo.saveAll(failed));
+        reportRun("장소", lang, todo.size(), done, failed.size(), unavailable, venueRepo.countGivenUp(lang.name(), MAX_ATTEMPTS));
         return done;
     }
 
     int translatePerformances(Lang lang, int limit) {
-        List<Performance> todo = perfRepo.findNeedingTranslation(lang.name(), limit);
+        List<Performance> todo = perfRepo.findNeedingTranslation(lang.name(), limit, MAX_ATTEMPTS);
         int done = 0;
+        int unavailable = 0;
+        List<Performance> failed = new ArrayList<>();
         for (List<Performance> chunk : partition(todo, CHUNK)) {
-            Map<String, String> got = client.translate(lang,
-                    chunk.stream().map(Performance::getTitle).distinct().toList());
+            Map<String, String> got;
+            try {
+                got = client.translate(lang, chunk.stream().map(Performance::getTitle).distinct().toList());
+            } catch (TranslationClient.UnavailableException e) {
+                // AI 가 안 닿은 것이지 행의 잘못이 아니다 — 실패로 세지 않고 다음 배치가 다시 집는다.
+                unavailable += chunk.size();
+                log.warn("행사 번역 호출 실패 lang={} 건수={} : {}", lang, chunk.size(), e.getMessage());
+                continue;
+            }
             List<Performance> changed = new ArrayList<>();
-            for (Performance p : chunk) {
-                String tr = got.get(p.getTitle());
-                if (tr == null) continue;
-                String h = hashOf(p.getTitle());
-                if (!h.equals(p.getNameHash())) {
-                    if (p.isHumanTranslated())
-                        log.warn("사람 번역을 비운다(제목이 바뀜) 행사 id={} 번역 시점 해시={} 새 제목={}", p.getId(), p.getNameHash(), p.getTitle());
-                    p.clearTranslations();
+            for (Performance x : chunk) {
+                String tr = got.get(x.getTitle());
+                if (tr == null) { x.recordTranslationFailure(lang); failed.add(x); continue; }   // 해시를 안 찍어 다음 배치가 다시 집되, 실패 횟수가 쌓인다
+                String h = hashOf(x.getTitle());
+                // 해시가 어긋났다면 이름이 바뀐 것이다. 다른 언어의 옛 번역이 남아 있으면
+                // 해시만 새로 찍힌 뒤 "끝난 행" 으로 보이므로 여기서 함께 비운다.
+                if (!h.equals(x.getNameHash())) {
+                    if (x.isHumanTranslated())
+                        log.warn("사람 번역을 비운다(제목이 바뀜) 행사 id={} 번역 시점 해시={} 새 제목={}", x.getId(), x.getNameHash(), x.getTitle());
+                    x.clearTranslations();
                 }
-                p.applyTranslation(lang, tr);
-                p.markHash(h);
-                changed.add(p);
+                x.applyTranslation(lang, tr);
+                x.markHash(h);
+                changed.add(x);
             }
             if (!changed.isEmpty()) tx.executeWithoutResult(s -> perfRepo.saveAll(changed));
             done += changed.size();
         }
-        if (done > 0) log.info("행사 번역 lang={} {}건", lang, done);
+        if (!failed.isEmpty()) tx.executeWithoutResult(s -> perfRepo.saveAll(failed));
+        reportRun("행사", lang, todo.size(), done, failed.size(), unavailable, perfRepo.countGivenUp(lang.name(), MAX_ATTEMPTS));
         return done;
+    }
+
+    /**
+     * 한 번 돈 결과를 남긴다. 예전에는 저장한 게 있을 때만 로그가 있어서, 아무것도 못 한 밤과
+     * 할 일이 없던 밤이 똑같이 조용했다.
+     */
+    private void reportRun(String label, Lang lang, int picked, int done, int failedRows, int unavailable, long givenUp) {
+        if (picked == 0 && givenUp == 0) return;   // 정말 할 일이 없던 밤
+        if (done == 0) {
+            log.warn("{} 번역 0건 lang={} 대상={} 모델이 못 한 행={} 호출 실패로 건너뜀={}", label, lang, picked, failedRows, unavailable);
+        } else {
+            log.info("{} 번역 lang={} {}건 (대상 {} 모델이 못 한 행 {} 호출 실패로 건너뜀 {})", label, lang, done, picked, failedRows, unavailable);
+        }
+        if (givenUp > 0) {
+            log.warn("{} 번역 포기 상태 lang={} {}건 — {}번 연속 못 받아 큐에서 뺐다(tr_fail_* 를 0 으로 돌리면 다시 시도)",
+                    label, lang, givenUp, MAX_ATTEMPTS);
+        }
     }
 
     /** 이름의 sha256(16진수 64자). 이름이 바뀐 행만 다시 번역하려고 쓴다. */

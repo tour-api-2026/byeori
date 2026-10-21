@@ -41,7 +41,7 @@ class TranslationTargetTest {
     @DisplayName("번역이 없는 행은 대상이다")
     void 번역_없음() {
         Venue v0 = saved("무명장소");
-        assertThat(repo.findNeedingTranslation("EN", 1_000_000))
+        assertThat(repo.findNeedingTranslation("EN", 1_000_000, TranslationBatch.MAX_ATTEMPTS))
                 .extracting(Venue::getId).contains(v0.getId());
     }
 
@@ -53,7 +53,7 @@ class TranslationTargetTest {
         v.markHash(TranslationBatch.hashOf("경복궁"));
         repo.saveAndFlush(v);
 
-        assertThat(repo.findNeedingTranslation("EN", 1_000_000))
+        assertThat(repo.findNeedingTranslation("EN", 1_000_000, TranslationBatch.MAX_ATTEMPTS))
                 .extracting(Venue::getId).doesNotContain(v.getId());
     }
 
@@ -65,7 +65,7 @@ class TranslationTargetTest {
         v.markHash(TranslationBatch.hashOf("옛이름"));   // 이름이 바뀐 상황을 흉내 낸다
         repo.saveAndFlush(v);
 
-        assertThat(repo.findNeedingTranslation("EN", 1_000_000))
+        assertThat(repo.findNeedingTranslation("EN", 1_000_000, TranslationBatch.MAX_ATTEMPTS))
                 .extracting(Venue::getId).contains(v.getId());
     }
 
@@ -77,9 +77,9 @@ class TranslationTargetTest {
         v.markHash(TranslationBatch.hashOf("북촌한옥마을"));
         repo.saveAndFlush(v);
 
-        assertThat(repo.findNeedingTranslation("EN", 1_000_000))
+        assertThat(repo.findNeedingTranslation("EN", 1_000_000, TranslationBatch.MAX_ATTEMPTS))
                 .extracting(Venue::getId).doesNotContain(v.getId());
-        assertThat(repo.findNeedingTranslation("JA", 1_000_000))
+        assertThat(repo.findNeedingTranslation("JA", 1_000_000, TranslationBatch.MAX_ATTEMPTS))
                 .extracting(Venue::getId).contains(v.getId());
     }
 }
