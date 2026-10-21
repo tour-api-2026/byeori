@@ -55,7 +55,79 @@ venue,12,경복궁,"","",""
 서울 5대 궁(경복궁·창덕궁·창경궁·덕수궁·경희궁)은 이름이 비슷해 서로 바뀌기 쉽다.
 사람 이름과 절 이름도 한자를 확인하지 않으면 자주 틀린다.
 
-## 되돌려 넣기
+## 되돌려 넣기 (운영자용 순서)
 
-채운 CSV 를 그대로 주면 `kind` + `id` 로 짝지어 DB 에 넣는다. 빈 칸은 건너뛴다 —
-일부만 채워 와도 그만큼만 반영되고, 나머지는 한국어가 그대로 나간다.
+새벽에 처음 보는 사람이 그대로 따라 할 수 있게 적는다. **순서가 중요하다.**
+
+### 0. 알아 둘 것
+
+- 스크립트는 `scripts/import-translations.py` 다. 운영 DB 는 호스트에 포트를 열지 않아서
+  `docker exec byeori-postgres psql` 로 들어간다 — **API 서버가 있는 호스트에서 레포 루트로 가서** 돌린다.
+- `--apply` 를 안 주면 **아무것도 바꾸지 않고** 센다(dry run). 항상 이것부터.
+- 넣은 행은 `tr_source='HUMAN'` 이고 `name_hash` 가 찍힌다. 야간 AI 배치가 이 행을 다시
+  번역하지도, 덮어쓰지도 않는다.
+- CSV 의 `ko` 가 DB 의 현재 이름과 다르면 그 행은 **건너뛴다**(그사이 동기화가 이름을 바꾼 것).
+  "이름이 바뀜" 숫자가 크면 CSV 가 낡았다는 뜻이다. 억지로 넣지 말고 멈춘다.
+
+### 1. V29 가 먼저 배포되어야 한다
+
+코스(`course`, `course_desc`) 컬럼은 마이그레이션 V29 가 만든다. 이 브랜치가 배포되어 API 가
+한 번 기동하고 Flyway 가 V29·V30 을 적용한 **뒤에** 코스 행을 넣을 수 있다.
+확인: `docker exec byeori-postgres psql -U byeori -d byeori -c "\d curated_courses"` 에
+`title_en` 이 보이면 된다. 없으면 스크립트가 "번역 컬럼이 없어 건너뛰는 kind: course" 를 찍고
+코스만 건너뛴다(나머지는 들어간다).
+
+### 2. 이름 번역 — dry run 먼저
+
+```bash
+python3 scripts/import-translations.py docs/translation/translate-all.csv
+```
+
+- `translate-all.csv`(47,500행)에는 채워진 3,261행이 **이미 전부 들어 있다**(행사 3,189 + 장소 58 +
+  코스 14). `translate-priority.csv` 는 그 부분집합이라 둘 중 하나만 넣으면 된다. 빈 칸은 건너뛴다.
+- 운영 DB 에는 행사·장소 3,247건이 이미 들어가 있다. 다시 돌리면 그 행은 같은 값으로 덮일 뿐
+  해가 없다. 새로 반영되는 것은 코스 14건이다.
+- 출력의 `반영` 이 기대한 숫자(코스만이면 14, 전부면 3,261)와 맞고 `이름이 바뀜`·`행 없음`이
+  0 에 가까운지 본다. 맞으면:
+
+```bash
+python3 scripts/import-translations.py docs/translation/translate-all.csv --apply
+```
+
+### 3. 코스 설명문 — 따로 돌린다
+
+`translate-course-desc.csv`(14행)는 `kind` 가 `course_desc` 라서 위 파일에 들어 있지 않다.
+**별도로** 돌린다.
+
+```bash
+python3 scripts/import-translations.py docs/translation/translate-course-desc.csv
+python3 scripts/import-translations.py docs/translation/translate-course-desc.csv --apply
+```
+
+### 4. 첫 AI 배치는 쪼개서
+
+나머지 약 4만 3천 행은 야간 배치가 AI 로 채운다. **처음 한 번을 한 요청으로 돌리지 않는다.**
+너무 오래 걸려 연결이 끊기면 어디까지 됐는지 알기 어렵다. 배치 호출에 `limit` 를 주어
+**2000 건 안팎**으로 여러 번 나눠 돌린다(끝난 행은 해시가 찍혀 다음 호출이 이어받는다).
+`limit` 는 **언어·종류별** 상한이라 한 번에 최대 2000×3언어×2종류 행을 AI 에 보낸다.
+먼저 소량으로 품질을 눈으로 확인한다.
+
+```bash
+# API 서버 호스트에서. 이 엔드포인트는 외부에 열려 있지 않다(nginx 443 으로 노출하지 않는다).
+curl -s -X POST 'http://127.0.0.1:8080/api/v1/admin/sync/trigger?only=translate&limit=100'
+# {"translated": N} — 품질이 괜찮으면 limit=2000 으로 N 이 줄어들 때까지 반복
+```
+
+**실제 OpenAI 를 부르고 돈이 든다.** 개발·테스트 환경에서는 돌리지 않는다.
+
+로그에서 볼 것(`TranslationBatch`):
+
+- `… 번역 lang=EN N건 (대상 … 모델이 못 한 행 … 호출 실패로 건너뜀 …)` — 정상 진행.
+- `… 번역 0건 …` (WARN) — 한 건도 못 했다. `호출 실패로 건너뜀` 이 크면 OpenAI 키·네트워크 문제다.
+- `… 번역 포기 상태 …` (WARN) — 3번 연속 못 받아 큐에서 뺀 행이다. 다시 시도하려면 해당
+  행의 `tr_fail_en|ja|zh` 를 0 으로 돌린다.
+
+### 5. 잘못 넣었을 때
+
+되돌리는 스크립트는 없다. 사람 번역은 CSV 가 원본이므로 CSV 를 고쳐 다시 `--apply` 하면 같은
+`kind`+`id` 행이 새 값으로 덮인다.
