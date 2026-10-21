@@ -8,6 +8,8 @@ import com.byeori.domain.venue.dto.VenueResponse;
 import com.byeori.global.exception.BadRequestException;
 import com.byeori.global.exception.NotFoundException;
 import com.byeori.domain.sync.CategoryMapper;
+import com.byeori.domain.translation.TranslationClient;
+import com.byeori.global.external.dto.TourDetail;
 import com.byeori.global.external.TourApiClient;
 import java.math.BigDecimal;
 import java.util.List;
@@ -27,8 +29,11 @@ public class VenueService {
     private final VenueRepository repo;
     private final VenueReportRepository reportRepo;
     private final TourApiClient tourClient;
+    private final TranslationClient translationClient;
 
-    public VenueService(VenueRepository repo, VenueReportRepository reportRepo, TourApiClient tourClient) {
+    public VenueService(VenueRepository repo, VenueReportRepository reportRepo, TourApiClient tourClient,
+                        TranslationClient translationClient) {
+        this.translationClient = translationClient;
         this.repo = repo;
         this.reportRepo = reportRepo;
         this.tourClient = tourClient;
@@ -137,14 +142,45 @@ public class VenueService {
      * 상세 조회. 실시간 결과의 절반 가까이는 우리 DB에 없어(경복궁 반경 2km 기준 50건 중 24건)
      * 우리 id가 없다. 숫자면 우리 레코드, 아니면 공사 콘텐츠 ID로 본다.
      */
+    // 처음 열릴 때 번역을 저장하므로 클래스 기본(readOnly)을 풀어야 한다.
+    @Transactional
     public VenueDetailResponse detailByKey(Lang lang, String key) {
         if (key != null && key.chars().allMatch(Character::isDigit) && key.length() < 19) {
             Long id = Long.valueOf(key);
             // 콘텐츠 ID도 숫자라 우리 id와 겹칠 수 있다. 우리 레코드가 먼저다.
             var mine = repo.findById(id);
-            if (mine.isPresent()) return VenueDetailResponse.from(mine.get(), tourClient.detail(mine.get().getDetailContentId()), lang);
+            if (mine.isPresent()) return render(mine.get(), tourClient.detail(mine.get().getDetailContentId()), lang);
         }
         return detailByContentId(lang, key);
+    }
+
+    /** 저장된 장소의 상세 응답. 긴 설명은 선택한 언어로 바꿔 준다. */
+    private VenueDetailResponse render(Venue v, TourDetail d, Lang lang) {
+        VenueDetailResponse r = VenueDetailResponse.from(v, d, lang);
+        String ko = r.longText();
+        String shown = describedIn(v, lang, ko);
+        return shown == null || shown.equals(ko) ? r : r.withLongText(shown);
+    }
+
+    /**
+     * 설명을 선택한 언어로. 처음 열릴 때 한 번 번역해 저장하고, 다음부터는 저장분을 쓴다.
+     *
+     * 설명은 DB 에 거의 없고(34,728곳 중 2곳) 공사 API 로 실시간 조회하는 값이다. 길어서 매번
+     * 번역하면 비싸다. 상세는 조회 빈도가 낮아 이쪽이 맞다 — 목록·지도와 달리 한 번에
+     * 한 곳만 열린다. 사용자 요청 경로에서 AI 를 부르는 유일한 자리다.
+     *
+     * 번역에 실패하면 한국어를 그대로 준다. 설명이 비어 보이는 것보다 낫다.
+     * 우리 DB 에 없는 장소(저장할 행이 없다)는 부르지 않는다 — 열 때마다 비용이 든다.
+     */
+    private String describedIn(Venue v, Lang lang, String koDescription) {
+        if (lang == Lang.KO || koDescription == null || koDescription.isBlank()) return koDescription;
+        String saved = v.descIn(lang);
+        if (saved != null && !saved.isBlank()) return saved;      // 두 번째부터는 AI 를 부르지 않는다
+        String tr = translationClient.translateText(lang, koDescription);
+        if (tr == null || tr.isBlank()) return koDescription;     // 실패 — 한국어로 둔다
+        v.applyDescription(lang, tr);
+        repo.save(v);
+        return tr;
     }
 
     private VenueDetailResponse detailByContentId(Lang lang, String contentId) {
@@ -152,7 +188,7 @@ public class VenueService {
         var stored = repo.findByTourContentId(contentId)
                 .or(() -> repo.findByDetailContentIdIn(List.of(contentId)).stream().findFirst());
         if (stored.isPresent()) {
-            return VenueDetailResponse.from(stored.get(), tourClient.detail(contentId), lang);
+            return render(stored.get(), tourClient.detail(contentId), lang);
         }
         var basic = tourClient.basic(contentId);
         if (basic == null) {

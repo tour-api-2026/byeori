@@ -101,6 +101,21 @@ public class Venue {
         return (t == null || t.isBlank()) ? name : t;
     }
 
+    /** 선택한 언어의 설명. 없으면 null — 부르는 쪽이 한국어로 떨어뜨린다. */
+    public String descIn(Lang lang) {
+        return switch (lang) { case EN -> descEn; case JA -> descJa; case ZH -> descZh; case KO -> null; };
+    }
+
+    /** 처음 열릴 때 번역한 긴 설명을 저장한다. 이름 번역(trSource)과는 별개라 출처를 건드리지 않는다. */
+    public void applyDescription(Lang lang, String text) {
+        switch (lang) {
+            case EN -> this.descEn = text;
+            case JA -> this.descJa = text;
+            case ZH -> this.descZh = text;
+            case KO -> { }
+        }
+    }
+
     /** USER 등록 장소(거지맵식 공유) 생성 */
     public static Venue userVenue(Long userId, String name, String address, BigDecimal lat, BigDecimal lng,
                                   String category, String phone, String homepageUrl, String operatingHours,

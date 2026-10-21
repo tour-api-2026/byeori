@@ -49,4 +49,27 @@ public record VenueDetailResponse(
                 v.getAvgRating(), v.getReviewCount() == null ? 0 : v.getReviewCount(), v.getSource(),
                 v.getLat(), v.getLng(), v.getVisibility(), live);
     }
+
+    /**
+     * 번역한 긴 설명으로 바꾼 사본. 앱이 읽는 곳은 공사 개요(liveInfo.overview)라 그것이 있으면
+     * 거기를, 없으면 우리 DB 의 description 을 바꾼다 — 번역할 원문을 고른 기준과 같아야 한다.
+     */
+    public VenueDetailResponse withLongText(String text) {
+        if (liveInfo != null && liveInfo.overview() != null && !liveInfo.overview().isBlank()) {
+            LiveInfo l = new LiveInfo(text, liveInfo.useTime(), liveInfo.restDate(),
+                    liveInfo.infoCenter(), liveInfo.parking(), liveInfo.homepage());
+            return new VenueDetailResponse(id, name, address, category, imageUrl, description, operatingHours,
+                    phone, homepageUrl, hanbokDiscount, hanbokDiscountDesc, avgRating, reviewCount, source,
+                    lat, lng, visibility, l);
+        }
+        return new VenueDetailResponse(id, name, address, category, imageUrl, text, operatingHours,
+                phone, homepageUrl, hanbokDiscount, hanbokDiscountDesc, avgRating, reviewCount, source,
+                lat, lng, visibility, liveInfo);
+    }
+
+    /** 번역할 긴 원문. 공사 개요가 있으면 그것, 없으면 DB 설명. 둘 다 비면 null. */
+    public String longText() {
+        if (liveInfo != null && liveInfo.overview() != null && !liveInfo.overview().isBlank()) return liveInfo.overview();
+        return description == null || description.isBlank() ? null : description;
+    }
 }

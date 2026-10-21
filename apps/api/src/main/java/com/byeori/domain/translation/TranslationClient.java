@@ -83,6 +83,44 @@ public class TranslationClient {
         }
     }
 
+    private static final String PROSE = """
+        You translate a Korean travel-guide description of a place into the target language for
+        foreign visitors. Translate faithfully and completely: do not summarise, shorten, or add anything.
+        Keep paragraph breaks. Keep place names consistent with their well-known official form in the
+        target language (e.g. 경복궁 -> Gyeongbokgung Palace in English). Return only the translation.
+        """;
+
+    private static final Map<String, Object> TEXT_SCHEMA = Map.of(
+            "type", "object",
+            "properties", Map.of("text", Map.of("type", "string")),
+            "required", List.of("text"),
+            "additionalProperties", false);
+
+    /**
+     * 한 장소의 긴 설명 하나를 번역한다. 사용자 요청 경로에서 AI 를 부르는 유일한 자리다.
+     *
+     * translate() 를 쓰지 않는 이유 — 그쪽 프롬프트는 "카드 라벨처럼 짧게" 를 요구해 문단을
+     * 줄여 버리고, 원문을 src 로 그대로 되돌려야 하는데 긴 글은 그게 자주 어긋난다.
+     * 실패하거나 빈 값이면 null 이고 던지지 않는다. 부르는 쪽이 한국어로 떨어뜨린다.
+     */
+    public String translateText(Lang lang, String text) {
+        if (lang == Lang.KO || text == null || text.isBlank()) return null;
+        try {
+            JsonNode res = openAi.completeJson(systemForProse(lang), text, "description", TEXT_SCHEMA, 0.2);
+            if (res == null || !res.path("text").isTextual()) return null;
+            String tr = res.get("text").asText().trim();
+            return tr.isEmpty() ? null : tr;
+        } catch (Exception e) {
+            log.warn("설명 번역 실패 lang={} 길이={} : {}", lang, text.length(), e.toString());
+            return null;
+        }
+    }
+
+    private static String systemForProse(Lang lang) {
+        String name = switch (lang) { case JA -> "Japanese"; case ZH -> "Simplified Chinese"; default -> "English"; };
+        return PROSE + "Target language: " + name + ".\n";
+    }
+
     /**
      * 일본어·중국어 칸에 한글이 남은 번역은 못 쓴다. 100건 표본에서 "고척동 고인돌" 을 그대로
      * 돌려주거나 "寺(서울)" 처럼 한글을 섞은 것이 나왔다. 버리면 해시가 안 찍혀 다음 배치가
