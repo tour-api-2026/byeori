@@ -1,5 +1,6 @@
 package com.byeori.domain.performance.dto;
 
+import com.byeori.global.i18n.Lang;
 import com.byeori.domain.performance.Performance;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -14,9 +15,9 @@ public record PerformanceResponse(
         /** 행사를 자세히 볼 수 있는 원문 페이지. 출처마다 다르다(아래 infoUrl 참고). */
         String infoUrl) {
 
-    public static PerformanceResponse from(Performance p) {
+    public static PerformanceResponse from(Performance p, Lang lang) {
         return new PerformanceResponse(
-                p.getId(), p.getVenueId(), p.getTitle(), p.getGenre(), p.getPosterImageUrl(),
+                p.getId(), p.getVenueId(), p.titleIn(lang), p.getGenre(), p.getPosterImageUrl(),
                 p.getStartDate(), p.getEndDate(), p.currentState(), p.getExternalBookingUrl(),
                 p.getAvgRating(), p.getReviewCount() == null ? 0 : p.getReviewCount(), p.getSource(),
                 p.getLat(), p.getLng(), p.isTraditional(), null, infoUrl(p));

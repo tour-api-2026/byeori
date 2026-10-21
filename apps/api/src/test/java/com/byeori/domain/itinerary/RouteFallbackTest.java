@@ -146,7 +146,7 @@ class RouteFallbackTest {
         when(mobilityClient.directions(anyList(), anyString())).thenReturn(driveRoute(
                 List.of(new double[]{126.9800, 37.5600}, new double[]{126.9800, 37.5630})));
 
-        RouteResponse res = service.route(7L, 1L, "AUTO");
+        RouteResponse res = service.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, "AUTO");
 
         assertThat(res.legs()).hasSize(3);
         assertThat(res.legs()).allMatch(l -> "DRIVE".equals(l.mode()));
@@ -163,7 +163,7 @@ class RouteFallbackTest {
     void 도보가_되면() {
         when(osrmClient.walk(anyList())).thenReturn(walkRoute());
 
-        RouteResponse res = service.route(7L, 1L, "AUTO");
+        RouteResponse res = service.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, "AUTO");
 
         assertThat(res.legs()).allMatch(l -> "WALK".equals(l.mode()));
         verify(osrmClient, times(3)).walk(anyList());
@@ -181,7 +181,7 @@ class RouteFallbackTest {
         when(osrmClient.walk(anyList())).thenReturn(WalkResult.FAILED);
         when(mobilityClient.directions(anyList(), anyString())).thenReturn(null);
 
-        RouteResponse res = service.route(7L, 1L, "AUTO");
+        RouteResponse res = service.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, "AUTO");
 
         assertThat(res.legs()).allMatch(l -> "STRAIGHT".equals(l.mode()));
         verify(routeSaver, never()).store(anyLong(), anyString(), anyString(),
@@ -194,7 +194,7 @@ class RouteFallbackTest {
         // mode=DRIVE 라 OSRM 은 아예 묻지 않는다. 빈 좌표열만으로 터지는지를 본다.
         when(mobilityClient.directions(anyList(), anyString())).thenReturn(driveRoute(List.of()));
 
-        RouteResponse res = service.route(7L, 1L, "DRIVE");
+        RouteResponse res = service.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, "DRIVE");
 
         assertThat(res.legs()).hasSize(3);
         assertThat(res.legs()).allMatch(l -> "DRIVE".equals(l.mode()));
@@ -214,7 +214,7 @@ class RouteFallbackTest {
                 .when(routeSaver).store(anyLong(), anyString(), anyString(),
                         anyInt(), anyInt(), anyString(), anyString());
 
-        RouteResponse res = service.route(7L, 1L, "AUTO");
+        RouteResponse res = service.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, "AUTO");
 
         assertThat(res.legs()).hasSize(3);
         assertThat(res.legs()).allMatch(l -> "WALK".equals(l.mode()));
@@ -228,7 +228,7 @@ class RouteFallbackTest {
                 .when(routeSaver).store(anyLong(), anyString(), anyString(),
                         anyInt(), anyInt(), anyString(), anyString());
 
-        assertThatCode(() -> service.route(7L, 1L, "AUTO")).doesNotThrowAnyException();
+        assertThatCode(() -> service.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, "AUTO")).doesNotThrowAnyException();
     }
 
     @Test
@@ -240,7 +240,7 @@ class RouteFallbackTest {
                 List.of(new double[]{126.9800, 37.5630}, new double[]{126.9800, 37.5660},
                         new double[]{126.9800, 37.5690})));
 
-        RouteResponse res = service.route(7L, 1L, "AUTO");
+        RouteResponse res = service.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, "AUTO");
 
         assertThat(res.legs()).extracting(l -> l.mode()).containsExactly("WALK", "DRIVE", "DRIVE");
         assertThat(res.legs()).extracting(l -> l.points()).containsExactly(2, 2, 2);
@@ -253,7 +253,7 @@ class RouteFallbackTest {
         when(osrmClient.walk(anyList())).thenReturn(WalkResult.FAILED);
         when(mobilityClient.directions(anyList(), anyString())).thenReturn(null);
 
-        RouteResponse res = service.route(7L, 1L, "AUTO");
+        RouteResponse res = service.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, "AUTO");
 
         assertThat(res.legs()).extracting(l -> l.points()).containsExactly(2, 1, 1);
         assertThat(res.legs().stream().mapToInt(l -> l.points()).sum()).isEqualTo(res.path().size());
@@ -266,7 +266,7 @@ class RouteFallbackTest {
         when(mobilityClient.directions(anyList(), anyString())).thenReturn(null);
         when(osrmClient.walk(anyList())).thenReturn(walkRoute());
 
-        RouteResponse res = service.route(7L, 1L, "WALK");
+        RouteResponse res = service.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, "WALK");
 
         assertThat(res.legs()).allMatch(l -> "WALK".equals(l.mode()));
         verify(mobilityClient, never()).directions(any(), anyString());
@@ -282,7 +282,7 @@ class RouteFallbackTest {
                 new OsrmRoute(300, 220, List.of(new double[]{37.5630, 126.9800})), false);
         when(osrmClient.walk(anyList())).thenReturn(walkRoute(), onePoint, walkRoute());
 
-        RouteResponse res = service.route(7L, 1L, "AUTO");
+        RouteResponse res = service.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, "AUTO");
 
         assertThat(res.legs()).extracting(l -> l.points()).containsExactly(2, 0, 1);
         verify(routeSaver, never()).store(anyLong(), anyString(), anyString(),
@@ -300,7 +300,7 @@ class RouteFallbackTest {
         when(mobilityClient.directions(anyList(), anyString())).thenReturn(driveRoute(
                 List.of(new double[]{126.9800, 37.5600}, new double[]{126.9800, 37.5630})));
 
-        RouteResponse res = service.route(7L, 1L, "AUTO");
+        RouteResponse res = service.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, "AUTO");
 
         assertThat(res.legs()).extracting(l -> l.mode()).containsExactly("DRIVE", "WALK", "WALK");
         verify(osrmClient, times(3)).walk(anyList());               // 차단기가 걸리지 않았다
@@ -319,7 +319,7 @@ class RouteFallbackTest {
         when(mobilityClient.directions(anyList(), anyString())).thenReturn(driveRoute(
                 List.of(new double[]{126.9800, 37.5600}, new double[]{126.9800, 37.5630})));
 
-        RouteResponse res = capped.route(7L, 1L, "WALK");
+        RouteResponse res = capped.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, "WALK");
 
         assertThat(res.legs()).allMatch(l -> "DRIVE".equals(l.mode()));
         verify(osrmClient, never()).walk(anyList());
@@ -333,7 +333,7 @@ class RouteFallbackTest {
         when(routeRepo.findByItineraryIdAndMode(1L, "AUTO"))
                 .thenReturn(Optional.of(savedRoute("AUTO")));
 
-        RouteResponse res = service.route(7L, 1L, "AUTO");
+        RouteResponse res = service.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, "AUTO");
 
         assertThat(res.legs()).hasSize(1);          // 저장해 둔 모양 그대로(계산하면 3구간)
         verify(osrmClient, never()).walk(anyList());
@@ -350,7 +350,7 @@ class RouteFallbackTest {
         when(routeRepo.findByItineraryIdAndMode(1L, "AUTO")).thenReturn(Optional.of(stale));
         when(osrmClient.walk(anyList())).thenReturn(walkRoute());
 
-        RouteResponse res = service.route(7L, 1L, "AUTO");
+        RouteResponse res = service.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, "AUTO");
 
         assertThat(res.legs()).hasSize(3);
         verify(osrmClient, times(3)).walk(anyList());
@@ -361,8 +361,8 @@ class RouteFallbackTest {
     void 모드_대소문자() {
         when(osrmClient.walk(anyList())).thenReturn(walkRoute());
 
-        assertThat(service.route(7L, 1L, "walk").mode()).isEqualTo("WALK");
-        assertThat(service.route(7L, 1L, " drive ").mode()).isEqualTo("DRIVE");
-        assertThat(service.route(7L, 1L, "엉뚱한값").mode()).isEqualTo("AUTO");
+        assertThat(service.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, "walk").mode()).isEqualTo("WALK");
+        assertThat(service.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, " drive ").mode()).isEqualTo("DRIVE");
+        assertThat(service.route(com.byeori.global.i18n.Lang.KO, 7L, 1L, "엉뚱한값").mode()).isEqualTo("AUTO");
     }
 }

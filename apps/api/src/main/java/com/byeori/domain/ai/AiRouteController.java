@@ -3,12 +3,14 @@ package com.byeori.domain.ai;
 import com.byeori.domain.ai.AiRouteDtos.GenerateRequest;
 import com.byeori.domain.ai.AiRouteDtos.Preview;
 import com.byeori.domain.ai.AiRouteDtos.Status;
+import com.byeori.global.i18n.Lang;
 import com.byeori.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -27,7 +29,9 @@ public class AiRouteController {
 
     /** 미리보기만 만든다. 저장은 POST /itineraries (sourceType=AI, items 포함). */
     @PostMapping
-    public ApiResponse<Preview> generate(@AuthenticationPrincipal Long userId, @RequestBody GenerateRequest req) {
-        return ApiResponse.ok(service.generate(userId, req));
+    public ApiResponse<Preview> generate(
+            @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
+            @AuthenticationPrincipal Long userId, @RequestBody GenerateRequest req) {
+        return ApiResponse.ok(service.generate(userId, req, Lang.of(acceptLanguage)));
     }
 }

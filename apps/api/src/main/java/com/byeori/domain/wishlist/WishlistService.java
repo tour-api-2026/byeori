@@ -1,5 +1,6 @@
 package com.byeori.domain.wishlist;
 
+import com.byeori.global.i18n.Lang;
 import com.byeori.domain.performance.Performance;
 import com.byeori.domain.performance.PerformanceRepository;
 import com.byeori.domain.venue.Venue;
@@ -27,19 +28,19 @@ public class WishlistService {
         this.performanceRepo = performanceRepo;
     }
 
-    public List<WishlistResponse> list(Long userId) {
-        return repo.findByUserIdOrderByCreatedAtDesc(userId).stream().map(this::toResponse).toList();
+    public List<WishlistResponse> list(Lang lang, Long userId) {
+        return repo.findByUserIdOrderByCreatedAtDesc(userId).stream().map(w -> toResponse(lang, w)).toList();
     }
 
     @Transactional
-    public WishlistResponse add(Long userId, WishlistRequest req) {
+    public WishlistResponse add(Lang lang, Long userId, WishlistRequest req) {
         ContentTarget target = new ContentTarget(ContentType.from(req.targetType()), req.targetId());
         Wishlist existing = target.targetType() == ContentType.PERFORMANCE
                 ? repo.findByUserIdAndPerformanceId(userId, target.targetId()).orElse(null)
                 : repo.findByUserIdAndVenueId(userId, target.targetId()).orElse(null);
         Wishlist saved = existing != null ? existing
                 : repo.save(new Wishlist(userId, target.performanceId(), target.venueId()));
-        return toResponse(saved);
+        return toResponse(lang, saved);
     }
 
     @Transactional
@@ -52,17 +53,17 @@ public class WishlistService {
         }
     }
 
-    private WishlistResponse toResponse(Wishlist w) {
+    private WishlistResponse toResponse(Lang lang, Wishlist w) {
         ContentTarget t = ContentTarget.of(w.getPerformanceId(), w.getVenueId());
         if (t.targetType() == ContentType.VENUE) {
             Venue v = venueRepo.findById(t.targetId()).orElse(null);
             return new WishlistResponse(w.getId(), "VENUE", t.targetId(),
-                    v == null ? null : v.getName(), v == null ? null : v.getImageUrl(),
+                    v == null ? null : v.nameIn(lang), v == null ? null : v.getImageUrl(),
                     v == null ? BigDecimal.ZERO : v.getAvgRating(), v == null || v.getReviewCount() == null ? 0 : v.getReviewCount());
         }
         Performance p = performanceRepo.findById(t.targetId()).orElse(null);
         return new WishlistResponse(w.getId(), "PERFORMANCE", t.targetId(),
-                p == null ? null : p.getTitle(), p == null ? null : p.getPosterImageUrl(),
+                p == null ? null : p.titleIn(lang), p == null ? null : p.getPosterImageUrl(),
                 p == null ? BigDecimal.ZERO : p.getAvgRating(), p == null || p.getReviewCount() == null ? 0 : p.getReviewCount());
     }
 }

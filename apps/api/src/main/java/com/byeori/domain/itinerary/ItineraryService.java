@@ -1,5 +1,6 @@
 package com.byeori.domain.itinerary;
 
+import com.byeori.global.i18n.Lang;
 import com.byeori.domain.course.CuratedCourseItem;
 import com.byeori.domain.course.CuratedCourseItemRepository;
 import com.byeori.domain.itinerary.dto.ItineraryDtos.*;
@@ -77,14 +78,14 @@ public class ItineraryService {
     /** 목록 카드가 보여주는 방문지 수. 더 보내도 카드가 잘라 버린다. */
     private static final int SUMMARY_STOPS = 5;
 
-    public List<Summary> listMine(Long userId) {
+    public List<Summary> listMine(Lang lang, Long userId) {
         return repo.findByUserIdOrderByCreatedAtDesc(userId).stream()
                 .map(i -> {
                     // 개수를 세려면 어차피 다 읽어야 한다. 앞쪽을 함께 보내면 카드가 상세를
                     // 따로 받지 않아도 되고, 제목과 방문지 줄이 같이 뜬다.
                     List<ItineraryItem> items = itemRepo.findByItineraryIdOrderByVisitDateAscSortOrderAsc(i.getId());
                     List<SummaryStop> stops = items.stream().limit(SUMMARY_STOPS)
-                            .map(it -> new SummaryStop(it.getId(), nameOf(it)))
+                            .map(it -> new SummaryStop(it.getId(), nameOf(lang, it)))
                             .toList();
                     return Summary.from(i, items.size(), stops);
                 })
@@ -92,20 +93,20 @@ public class ItineraryService {
     }
 
     /** 항목의 표시 이름. 장소면 장소 이름, 공연이면 공연 제목. 지워졌으면 null. */
-    private String nameOf(ItineraryItem item) {
+    private String nameOf(Lang lang, ItineraryItem item) {
         if (item.getVenueId() != null) {
-            return venueRepo.findById(item.getVenueId()).map(Venue::getName).orElse(null);
+            return venueRepo.findById(item.getVenueId()).map(v -> v.nameIn(lang)).orElse(null);
         }
         if (item.getPerformanceId() != null) {
-            return performanceRepo.findById(item.getPerformanceId()).map(Performance::getTitle).orElse(null);
+            return performanceRepo.findById(item.getPerformanceId()).map(p -> p.titleIn(lang)).orElse(null);
         }
         return null;
     }
 
-    public Detail get(Long userId, Long id) {
+    public Detail get(Lang lang, Long userId, Long id) {
         Itinerary i = own(userId, id);
         List<ItemResponse> items = itemRepo.findByItineraryIdOrderByVisitDateAscSortOrderAsc(id).stream()
-                .map(this::toItemResponse).toList();
+                .map(it -> toItemResponse(lang, it)).toList();
         return Detail.from(i, items);
     }
 
@@ -130,14 +131,14 @@ public class ItineraryService {
      * 128비트 난수를 URL 안전 문자로 적어 22자가 된다. 훑어서 맞히는 건 현실적으로 불가능하고,
      * id 가 응답에 없어 이걸로 다른 루트를 짚어 볼 수도 없다.
      */
-    public SharedDetail getShared(String token) {
+    public SharedDetail getShared(Lang lang, String token) {
         if (token == null || token.isBlank()) {
             throw new NotFoundException("SHARED_NOT_FOUND", "공유된 루트를 찾을 수 없습니다.");
         }
         Itinerary i = repo.findByShareToken(token)
                 .orElseThrow(() -> new NotFoundException("SHARED_NOT_FOUND", "공유된 루트를 찾을 수 없습니다."));
         List<SharedStop> stops = itemRepo.findByItineraryIdOrderByVisitDateAscSortOrderAsc(i.getId()).stream()
-                .map(this::toSharedStop).toList();
+                .map(it -> toSharedStop(lang, it)).toList();
         return new SharedDetail(i.getTitle(), i.getStartDate(), i.getEndDate(), stops);
     }
 
@@ -148,8 +149,8 @@ public class ItineraryService {
     }
 
     /** 공유로 내보낼 모양. memo 는 **옮기지 않는다** — 개인 메모가 적혀 있을 수 있다. */
-    private SharedStop toSharedStop(ItineraryItem item) {
-        ItemResponse r = toItemResponse(item);
+    private SharedStop toSharedStop(Lang lang, ItineraryItem item) {
+        ItemResponse r = toItemResponse(lang, item);
         return new SharedStop(r.targetType(), r.targetId(), r.name(), r.imageUrl(),
                 r.visitDate(), r.sortOrder(), r.plannedTime(), r.lat(), r.lng());
     }
@@ -162,7 +163,7 @@ public class ItineraryService {
      * 클래스 기본값(readOnly)을 그대로 쓰면 저장이 조용히 사라진다.
      */
     @Transactional
-    public RouteResponse route(Long userId, Long id, String mode) {
+    public RouteResponse route(Lang lang, Long userId, Long id, String mode) {
         Itinerary itinerary = own(userId, id);
         // 카카오 키가 없다고 미리 막지 않는다. directions 가 스스로 null 을 주므로 구간마다
         // 알아서 내려가고, 도보로 충분한 루트는 키 없이도 온전히 나온다. 막아 두면 그 루트가
@@ -178,12 +179,12 @@ public class ItineraryService {
             if (item.getPerformanceId() != null) {
                 Performance p = performanceRepo.findById(item.getPerformanceId()).orElse(null);
                 if (p == null) continue;
-                lat = p.getLat(); lng = p.getLng(); name = p.getTitle();
+                lat = p.getLat(); lng = p.getLng(); name = p.titleIn(lang);
                 type = "PERFORMANCE"; targetId = p.getId();
             } else if (item.getVenueId() != null) {
                 Venue v = venueRepo.findById(item.getVenueId()).orElse(null);
                 if (v == null) continue;
-                lat = v.getLat(); lng = v.getLng(); name = v.getName();
+                lat = v.getLat(); lng = v.getLng(); name = v.nameIn(lang);
                 type = "VENUE"; targetId = v.getId();
             } else {
                 continue;
@@ -363,7 +364,7 @@ public class ItineraryService {
     }
 
     @Transactional
-    public Detail create(Long userId, CreateRequest req) {
+    public Detail create(Lang lang, Long userId, CreateRequest req) {
         // 필수 값 검증. 없으면 DB의 NOT NULL 제약에서 터져 SQL문이 그대로 응답에 실린다.
         if (req == null || req.title() == null || req.title().isBlank()) {
             throw new BadRequestException("ITINERARY_INVALID", "일정 제목은 필수입니다.");
@@ -407,14 +408,14 @@ public class ItineraryService {
                         visit, order++, it.plannedTime(), it.memo()));
             }
         }
-        return get(userId, saved.getId());
+        return get(lang, userId, saved.getId());
     }
 
     @Transactional
-    public Detail update(Long userId, Long id, UpdateRequest req) {
+    public Detail update(Lang lang, Long userId, Long id, UpdateRequest req) {
         Itinerary i = own(userId, id);
         i.update(req.title(), req.startDate(), req.endDate());
-        return get(userId, id);
+        return get(lang, userId, id);
     }
 
     /**
@@ -425,7 +426,7 @@ public class ItineraryService {
      * 화면이 낡은 목록을 들고 있을 때(다른 기기에서 장소를 지웠다거나) 여기서 걸린다.
      */
     @Transactional
-    public List<ItemResponse> reorderItems(Long userId, Long id, ReorderRequest req) {
+    public List<ItemResponse> reorderItems(Lang lang, Long userId, Long id, ReorderRequest req) {
         own(userId, id);
         if (req == null || req.visitDate() == null || req.itemIds() == null || req.itemIds().isEmpty()) {
             throw new BadRequestException("ORDER_INVALID", "순서를 바꿀 장소가 없습니다.");
@@ -445,7 +446,7 @@ public class ItineraryService {
         for (Long itemId : req.itemIds()) {
             ItineraryItem item = byId.get(itemId);
             item.update(null, order++, null, null);
-            out.add(toItemResponse(item));
+            out.add(toItemResponse(lang, item));
         }
         return out;
     }
@@ -458,7 +459,7 @@ public class ItineraryService {
     }
 
     @Transactional
-    public ItemResponse addItem(Long userId, Long id, ItemRequest req) {
+    public ItemResponse addItem(Lang lang, Long userId, Long id, ItemRequest req) {
         own(userId, id);
         if (req == null || req.visitDate() == null) {
             throw new BadRequestException("ITEM_INVALID", "방문 날짜는 필수입니다.");
@@ -466,7 +467,7 @@ public class ItineraryService {
         ContentTarget t = new ContentTarget(ContentType.from(req.targetType()), req.targetId());
         ItineraryItem saved = itemRepo.save(new ItineraryItem(id, t.performanceId(), t.venueId(),
                 req.visitDate(), req.sortOrder(), req.plannedTime(), req.memo()));
-        return toItemResponse(saved);
+        return toItemResponse(lang, saved);
     }
 
     /**
@@ -474,7 +475,7 @@ public class ItineraryService {
      * 재사용하고, 없으면 그 사용자만 보는 장소로 만든다.
      */
     @Transactional
-    public ItemResponse addPlaceItem(Long userId, Long id, PlaceItemRequest req) {
+    public ItemResponse addPlaceItem(Lang lang, Long userId, Long id, PlaceItemRequest req) {
         own(userId, id);
         if (req == null || req.visitDate() == null) {
             throw new BadRequestException("ITEM_INVALID", "방문 날짜는 필수입니다.");
@@ -482,7 +483,7 @@ public class ItineraryService {
         Venue venue = resolvePlaceVenue(userId, req);
         ItineraryItem saved = itemRepo.save(new ItineraryItem(id, null, venue.getId(),
                 req.visitDate(), req.sortOrder(), null, null));
-        return toItemResponse(saved);
+        return toItemResponse(lang, saved);
     }
 
     private static String clip(String s, int max) {
@@ -492,7 +493,7 @@ public class ItineraryService {
     }
 
     @Transactional
-    public ItemResponse updateItem(Long userId, Long id, Long itemId, ItemRequest req) {
+    public ItemResponse updateItem(Lang lang, Long userId, Long id, Long itemId, ItemRequest req) {
         own(userId, id);
         ItineraryItem item = itemRepo.findById(itemId)
                 .orElseThrow(() -> new NotFoundException("ITEM_NOT_FOUND", "일정 항목을 찾을 수 없습니다."));
@@ -504,7 +505,7 @@ public class ItineraryService {
             item.changeTarget(t.performanceId(), t.venueId());
         }
         item.update(req.visitDate(), req.sortOrder(), req.plannedTime(), req.memo());
-        return toItemResponse(item);
+        return toItemResponse(lang, item);
     }
 
     @Transactional
@@ -555,26 +556,26 @@ public class ItineraryService {
      * 다시 쓰고, 처음이면 그 사용자만 보는 장소로 만든다.
      */
     @Transactional
-    public ItemResponse replaceItemPlace(Long userId, Long id, Long itemId, PlaceItemRequest req) {
+    public ItemResponse replaceItemPlace(Lang lang, Long userId, Long id, Long itemId, PlaceItemRequest req) {
         own(userId, id);
         ItineraryItem item = itemRepo.findById(itemId)
                 .orElseThrow(() -> new NotFoundException("ITEM_NOT_FOUND", "일정 항목을 찾을 수 없습니다."));
         if (!item.getItineraryId().equals(id)) throw new BadRequestException("ITEM_MISMATCH", "해당 일지의 항목이 아닙니다.");
         Venue venue = resolvePlaceVenue(userId, req);
         item.changeTarget(null, venue.getId());
-        return toItemResponse(item);
+        return toItemResponse(lang, item);
     }
 
-    private ItemResponse toItemResponse(ItineraryItem item) {
+    private ItemResponse toItemResponse(Lang lang, ItineraryItem item) {
         ContentTarget t = ContentTarget.of(item.getPerformanceId(), item.getVenueId());
         String name = null, image = null;
         BigDecimal lat = null, lng = null;
         if (t.targetType() == ContentType.VENUE) {
             Venue v = venueRepo.findById(t.targetId()).orElse(null);
-            if (v != null) { name = v.getName(); image = v.getImageUrl(); lat = v.getLat(); lng = v.getLng(); }
+            if (v != null) { name = v.nameIn(lang); image = v.getImageUrl(); lat = v.getLat(); lng = v.getLng(); }
         } else {
             Performance p = performanceRepo.findById(t.targetId()).orElse(null);
-            if (p != null) { name = p.getTitle(); image = p.getPosterImageUrl(); lat = p.getLat(); lng = p.getLng(); }
+            if (p != null) { name = p.titleIn(lang); image = p.getPosterImageUrl(); lat = p.getLat(); lng = p.getLng(); }
         }
         return new ItemResponse(item.getId(), t.targetType().name(), t.targetId(), name, image,
                 item.getVisitDate(), item.getSortOrder(), item.getPlannedTime(), item.getMemo(),

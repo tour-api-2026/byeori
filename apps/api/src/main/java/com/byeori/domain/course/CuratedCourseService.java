@@ -1,5 +1,6 @@
 package com.byeori.domain.course;
 
+import com.byeori.global.i18n.Lang;
 import com.byeori.domain.course.dto.CourseItemResponse;
 import com.byeori.domain.course.dto.CuratedCourseDetailResponse;
 import com.byeori.domain.course.dto.CuratedCourseResponse;
@@ -29,28 +30,28 @@ public class CuratedCourseService {
         this.performanceRepo = performanceRepo;
     }
 
-    public List<CuratedCourseResponse> list(String theme) {
-        return courseRepo.findActive(theme).stream().map(CuratedCourseResponse::from).toList();
+    public List<CuratedCourseResponse> list(Lang lang, String theme) {
+        return courseRepo.findActive(theme).stream().map(c -> CuratedCourseResponse.from(c, lang)).toList();
     }
 
-    public CuratedCourseDetailResponse detail(Long id) {
+    public CuratedCourseDetailResponse detail(Lang lang, Long id) {
         CuratedCourse course = courseRepo.findById(id)
                 .orElseThrow(() -> new NotFoundException("COURSE_NOT_FOUND", "추천 코스를 찾을 수 없습니다."));
         List<CourseItemResponse> items = itemRepo.findByCourseIdOrderBySortOrderAsc(id).stream()
-                .map(this::toItemResponse).toList();
-        return CuratedCourseDetailResponse.from(course, items);
+                .map(i -> toItemResponse(lang, i)).toList();
+        return CuratedCourseDetailResponse.from(course, lang, items);
     }
 
-    private CourseItemResponse toItemResponse(CuratedCourseItem item) {
+    private CourseItemResponse toItemResponse(Lang lang, CuratedCourseItem item) {
         if (item.getVenueId() != null) {
             Venue v = venueRepo.findById(item.getVenueId()).orElse(null);
             return new CourseItemResponse(item.getId(), "VENUE", item.getVenueId(),
-                    v == null ? null : v.getName(), v == null ? null : v.getImageUrl(),
+                    v == null ? null : v.nameIn(lang), v == null ? null : v.getImageUrl(),
                     item.getSortOrder(), item.getRecommendedTime(), item.getNote());
         }
         Performance p = performanceRepo.findById(item.getPerformanceId()).orElse(null);
         return new CourseItemResponse(item.getId(), "PERFORMANCE", item.getPerformanceId(),
-                p == null ? null : p.getTitle(), p == null ? null : p.getPosterImageUrl(),
+                p == null ? null : p.titleIn(lang), p == null ? null : p.getPosterImageUrl(),
                 item.getSortOrder(), item.getRecommendedTime(), item.getNote());
     }
 }

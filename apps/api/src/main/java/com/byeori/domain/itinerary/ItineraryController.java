@@ -1,5 +1,6 @@
 package com.byeori.domain.itinerary;
 
+import com.byeori.global.i18n.Lang;
 import com.byeori.domain.itinerary.dto.ItineraryDtos.*;
 import com.byeori.global.response.ApiResponse;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,20 +18,26 @@ public class ItineraryController {
     }
 
     @GetMapping("/users/me/itineraries")
-    public ApiResponse<List<Summary>> listMine(@AuthenticationPrincipal Long userId) {
-        return ApiResponse.ok(service.listMine(userId));
+    public ApiResponse<List<Summary>> listMine(
+            @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
+            @AuthenticationPrincipal Long userId) {
+        return ApiResponse.ok(service.listMine(Lang.of(acceptLanguage), userId));
     }
 
     @PostMapping("/itineraries")
-    public ApiResponse<Detail> create(@AuthenticationPrincipal Long userId,
+    public ApiResponse<Detail> create(
+            @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
+            @AuthenticationPrincipal Long userId,
                                       @RequestBody CreateRequest req) {
-        return ApiResponse.ok(service.create(userId, req));
+        return ApiResponse.ok(service.create(Lang.of(acceptLanguage), userId, req));
     }
 
     @GetMapping("/itineraries/{id}")
-    public ApiResponse<Detail> get(@AuthenticationPrincipal Long userId,
+    public ApiResponse<Detail> get(
+            @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
+            @AuthenticationPrincipal Long userId,
                                    @PathVariable("id") Long id) {
-        return ApiResponse.ok(service.get(userId, id));
+        return ApiResponse.ok(service.get(Lang.of(acceptLanguage), userId, id));
     }
 
     /** 공유 링크 발급(소유자만). 이미 있으면 같은 토큰을 돌려준다. */
@@ -48,22 +55,28 @@ public class ItineraryController {
      * 공개하려는 것만 /shared 아래에 모아 두면 보호 규칙을 건드릴 일이 없다.
      */
     @GetMapping("/shared/itineraries/{token}")
-    public ApiResponse<SharedDetail> shared(@PathVariable("token") String token) {
-        return ApiResponse.ok(service.getShared(token));
+    public ApiResponse<SharedDetail> shared(
+            @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
+            @PathVariable("token") String token) {
+        return ApiResponse.ok(service.getShared(Lang.of(acceptLanguage), token));
     }
 
     /** 저장해 둔 경로가 아직 맞으면 그대로 준다. mode: AUTO(기본)|WALK|DRIVE. */
     @GetMapping("/itineraries/{id}/route")
-    public ApiResponse<RouteResponse> route(@AuthenticationPrincipal Long userId,
+    public ApiResponse<RouteResponse> route(
+            @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
+            @AuthenticationPrincipal Long userId,
                                             @PathVariable("id") Long id,
                                             @RequestParam(name = "mode", defaultValue = "AUTO") String mode) {
-        return ApiResponse.ok(service.route(userId, id, mode));
+        return ApiResponse.ok(service.route(Lang.of(acceptLanguage), userId, id, mode));
     }
 
     @PatchMapping("/itineraries/{id}")
-    public ApiResponse<Detail> update(@AuthenticationPrincipal Long userId,
+    public ApiResponse<Detail> update(
+            @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
+            @AuthenticationPrincipal Long userId,
                                       @PathVariable("id") Long id, @RequestBody UpdateRequest req) {
-        return ApiResponse.ok(service.update(userId, id, req));
+        return ApiResponse.ok(service.update(Lang.of(acceptLanguage), userId, id, req));
     }
 
     @DeleteMapping("/itineraries/{id}")
@@ -74,24 +87,30 @@ public class ItineraryController {
     }
 
     @PostMapping("/itineraries/{id}/items")
-    public ApiResponse<ItemResponse> addItem(@AuthenticationPrincipal Long userId,
+    public ApiResponse<ItemResponse> addItem(
+            @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
+            @AuthenticationPrincipal Long userId,
                                              @PathVariable("id") Long id, @RequestBody ItemRequest req) {
-        return ApiResponse.ok(service.addItem(userId, id, req));
+        return ApiResponse.ok(service.addItem(Lang.of(acceptLanguage), userId, id, req));
     }
 
     /** 카카오에서 고른 장소(벼리 DB 밖)를 루트에 넣는다. */
     @PostMapping("/itineraries/{id}/items/place")
-    public ApiResponse<ItemResponse> addPlaceItem(@AuthenticationPrincipal Long userId,
+    public ApiResponse<ItemResponse> addPlaceItem(
+            @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
+            @AuthenticationPrincipal Long userId,
                                                   @PathVariable("id") Long id,
                                                   @RequestBody PlaceItemRequest req) {
-        return ApiResponse.ok(service.addPlaceItem(userId, id, req));
+        return ApiResponse.ok(service.addPlaceItem(Lang.of(acceptLanguage), userId, id, req));
     }
 
     @PatchMapping("/itineraries/{id}/items/{itemId}")
-    public ApiResponse<ItemResponse> updateItem(@AuthenticationPrincipal Long userId,
+    public ApiResponse<ItemResponse> updateItem(
+            @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
+            @AuthenticationPrincipal Long userId,
                                                 @PathVariable("id") Long id, @PathVariable("itemId") Long itemId,
                                                 @RequestBody ItemRequest req) {
-        return ApiResponse.ok(service.updateItem(userId, id, itemId, req));
+        return ApiResponse.ok(service.updateItem(Lang.of(acceptLanguage), userId, id, itemId, req));
     }
 
     /**
@@ -101,19 +120,23 @@ public class ItineraryController {
      * Spring 은 변수 자리보다 글자가 그대로 박힌 경로를 먼저 고른다.
      */
     @PatchMapping("/itineraries/{id}/items/order")
-    public ApiResponse<List<ItemResponse>> reorderItems(@AuthenticationPrincipal Long userId,
+    public ApiResponse<List<ItemResponse>> reorderItems(
+            @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
+            @AuthenticationPrincipal Long userId,
                                                        @PathVariable("id") Long id,
                                                        @RequestBody ReorderRequest req) {
-        return ApiResponse.ok(service.reorderItems(userId, id, req));
+        return ApiResponse.ok(service.reorderItems(Lang.of(acceptLanguage), userId, id, req));
     }
 
     /** 이 자리의 장소를 카카오에서 고른 곳으로 바꾼다. */
     @PatchMapping("/itineraries/{id}/items/{itemId}/place")
-    public ApiResponse<ItemResponse> replaceItemPlace(@AuthenticationPrincipal Long userId,
+    public ApiResponse<ItemResponse> replaceItemPlace(
+            @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage,
+            @AuthenticationPrincipal Long userId,
                                                       @PathVariable("id") Long id,
                                                       @PathVariable("itemId") Long itemId,
                                                       @RequestBody PlaceItemRequest req) {
-        return ApiResponse.ok(service.replaceItemPlace(userId, id, itemId, req));
+        return ApiResponse.ok(service.replaceItemPlace(Lang.of(acceptLanguage), userId, id, itemId, req));
     }
 
     @DeleteMapping("/itineraries/{id}/items/{itemId}")

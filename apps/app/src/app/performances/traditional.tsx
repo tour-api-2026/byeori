@@ -7,6 +7,7 @@ import { Chip } from '@/components/Chip';
 import { Performance } from '@/lib/api/types';
 import { usePerformancesQuery } from '@/lib/hooks/queries';
 import { useT } from '@/lib/i18n';
+import { genreLabel } from '@/lib/i18n/labels';
 import { sized } from '@/lib/img';
 import { colors, fonts, radius, shadow, space } from '@/lib/theme';
 
@@ -63,7 +64,7 @@ export default function TraditionalPerformancesScreen() {
               />
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
-                <Text style={styles.genre} numberOfLines={1}>{item.genre ?? t('performance.defaultGenre')}</Text>
+                <Text style={styles.genre} numberOfLines={1}>{item.genre ? genreLabel(t, item.genre) : t('performance.defaultGenre')}</Text>
                 <Text style={styles.period}>{formatPeriod(item)}</Text>
               </View>
             </Pressable>

@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import com.byeori.global.i18n.Lang;
 import lombok.Getter;
 
 @Entity
@@ -45,6 +46,83 @@ public class Performance {
      * 값은 {@link com.byeori.domain.sync.PerformanceDeduper}가 동기화마다 다시 계산한다.
      */
     private Long duplicateOf;
+
+    /**
+     * 제목의 번역본. 설명은 저장하지 않는다(상세는 실시간 조회).
+     * 컬럼 이름은 Hibernate 네이밍에 맡기지 않고 명시한다.
+     */
+    @Column(name = "title_en") private String titleEn;
+    @Column(name = "title_ja") private String titleJa;
+    @Column(name = "title_zh") private String titleZh;
+    /** 원본 제목의 sha256. 제목이 바뀐 행만 다시 번역하려고 둔다. */
+    @Column(name = "name_hash") private String nameHash;
+    /**
+     * 번역의 출처. HUMAN = 사람이 번역해 scripts/import-translations.py 로 넣은 것(배치가 건드리지
+     * 않고, 일부 언어만 AI 가 채워도 HUMAN 으로 남는다). AI = 배치가 만든 것. TOURAPI = 공사 다국어
+     * 서비스용으로 계획만 해 둔 값이고 지금은 쓰지 않는다. 이름이 바뀌면 null 로 비워진다.
+     */
+    @Column(name = "tr_source") private String trSource;
+
+    /**
+     * 언어별 연속 실패 횟수. TranslationBatch.MAX_ATTEMPTS 에 닿으면 그 언어는 큐에서 빠진다.
+     * 성공하면 0 으로 돌아간다. 컬럼은 V30.
+     */
+    @Column(name = "tr_fail_en") private short trFailEn;
+    @Column(name = "tr_fail_ja") private short trFailJa;
+    @Column(name = "tr_fail_zh") private short trFailZh;
+
+    /** 이번 배치에서 이 언어 번역을 못 받았다. */
+    public void recordTranslationFailure(Lang lang) {
+        switch (lang) {
+            case EN -> { if (trFailEn < Short.MAX_VALUE) trFailEn++; }
+            case JA -> { if (trFailJa < Short.MAX_VALUE) trFailJa++; }
+            case ZH -> { if (trFailZh < Short.MAX_VALUE) trFailZh++; }
+            case KO -> { }
+        }
+    }
+
+    private void resetFailure(Lang lang) {
+        switch (lang) {
+            case EN -> trFailEn = 0;
+            case JA -> trFailJa = 0;
+            case ZH -> trFailZh = 0;
+            case KO -> { }
+        }
+    }
+
+    public void applyTranslation(Lang lang, String text) {
+        switch (lang) {
+            case EN -> this.titleEn = text;
+            case JA -> this.titleJa = text;
+            case ZH -> this.titleZh = text;
+            case KO -> { }   // 원본이 한국어다
+        }
+        // 사람이 번역한 행은 일부 언어만 AI 가 채워도 HUMAN 으로 남긴다. 이 표시가 "기계가 사람의
+        // 작업을 덮어쓰지 않게" 하는 유일한 근거라 내리면 안 된다.
+        if (!"HUMAN".equals(this.trSource)) this.trSource = "AI";
+        resetFailure(lang);
+    }
+
+    public boolean isHumanTranslated() { return "HUMAN".equals(trSource); }
+
+    public void markHash(String hash) { this.nameHash = hash; }
+
+    /** 제목이 바뀌었을 때 옛 제목의 번역을 모두 비운다. 비워야 세 언어가 모두 다시 대상이 된다. */
+    public void clearTranslations() {
+        this.titleEn = null;
+        this.titleJa = null;
+        this.titleZh = null;
+        this.trFailEn = 0;
+        this.trFailJa = 0;
+        this.trFailZh = 0;
+        this.trSource = null;   // 옛 이름의 번역이 사라졌으니 출처도 비운다. 새로 쓰면 AI 가 된다
+    }
+
+    /** 선택한 언어의 제목. 번역이 없으면 한국어 원본. */
+    public String titleIn(Lang lang) {
+        String t = switch (lang) { case EN -> titleEn; case JA -> titleJa; case ZH -> titleZh; case KO -> null; };
+        return (t == null || t.isBlank()) ? title : t;
+    }
 
     /**
      * 기준일로 본 행사 상태.

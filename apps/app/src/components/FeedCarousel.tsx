@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from '@/components/Image';
 import type { FeedItem } from '@/lib/api/feed';
 import { useT } from '@/lib/i18n';
-import { categoryLabel } from '@/lib/i18n/labels';
+import { categoryLabel, feedReasonText } from '@/lib/i18n/labels';
 import { sized } from '@/lib/img';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
@@ -41,7 +41,7 @@ export function FeedCarousel({ items }: { items: FeedItem[] }) {
             cachePolicy="memory-disk"
           />
           <View style={styles.reason}>
-            <Text style={styles.reasonText} numberOfLines={1}>{it.reason}</Text>
+            <Text style={styles.reasonText} numberOfLines={1}>{feedReasonText(t, it.reason, it.reasonParam)}</Text>
           </View>
           <Text style={styles.name} numberOfLines={2}>{it.name ?? t('feed.noName')}</Text>
           <Text style={styles.sub} numberOfLines={1}>

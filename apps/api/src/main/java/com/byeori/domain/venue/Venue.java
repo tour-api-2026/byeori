@@ -3,6 +3,7 @@ package com.byeori.domain.venue;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import com.byeori.global.i18n.Lang;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -52,6 +53,103 @@ public class Venue {
     private String kakaoPlaceId;
     private String visibility;
     private LocalDateTime createdAt;
+
+    /**
+     * 이름·설명의 번역본. 사용자 요청 경로는 읽기만 하고, 쓰기는 번역 배치뿐이다.
+     *
+     * 컬럼 이름을 명시한다 — 스프링 네이밍은 대문자 앞에만 밑줄을 넣는 규칙이 어긋나면
+     * (distanceM 이 distancem 이 된 적이 있다) 컬럼을 못 찾는다. 이름을 못 박아 두면 안전하다.
+     */
+    @Column(name = "name_en") private String nameEn;
+    @Column(name = "name_ja") private String nameJa;
+    @Column(name = "name_zh") private String nameZh;
+    @Column(name = "desc_en", columnDefinition = "text") private String descEn;
+    @Column(name = "desc_ja", columnDefinition = "text") private String descJa;
+    @Column(name = "desc_zh", columnDefinition = "text") private String descZh;
+    /** 원본 이름의 sha256. 이름이 바뀐 행만 다시 번역하려고 둔다. */
+    @Column(name = "name_hash") private String nameHash;
+    /**
+     * 번역의 출처. HUMAN = 사람이 번역해 scripts/import-translations.py 로 넣은 것(배치가 건드리지
+     * 않고, 일부 언어만 AI 가 채워도 HUMAN 으로 남는다). AI = 배치가 만든 것. TOURAPI = 공사 다국어
+     * 서비스용으로 계획만 해 둔 값이고 지금은 쓰지 않는다. 이름이 바뀌면 null 로 비워진다.
+     */
+    @Column(name = "tr_source") private String trSource;
+
+    /**
+     * 언어별 연속 실패 횟수. TranslationBatch.MAX_ATTEMPTS 에 닿으면 그 언어는 큐에서 빠진다.
+     * 성공하면 0 으로 돌아간다. 컬럼은 V30.
+     */
+    @Column(name = "tr_fail_en") private short trFailEn;
+    @Column(name = "tr_fail_ja") private short trFailJa;
+    @Column(name = "tr_fail_zh") private short trFailZh;
+
+    /** 이번 배치에서 이 언어 번역을 못 받았다. */
+    public void recordTranslationFailure(Lang lang) {
+        switch (lang) {
+            case EN -> { if (trFailEn < Short.MAX_VALUE) trFailEn++; }
+            case JA -> { if (trFailJa < Short.MAX_VALUE) trFailJa++; }
+            case ZH -> { if (trFailZh < Short.MAX_VALUE) trFailZh++; }
+            case KO -> { }
+        }
+    }
+
+    private void resetFailure(Lang lang) {
+        switch (lang) {
+            case EN -> trFailEn = 0;
+            case JA -> trFailJa = 0;
+            case ZH -> trFailZh = 0;
+            case KO -> { }
+        }
+    }
+
+    public void applyTranslation(Lang lang, String text) {
+        switch (lang) {
+            case EN -> this.nameEn = text;
+            case JA -> this.nameJa = text;
+            case ZH -> this.nameZh = text;
+            case KO -> { }   // 원본이 한국어다 — 덮어쓸 것이 없다
+        }
+        // 사람이 번역한 행은 일부 언어만 AI 가 채워도 HUMAN 으로 남긴다. 이 표시가 "기계가 사람의
+        // 작업을 덮어쓰지 않게" 하는 유일한 근거라 내리면 안 된다.
+        if (!"HUMAN".equals(this.trSource)) this.trSource = "AI";
+        resetFailure(lang);
+    }
+
+    public boolean isHumanTranslated() { return "HUMAN".equals(trSource); }
+
+    public void markHash(String hash) { this.nameHash = hash; }
+
+    /** 이름이 바뀌었을 때 옛 이름의 번역을 모두 비운다. 비워야 세 언어가 모두 다시 대상이 된다. */
+    public void clearTranslations() {
+        this.nameEn = null;
+        this.nameJa = null;
+        this.nameZh = null;
+        this.trFailEn = 0;
+        this.trFailJa = 0;
+        this.trFailZh = 0;
+        this.trSource = null;   // 옛 이름의 번역이 사라졌으니 출처도 비운다. 새로 쓰면 AI 가 된다
+    }
+
+    /** 선택한 언어의 이름. 번역이 없으면 한국어 원본. */
+    public String nameIn(Lang lang) {
+        String t = switch (lang) { case EN -> nameEn; case JA -> nameJa; case ZH -> nameZh; case KO -> null; };
+        return (t == null || t.isBlank()) ? name : t;
+    }
+
+    /** 선택한 언어의 설명. 없으면 null — 부르는 쪽이 한국어로 떨어뜨린다. */
+    public String descIn(Lang lang) {
+        return switch (lang) { case EN -> descEn; case JA -> descJa; case ZH -> descZh; case KO -> null; };
+    }
+
+    /** 처음 열릴 때 번역한 긴 설명을 저장한다. 이름 번역(trSource)과는 별개라 출처를 건드리지 않는다. */
+    public void applyDescription(Lang lang, String text) {
+        switch (lang) {
+            case EN -> this.descEn = text;
+            case JA -> this.descJa = text;
+            case ZH -> this.descZh = text;
+            case KO -> { }
+        }
+    }
 
     /** USER 등록 장소(거지맵식 공유) 생성 */
     public static Venue userVenue(Long userId, String name, String address, BigDecimal lat, BigDecimal lng,

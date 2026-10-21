@@ -8,6 +8,7 @@ import {
   useReviewsQuery, useVoteTagMutation,
 } from '@/lib/hooks/queries';
 import { useT } from '@/lib/i18n';
+import { tagLabel } from '@/lib/i18n/labels';
 import { useAuthStore } from '@/lib/store/authStore';
 import { colors, fonts, radius } from '@/lib/theme';
 
@@ -108,7 +109,7 @@ export function ContentComments({
             style={[styles.tag, tag.voted && styles.tagOn]}
             onPress={() => (tag.voted ? unvote.mutate(tag.commentTagId) : vote.mutate(tag.commentTagId))}>
             <Text style={[styles.tagText, tag.voted && styles.tagTextOn]}>
-              {tag.name}{tag.count > 0 ? ` ${tag.count}` : ''}
+              {tagLabel(t, tag.name)}{tag.count > 0 ? ` ${tag.count}` : ''}
             </Text>
           </Pressable>
         ))}

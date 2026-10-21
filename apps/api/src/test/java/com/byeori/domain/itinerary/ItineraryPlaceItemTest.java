@@ -65,7 +65,7 @@ class ItineraryPlaceItemTest {
         when(venueRepo.findFirstByCreatedByUserIdAndKakaoPlaceId(7L, "10332413")).thenReturn(Optional.empty());
         ArgumentCaptor<Venue> cap = ArgumentCaptor.forClass(Venue.class);
 
-        service.addPlaceItem(7L, 1L, req("10332413", 37.5625));
+        service.addPlaceItem(com.byeori.global.i18n.Lang.KO, 7L, 1L, req("10332413", 37.5625));
 
         verify(venueRepo).save(cap.capture());
         saved = cap.getValue();
@@ -83,7 +83,7 @@ class ItineraryPlaceItemTest {
         saved = existing;
         when(venueRepo.findFirstByCreatedByUserIdAndKakaoPlaceId(7L, "10332413")).thenReturn(Optional.of(existing));
 
-        ItemResponse res = service.addPlaceItem(7L, 1L, req("10332413", 37.5625));
+        ItemResponse res = service.addPlaceItem(com.byeori.global.i18n.Lang.KO, 7L, 1L, req("10332413", 37.5625));
 
         verify(venueRepo, never()).save(any());
         assertThat(res.targetId()).isEqualTo(500L);
@@ -92,15 +92,15 @@ class ItineraryPlaceItemTest {
 
     @Test
     void 해외_좌표나_이상한_ID는_거절한다() {
-        assertThatThrownBy(() -> service.addPlaceItem(7L, 1L, req("10332413", 48.85)))
+        assertThatThrownBy(() -> service.addPlaceItem(com.byeori.global.i18n.Lang.KO, 7L, 1L, req("10332413", 48.85)))
                 .isInstanceOf(BadRequestException.class);
-        assertThatThrownBy(() -> service.addPlaceItem(7L, 1L, req("abc'--", 37.56)))
+        assertThatThrownBy(() -> service.addPlaceItem(com.byeori.global.i18n.Lang.KO, 7L, 1L, req("abc'--", 37.56)))
                 .isInstanceOf(BadRequestException.class);
     }
 
     @Test
     void 남의_루트에는_넣을_수_없다() {
-        assertThatThrownBy(() -> service.addPlaceItem(8L, 1L, req("10332413", 37.56)))
+        assertThatThrownBy(() -> service.addPlaceItem(com.byeori.global.i18n.Lang.KO, 8L, 1L, req("10332413", 37.56)))
                 .isInstanceOf(BadRequestException.class);
         verify(venueRepo, never()).save(any());
     }

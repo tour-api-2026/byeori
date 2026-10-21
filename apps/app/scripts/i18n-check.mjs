@@ -5,6 +5,8 @@
 //   2. translate() 가 키 없음·변수 없음 같은 경우에 어떻게 떨어지는지
 //   3. 이미 번역한 화면에 한국어 리터럴이 남아 있지 않은지 (+ 어느 쪽 목록에도 없는 새 파일이 없는지)
 //   4. 서버가 저장하는 한국어 값마다 사전 키가 있는지
+//   5. 라벨 함수가 사전에 없는 값에 한국어 원문을 돌려주는지
+//   (4b. 서버 FeedReason 코드마다 feed.reason.* 키가 있는지)
 //
 // 2번은 index.ts 에서 함수 본문을 떼어내 타입 표기만 지우고 실제로 돌린다.
 // 베껴 쓰면 구현과 어긋나므로 그렇게 하지 않는다.
@@ -286,6 +288,62 @@ for (const [rel, name, prefix, pick] of VALUE_LISTS) {
   ok(`src/lib/reportReasons.ts REPORT_REASONS 의 키 ${ks.length}개가 ko 사전에 있다`, ks.length > 0 && missing.length === 0, missing.join(', '));
 }
 ok('aiRoute.myLocation 키가 ko 사전에 있다', keys.ko.has('aiRoute.myLocation'));
+
+// 코스 테마·댓글 태그는 우리 데이터라 상수로 둔다. 서버(시드 데이터)가 저장하는 값과 같아야 한다.
+// 행사 장르는 외부(KOPIS) 데이터라 목록을 박아 두지 않는다 — ko 의 genre.* 키가 다른 언어에도
+// 있는지는 위 1번의 키 집합 검사가 이미 본다.
+const THEMES = ['공예·한옥', '한복나들이', '한옥나들이', '한옥마을', '궁궐산책', '근대골목', '세계유산', '전통시장', '역사탐방', '미식투어'];
+const TAGS = ['분위기 좋음', '야경 최고', '재방문 의사', '인생샷 명소', '가성비 좋음'];
+{
+  const missT = THEMES.filter((v) => !keys.ko.has('theme.' + v));
+  ok(`코스 테마 ${THEMES.length}개가 ko 사전에 theme.* 키로 있다`, missT.length === 0, missT.join(', '));
+  const missG = TAGS.filter((v) => !keys.ko.has('tag.' + v));
+  ok(`댓글 태그 ${TAGS.length}개가 ko 사전에 tag.* 키로 있다`, missG.length === 0, missG.join(', '));
+  const genres = [...keys.ko].filter((k) => k.startsWith('genre.'));
+  ok('ko 사전에 genre.* 키가 있다', genres.length > 0, `${genres.length}개`);
+}
+
+// ── 4b. 피드 이유 코드 ──────────────────────────────────────
+// 우리 서버가 만드는 값이라 목록을 서버 소스에서 직접 읽는다. 서버가 코드를 더했는데 사전을
+// 안 더하면 사용자에게 'feed.reason.XXX' 키 문자열이 그대로 보인다. CATEGORY·GENRE 는 일부러
+// 사전 키가 없다 — 분류·장르 사전(category.*, genre.*)을 거쳐 번역한다.
+{
+  const FEED_REASON = join(ROOT, '../api/src/main/java/com/byeori/domain/feed/FeedReason.java');
+  if (!existsSync(FEED_REASON)) {
+    console.log('FAIL FeedReason.java 를 찾지 못했다 — 스크립트의 경로를 함께 고칠 것');
+    process.exit(1);
+  }
+  const codes = [...new Set([...readFileSync(FEED_REASON, 'utf8').matchAll(/new FeedReason\("([A-Z_]+)"/g)].map((m) => m[1]))];
+  const ROUTED = ['CATEGORY', 'GENRE'];
+  ok(`FeedReason 코드를 읽었다`, codes.length >= 8, `${codes.length}개`);
+  const need = codes.filter((c) => !ROUTED.includes(c));
+  for (const l of LOCALES) {
+    const miss = need.filter((c) => !keys[l].has('feed.reason.' + c));
+    ok(`${l} 사전에 FeedReason 코드 ${need.length}개의 feed.reason.* 키가 있다`, miss.length === 0, miss.join(', '));
+  }
+  const stale = [...keys.ko].filter((k) => k.startsWith('feed.reason.') && !codes.includes(k.slice('feed.reason.'.length)));
+  ok('서버가 더는 내지 않는 feed.reason.* 키가 없다', stale.length === 0, stale.join(', '));
+  const routedMissing = ROUTED.filter((c) => !codes.includes(c));
+  ok('제외한 CATEGORY·GENRE 가 실제로 서버에 있는 코드다', routedMissing.length === 0, routedMissing.join(', '));
+}
+
+// ── 5. passthrough ──────────────────────────────────────────
+// 라벨 함수는 사전에 없는 값에 키 문자열이 아니라 한국어 원문을 돌려줘야 한다. 본문을 떼어내 돌린다.
+const lab = readFileSync(join(I18N, 'labels.ts'), 'utf8');
+const PSIG = 'const passthrough = (t: TFn, prefix: string, value: string) => {';
+if (!lab.includes(PSIG)) {
+  console.log('FAIL passthrough 서명을 찾지 못했다 — 스크립트의 PSIG 를 함께 고칠 것');
+  process.exit(1);
+}
+const pBody = lab.slice(lab.indexOf(PSIG)).replace(PSIG, 'const passthrough = (t, prefix, value) => {');
+const passthrough = new Function(pBody.slice(0, pBody.indexOf('\n};\n') + 4) + '\nreturn passthrough;')();
+const tf = (k) => ({ 'genre.연극': 'Theater' })[k] ?? k;
+ok('passthrough: 있는 값은 번역을 준다', passthrough(tf, 'genre', '연극') === 'Theater');
+ok('passthrough: 없는 값은 한국어 원문을 준다(키가 아니다)', passthrough(tf, 'genre', '새로운것') === '새로운것');
+for (const fnName of ['categoryLabel', 'regionLabel', 'kakaoCategoryLabel', 'areaLabel', 'genreLabel', 'themeLabel', 'tagLabel']) {
+  const m = lab.match(new RegExp(`export const ${fnName} =[\\s\\S]*?;\\n(?=export|/\\*\\*|$)`));
+  ok(`${fnName} 이 passthrough 를 쓴다`, !!m && m[0].includes('passthrough('));
+}
 
 console.log(failed ? `\n${failed}건 실패` : '\n전부 통과');
 process.exit(failed ? 1 : 0);

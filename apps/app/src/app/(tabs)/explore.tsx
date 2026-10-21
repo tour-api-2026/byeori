@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTabBarHeight } from '@/components/TabBar';
 import { useCoursesQuery } from '@/lib/hooks/queries';
 import { useT } from '@/lib/i18n';
+import { themeLabel } from '@/lib/i18n/labels';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 // 루트 탐색 — 큐레이션 추천 코스(루트) 목록. 탭하면 코스 상세로 이동.
@@ -37,7 +38,7 @@ export default function ExploreScreen() {
                 <View style={[styles.cover, styles.coverEmpty]} />
               )}
               <View style={styles.body}>
-                {item.theme ? <Text style={styles.theme}>{item.theme}</Text> : null}
+                {item.theme ? <Text style={styles.theme}>{themeLabel(t, item.theme)}</Text> : null}
                 <Text style={styles.cardTitle} numberOfLines={1}>
                   {item.title}
                 </Text>

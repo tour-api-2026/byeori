@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { Performance } from '@/lib/api/types';
 import { useT } from '@/lib/i18n';
-import type { TFn } from '@/lib/i18n/labels';
+import { genreLabel, type TFn } from '@/lib/i18n/labels';
 import { sized } from '@/lib/img';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
@@ -50,7 +50,7 @@ export function PerformanceCarousel({
 
 /** 홈 기본값 — 장르 · 시작일. */
 function genreCaption(p: Performance, t: TFn) {
-  return `${p.genre ?? t('performance.defaultGenre')}${p.startDate ? ` · ${md(p.startDate)}~` : ''}`;
+  return `${p.genre ? genreLabel(t, p.genre) : t('performance.defaultGenre')}${p.startDate ? ` · ${md(p.startDate)}~` : ''}`;
 }
 
 /** 장소 상세용 — 진행 상태 · 기간. */
