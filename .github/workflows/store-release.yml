@@ -1,11 +1,16 @@
-name: Store Release (Play · internal)
+name: Store Release (Play · 비공개 테스트)
 
-# git tag v* 를 밀면 production 빌드 → Play 내부 테스트 트랙 제출까지 한 번에 간다.
+# git tag v* 를 밀면 production 빌드 → Play 비공개 테스트 트랙 제출까지 한 번에 간다.
 # 평소 커밋은 ota-update.yml이 OTA로 내보내고(branches: [main]), 이 워크플로는 태그에만
 # 걸리므로 서로 겹치지 않는다.
 #
 # 프로덕션 트랙 승격은 일부러 자동화하지 않는다 — 되돌릴 수 없는 공개 출시가 태그 하나로
-# 나가지 않도록, 내부 테스트까지만 올리고 승격은 Play Console에서 사람이 누른다.
+# 나가지 않도록, 테스트 트랙까지만 올리고 승격은 Play Console에서 사람이 누른다.
+#
+# **OTA 는 Play 의 업데이트 이력에 남지 않는다.** Play 가 세는 것은 트랙에 올라간 AAB 의
+# versionCode 뿐이고, OTA 는 JS 번들만 바꾸므로 Play 는 그 존재를 모른다. 14일 비공개 테스트
+# 요건(기간 내 업데이트 2회 이상)을 채우려면 반드시 이 워크플로를 돌려야 한다.
+# 자세한 순서는 docs/release/closed-testing.md 를 본다.
 
 on:
   push:
@@ -69,6 +74,11 @@ jobs:
 
       # 태그와 app.json version이 어긋나면 스토어에 엉뚱한 버전명으로 올라가고,
       # 그때 쓰인 versionCode는 되돌릴 수 없다. 빌드 전에 막는 편이 싸다.
+      #
+      # 같은 버전명으로 여러 번 낼 때는 태그에 +N 을 붙인다(v1.0.0+8, v1.0.0+9). 아래에서
+      # +뒤를 떼고 비교하므로 검사를 통과하면서 태그는 서로 겹치지 않는다. app.json 의
+      # version 을 올리는 쪽은 피한다 — runtimeVersion 이 fingerprint 정책이라 version 을
+      # 바꾸면 런타임 버전이 갈리고, 이미 깔린 앱이 OTA 를 더 받지 못한다.
       - name: Tag ↔ version check
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
@@ -78,7 +88,7 @@ jobs:
           APP_VERSION=$(node -p "require('./app.json').expo.version")
           echo "tag=$TAG_VERSION app.json=$APP_VERSION"
           if [ "$TAG_VERSION" != "$APP_VERSION" ]; then
-            echo "::error::태그($TAG_VERSION)와 app.json version($APP_VERSION)이 다릅니다. app.json을 먼저 올리고 그 커밋에 태그를 다세요."
+            echo "::error::태그($TAG_VERSION)와 app.json version($APP_VERSION)이 다릅니다. 같은 버전명으로 또 내려면 v$APP_VERSION+N 처럼 +N 을 붙이세요(app.json version 을 올리면 OTA 가 끊깁니다)."
             exit 1
           fi
 
@@ -115,13 +125,19 @@ jobs:
         if: success()
         run: |
           VC=$(eas build:version:get --platform android --non-interactive 2>/dev/null | sed -n 's/.*versionCode - //p')
+          # 트랙은 eas.json에서 읽는다. 여기 적어 두면 설정과 어긋나도 알 수 없다.
+          TRACK=$(node -p "require('./eas.json').submit.production.android.track")
           {
             echo "## 스토어 릴리스"
             echo
             echo "- 트리거: \`$GITHUB_EVENT_NAME\` (\`$GITHUB_REF_NAME\`)"
             echo "- version: \`$(node -p "require('./app.json').expo.version")\`"
             echo "- versionCode: \`${VC:-확인 실패}\`"
-            echo "- Play 제출: \`${{ steps.mode.outputs.submit }}\` (트랙: internal)"
+            echo "- Play 제출: \`${{ steps.mode.outputs.submit }}\` (트랙: \`$TRACK\`)"
+            echo
+            echo "Play Console에서 **이 트랙이 테스터가 받는 트랙과 같은지** 확인하세요."
+            echo "alpha = 비공개 테스트, internal = 내부 테스트입니다. 다르면 테스터에게 가지 않고"
+            echo "업데이트 이력에도 잡히지 않습니다."
             echo
             echo "프로덕션 트랙 승격은 Play Console에서 수동으로 진행합니다."
           } >> "$GITHUB_STEP_SUMMARY"
