@@ -53,9 +53,9 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
               and (:genre is null or p.genre = :genre)
               and (:venueId is null or p.venueId = :venueId)
               and (:keyword is null or p.title like %:keyword%
-                   or lower(p.titleEn) like lower(concat('%', :keyword, '%'))
-                   or lower(p.titleJa) like lower(concat('%', :keyword, '%'))
-                   or lower(p.titleZh) like lower(concat('%', :keyword, '%')))
+                   or lower(p.titleEn) like :pattern
+                   or lower(p.titleJa) like :pattern
+                   or lower(p.titleZh) like :pattern)
               and (:traditional is null or p.traditional = :traditional)
               and p.duplicateOf is null
             """)
@@ -64,8 +64,21 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
                              @Param("genre") String genre,
                              @Param("venueId") Long venueId,
                              @Param("keyword") String keyword,
+                             @Param("pattern") String pattern,
                              @Param("traditional") Boolean traditional,
                              Pageable pageable);
+
+    /**
+     * 부르는 쪽이 쓰는 쪽. 번역 컬럼용 like 패턴을 만들어 위 쿼리에 넘긴다.
+     *
+     * 패턴을 JPQL 안에서 concat 으로 만들면 keyword 가 null 일 때 쿼리가 거부된다
+     * (이유는 LikePattern 주석).
+     */
+    default Page<Performance> search(String state, LocalDate today, String genre, Long venueId,
+                                     String keyword, Boolean traditional, Pageable pageable) {
+        return search(state, today, genre, venueId, keyword,
+                      com.byeori.global.jpa.LikePattern.contains(keyword), traditional, pageable);
+    }
 
     /**
      * 장소 상세에 띄울 행사 — 진행 중·예정만.

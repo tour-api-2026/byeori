@@ -95,16 +95,29 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
               and (:category is null or v.category = :category)
               and (:hanbokDiscount is null or v.hanbokDiscount = :hanbokDiscount)
               and (:keyword is null or v.name like %:keyword%
-                   or lower(v.nameEn) like lower(concat('%', :keyword, '%'))
-                   or lower(v.nameJa) like lower(concat('%', :keyword, '%'))
-                   or lower(v.nameZh) like lower(concat('%', :keyword, '%')))
+                   or lower(v.nameEn) like :pattern
+                   or lower(v.nameJa) like :pattern
+                   or lower(v.nameZh) like :pattern)
             order by case when v.imageUrl is null or v.imageUrl = '' then 1 else 0 end,
                      v.avgRating desc, v.reviewCount desc, v.id asc
             """)
     Page<Venue> search(@Param("category") String category,
                        @Param("hanbokDiscount") Boolean hanbokDiscount,
                        @Param("keyword") String keyword,
+                       @Param("pattern") String pattern,
                        Pageable pageable);
+
+    /**
+     * 부르는 쪽이 쓰는 쪽. 번역 컬럼용 like 패턴을 만들어 위 쿼리에 넘긴다.
+     *
+     * 패턴을 JPQL 안에서 concat 으로 만들면 keyword 가 null 일 때 쿼리가 거부된다
+     * (이유는 LikePattern 주석).
+     */
+    default Page<Venue> search(String category, Boolean hanbokDiscount, String keyword,
+                               Pageable pageable) {
+        return search(category, hanbokDiscount, keyword,
+                      com.byeori.global.jpa.LikePattern.contains(keyword), pageable);
+    }
 
     /**
      * 같은 검색을 '현재 위치에서 가까운 순'으로.
@@ -123,9 +136,9 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
               and (:category is null or v.category = :category)
               and (:hanbokDiscount is null or v.hanbokDiscount = :hanbokDiscount)
               and (:keyword is null or v.name like %:keyword%
-                   or lower(v.nameEn) like lower(concat('%', :keyword, '%'))
-                   or lower(v.nameJa) like lower(concat('%', :keyword, '%'))
-                   or lower(v.nameZh) like lower(concat('%', :keyword, '%')))
+                   or lower(v.nameEn) like :pattern
+                   or lower(v.nameJa) like :pattern
+                   or lower(v.nameZh) like :pattern)
             order by (v.lat - :lat) * (v.lat - :lat)
                    + (v.lng - :lng) * (v.lng - :lng) * 0.656,
                      v.id asc
@@ -133,9 +146,22 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
     Page<Venue> searchNear(@Param("category") String category,
                            @Param("hanbokDiscount") Boolean hanbokDiscount,
                            @Param("keyword") String keyword,
+                           @Param("pattern") String pattern,
                            @Param("lat") BigDecimal lat,
                            @Param("lng") BigDecimal lng,
                            Pageable pageable);
+
+    /**
+     * 부르는 쪽이 쓰는 쪽. 번역 컬럼용 like 패턴을 만들어 위 쿼리에 넘긴다.
+     *
+     * 패턴을 JPQL 안에서 concat 으로 만들면 keyword 가 null 일 때 쿼리가 거부된다
+     * (이유는 LikePattern 주석).
+     */
+    default Page<Venue> searchNear(String category, Boolean hanbokDiscount, String keyword,
+                                   BigDecimal lat, BigDecimal lng, Pageable pageable) {
+        return searchNear(category, hanbokDiscount, keyword,
+                          com.byeori.global.jpa.LikePattern.contains(keyword), lat, lng, pageable);
+    }
 
     /**
      * AI 루트 후보. 사진 있는 장소만, 매번 순서를 섞어 뽑는다.
