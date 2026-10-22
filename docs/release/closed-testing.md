@@ -187,5 +187,37 @@ https://github.com/expo/fyi/blob/main/creating-google-service-account.md)
 gh run rerun <실행 ID> --failed
 ```
 
+## 빌드는 됐는데 제출만 실패했을 때
+
+```
+✖ The Google service account cannot submit this app.
+  Check its key and app permissions in Play Console.
+```
+
+**다시 빌드하지 않는다.** AAB 는 이미 만들어졌고 versionCode 도 이미 썼다. 다시 빌드하면
+20분을 또 쓰고 번호를 하나 더 태우는데 그 번호는 돌아오지 않는다. 권한을 고친 뒤
+**제출만** 다시 한다.
+
+```bash
+# 실패한 실행 로그에서 Build ID 를 찾는다 (…/builds/<이 값>)
+gh workflow run store-release.yml -f build_id=<EAS build id>
+```
+
+### 원인은 보통 둘 중 하나다
+
+메시지가 둘을 구분해 주지 않으므로 양쪽을 다 본다.
+
+1. **Google Play Android Developer API 가 꺼져 있다.** 서비스 계정이 속한 **그 Cloud
+   프로젝트에서** 켜져 있어야 한다. 다른 프로젝트에서 켰으면 소용없다.
+   https://console.cloud.google.com/apis/library/androidpublisher.googleapis.com
+   (상단 프로젝트 선택기가 서비스 계정의 프로젝트인지 확인한다)
+
+2. **Play Console 권한이 없거나 이 앱에 걸려 있지 않다.** 사용자 및 권한 목록에서 그
+   서비스 계정 이메일을 찾아, **앱 권한**에 `com.byeori.app` 이 들어 있고 **테스트 트랙에
+   앱 출시** 가 체크되어 있는지 본다. 계정 권한 탭에만 주고 앱을 안 고른 경우가 흔하다.
+
+권한을 막 바꿨다면 Play API 가 아직 모를 수 있다. 설정이 맞아 보이는데도 같은 오류가
+나면 조금 기다렸다 제출만 다시 돌린다.
+
 점검만 하고 싶으면 Actions 에서 `workflow_dispatch` 로 `submit=false` 를 주면 빌드까지만
 돈다(versionCode 는 그래도 올라간다 — 되돌릴 수 없으니 자주 돌리지 않는다).
