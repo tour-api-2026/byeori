@@ -18,9 +18,13 @@ JS 번들만 바꾸고 Play 는 그 존재를 모른다. 둘은 전혀 다른 �
 ## 3~4일에 한 번, 태그를 민다
 
 ```bash
+# 다음 versionCode 를 먼저 본다 — 태그의 +N 을 거기에 맞추면 나중에 태그만 보고
+# 어느 빌드인지 알 수 있다. (이 값은 EAS 가 원격에서 관리한다)
+cd apps/app && npx eas build:version:get --platform android --non-interactive
+
 git checkout main && git pull
-git tag v1.0.0+8      # 숫자만 올린다. 아래 "왜 +N 인가" 참고
-git push origin v1.0.0+8
+git tag v1.0.0+11     # 다음 versionCode 가 11 이면
+git push origin v1.0.0+11
 ```
 
 끝이다. `store-release.yml` 이 받아서 production 프로필로 AAB 를 빌드하고 비공개 테스트
@@ -38,7 +42,11 @@ git push origin v1.0.0+8
 ## 왜 `+N` 인가 — app.json 의 version 을 올리지 않는다
 
 태그는 서로 겹칠 수 없는데 버전명은 `1.0.0` 그대로 두고 싶다. 워크플로의 태그 검사가
-`+` 뒤를 떼고 비교하므로 `v1.0.0+8`, `v1.0.0+9` 가 전부 `1.0.0` 으로 통과한다.
+`+` 뒤를 떼고 비교하므로 `v1.0.0+11`, `v1.0.0+12` 가 전부 `1.0.0` 으로 통과한다.
+
+`N` 은 아무 숫자나 되지만 **versionCode 와 맞추는 편이 낫다.** Play 에 올라간 것은
+versionCode 로만 구분되므로, 태그가 그 번호를 달고 있으면 "이 릴리스가 어느 커밋인지"를
+되짚을 수 있다. 맞추지 않아도 빌드는 된다(`v1.0.0+8` 로 versionCode 11 이 나갈 수 있다).
 
 **`app.json` 의 `version` 은 올리지 않는다.** `runtimeVersion` 이 `fingerprint` 정책이라
 version 을 바꾸면 런타임 버전이 갈린다:
@@ -92,23 +100,52 @@ track=alpha    → 2a60a46685db52ab4089e1cb1b846d20cb536ae3   ← 앞으로의 �
 
 | | 할 일 |
 |---|---|
-| D+0 | `v1.0.0+8` — 첫 릴리스 |
+| D+0 | `v1.0.0+11` — 첫 릴리스 |
 | D+1 | 설치 이력 확인 |
-| D+4 | `v1.0.0+9` |
+| D+4 | `v1.0.0+12` |
 | D+5 | 설치 이력 확인 |
-| D+8 | `v1.0.0+10` |
-| D+12 | `v1.0.0+11` |
+| D+8 | `v1.0.0+13` |
+| D+12 | `v1.0.0+14` |
 | D+14 | 프로덕션 신청 |
+
+(마지막 프로덕션 빌드가 versionCode 10 이었으므로 다음이 11 이다. 2026-10-04 이후
+모든 변경은 OTA 로만 나갔다 — Play 기준으로는 그때부터 업데이트가 없다.)
 
 릴리스마다 실제로 바뀐 내용이 있는 편이 낫다. 지금은 OTA 로만 나간 변경이 쌓여 있어
 (i18n 2단계 등) 그대로 빌드해도 내용이 있는 릴리스가 된다.
 
-## 처음 한 번만: 시크릿 확인
+## 처음 한 번만: 시크릿 두 개
 
-`store-release.yml` 은 GitHub 시크릿 두 개를 쓴다. 없으면 빌드 전에 멈춘다.
+`store-release.yml` 은 GitHub 시크릿 두 개를 쓴다. 둘 다 빌드 **전에** 검사하므로
+없으면 versionCode 를 쓰지 않고 멈춘다(되돌릴 수 없는 번호를 낭비하지 않는다).
 
-- `EXPO_TOKEN` — expo.dev → Access Tokens
-- `PLAY_SERVICE_ACCOUNT_JSON` — Google Cloud 서비스 계정 JSON 전문
+- `EXPO_TOKEN` — expo.dev → Access Tokens. **등록되어 있다**(첫 실행에서 통과).
+- `PLAY_SERVICE_ACCOUNT_JSON` — Google Cloud 서비스 계정 JSON 전문.
+
+### 서비스 계정 키 만들기
+
+1. **Play Console → 설정 → API 액세스.** Google Cloud 프로젝트를 연결한다(없으면 만든다).
+2. 같은 화면에서 **서비스 계정 만들기** → Google Cloud 콘솔로 넘어간다. 서비스 계정을
+   만들고 Cloud 쪽 역할은 주지 않아도 된다(권한은 Play Console 에서 준다).
+3. Cloud 콘솔 → 그 서비스 계정 → **키 → 키 추가 → 새 키 만들기 → JSON.** 파일이 받아진다.
+4. Play Console 로 돌아와 그 서비스 계정에 **앱 권한**을 준다. **반드시 비공개 테스트
+   트랙에 출시할 수 있는 권한**이 있어야 한다 — 내부 테스트 권한만 주면 빌드는 20분
+   돌고 제출 단계에서 죽고, 그때 쓴 versionCode 는 돌아오지 않는다.
+   (릴리스 관리자 역할을 주거나, 세부 권한에서 "앱 버전 출시" + 해당 트랙을 체크한다)
+5. GitHub → 레포 → Settings → Secrets and variables → Actions → **New repository secret.**
+   이름 `PLAY_SERVICE_ACCOUNT_JSON`, 값은 받은 **JSON 파일 내용 전문**을 그대로 붙인다
+   (파일 경로가 아니라 중괄호로 시작하는 내용 전체).
+
+워크플로가 `client_email` 과 `private_key` 가 있는지 먼저 확인하므로, 내용을 잘못
+붙였으면 역시 빌드 전에 멈춘다.
+
+### 다시 돌리기
+
+시크릿을 넣은 뒤에는 태그를 새로 밀 필요 없이 실패한 실행을 다시 돌리면 된다.
+
+```bash
+gh run rerun <실행 ID> --failed
+```
 
 점검만 하고 싶으면 Actions 에서 `workflow_dispatch` 로 `submit=false` 를 주면 빌드까지만
 돈다(versionCode 는 그래도 올라간다 — 되돌릴 수 없으니 자주 돌리지 않는다).
