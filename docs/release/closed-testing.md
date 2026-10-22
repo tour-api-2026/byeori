@@ -124,20 +124,60 @@ track=alpha    → 2a60a46685db52ab4089e1cb1b846d20cb536ae3   ← 앞으로의 �
 
 ### 서비스 계정 키 만들기
 
-1. **Play Console → 설정 → API 액세스.** Google Cloud 프로젝트를 연결한다(없으면 만든다).
-2. 같은 화면에서 **서비스 계정 만들기** → Google Cloud 콘솔로 넘어간다. 서비스 계정을
-   만들고 Cloud 쪽 역할은 주지 않아도 된다(권한은 Play Console 에서 준다).
-3. Cloud 콘솔 → 그 서비스 계정 → **키 → 키 추가 → 새 키 만들기 → JSON.** 파일이 받아진다.
-4. Play Console 로 돌아와 그 서비스 계정에 **앱 권한**을 준다. **반드시 비공개 테스트
-   트랙에 출시할 수 있는 권한**이 있어야 한다 — 내부 테스트 권한만 주면 빌드는 20분
-   돌고 제출 단계에서 죽고, 그때 쓴 versionCode 는 돌아오지 않는다.
-   (릴리스 관리자 역할을 주거나, 세부 권한에서 "앱 버전 출시" + 해당 트랙을 체크한다)
-5. GitHub → 레포 → Settings → Secrets and variables → Actions → **New repository secret.**
-   이름 `PLAY_SERVICE_ACCOUNT_JSON`, 값은 받은 **JSON 파일 내용 전문**을 그대로 붙인다
-   (파일 경로가 아니라 중괄호로 시작하는 내용 전체).
+Play Console 의 "API 액세스" 에서 시작하지 않는다. **Google Cloud Console 에서 계정을
+만들고, Play Console 에서는 권한만 준다.** (Expo 공식 가이드와 같은 순서다 —
+https://github.com/expo/fyi/blob/main/creating-google-service-account.md)
+
+#### Google Cloud Console 에서
+
+1. 프로젝트가 없으면 만든다 — https://console.cloud.google.com/projectcreate
+2. **IAM 및 관리자 → 서비스 계정** (IAM & Admin → Service Accounts) →
+   **서비스 계정 만들기** (Create Service Account).
+3. 이름은 용도를 알아볼 수 있게 적는다(예: `play-release`). ID·설명은 선택이다.
+   **Cloud 쪽 역할(role)은 주지 않아도 된다** — 권한은 Play Console 에서 준다.
+   **만들고 닫기** (Create and close).
+4. 목록에서 그 계정의 **이메일 주소를 복사한다.** 아래 7번에서 쓴다.
+5. 그 계정의 점 세 개 메뉴 → **키 관리** (Manage keys) → **키 추가 → 새 키 만들기** →
+   **JSON** → **만들기**. 파일이 받아진다. 다시 받을 수 없으니 잘 둔다.
+6. **Google Play Android Developer API 를 켠다.** API 라이브러리에서 그 이름을 찾아
+   **사용** (Enable) 을 누른다. 이걸 빼먹으면 제출이 권한 오류로 죽는다.
+
+#### Play Console 에서
+
+7. **사용자 및 권한** (Users and permissions) → **새 사용자 초대** (Invite new users).
+   4번에서 복사한 **서비스 계정 이메일**을 넣는다.
+8. **앱 권한** 탭에서 이 앱을 고른다(모든 앱에 주려면 **계정 권한** 탭을 쓴다).
+9. 권한을 체크한다. 괄호 안은 영문 표기다.
+
+   - 앱 액세스: **앱 정보 보기(읽기 전용)** (View app information (read-only))
+   - 초안 앱: **초안 앱 수정 및 삭제** (Edit and delete draft apps)
+   - 출시: **테스트 트랙에 앱 출시** (Release apps to testing tracks) ← **이게 핵심이다**
+   - 출시: **테스트 트랙 관리 및 테스터 목록 수정** (Manage testing tracks and edit tester lists)
+   - 출시: **프로덕션 출시, 기기 제외, Play 앱 서명 사용** (Release to production...)
+   - 스토어 등록정보: **스토어 등록정보 관리** (Manage store presence)
+
+   "관리자(모든 권한)" 는 필요 없다. 재무 데이터·주문·리뷰 답글도 필요 없다.
+   **초대** 를 누른다.
+
+   **테스트 트랙에 앱 출시** 가 없으면 빌드는 20분 돌고 제출에서 죽는다. 그때 쓴
+   versionCode 는 돌아오지 않는다.
+
+#### GitHub 에
+
+10. Settings → Secrets and variables → Actions → **New repository secret.**
+    이름 `PLAY_SERVICE_ACCOUNT_JSON`, 값은 5번에서 받은 **JSON 파일 내용 전문**
+    (파일 경로가 아니라 `{` 로 시작하는 내용 전체).
 
 워크플로가 `client_email` 과 `private_key` 가 있는지 먼저 확인하므로, 내용을 잘못
-붙였으면 역시 빌드 전에 멈춘다.
+붙였으면 빌드 전에 멈춘다.
+
+> Expo 가이드는 마지막에 `eas submit` 으로 키를 EAS 에 올리라고 하는데, 이 레포는
+> 그 방식이 아니다. 워크플로가 GitHub 시크릿에서 키를 받아 `play-service-account.json`
+> 으로 떨어뜨리고 `eas.json` 의 `serviceAccountKeyPath` 가 그 파일을 가리킨다. 그래서
+> EAS 대시보드에 키를 올릴 필요가 없다.
+
+> 권한을 막 준 직후에는 Play API 가 아직 모를 수 있다. 제출이 권한 오류로 죽으면
+> 설정을 의심하기 전에 조금 기다렸다가 다시 돌려 본다.
 
 ### 다시 돌리기
 
