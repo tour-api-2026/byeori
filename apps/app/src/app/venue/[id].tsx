@@ -2,11 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from '@/components/Image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ContentComments } from '@/components/ContentComments';
 import { PerformanceCarousel, stateCaption } from '@/components/PerformanceCarousel';
 import { Rating } from '@/components/Rating';
+import { Skeleton, SkeletonText } from '@/components/Skeleton';
 import { ReportDialog } from '@/components/ReportDialog';
 import {
   useDeleteVenueMutation, useNearbyPerformancesQuery, useReportVenueMutation, useToggleWishlistMutation,
@@ -23,7 +24,15 @@ export default function VenueDetailScreen() {
   const t = useT();
   const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const { id, mine } = useLocalSearchParams<{ id: string; mine?: string }>();
-  const { data: v, isLoading } = useVenueDetailQuery(id);
+  const { data: v, isLoading, isPlaceholderData } = useVenueDetailQuery(id);
+  /**
+   * 공사 실시간 조회(소개글·운영시간·휴무일·문의·웹사이트)가 아직 안 온 상태.
+   *
+   * 목록에서 들어왔으면 이름·사진·주소·평점은 밑그림으로 이미 그려져 있고, 느린 것은
+   * 이 부분뿐이다(한국어 1.2초, 외국어 첫 조회 3.8초). 그래서 화면 전체가 아니라
+   * 여기만 스켈레톤으로 둔다.
+   */
+  const liveLoading = isPlaceholderData;
   // 콘텐츠 ID도 숫자라 URL만 보고 우리 id로 단정하면 엉뚱한 장소의 리뷰·위시리스트를
   // 건드릴 수 있다. 우리 레코드 id는 응답에서만 받는다(없으면 0 → 관련 기능 비활성).
   const vid = v?.id ?? 0;
@@ -107,8 +116,12 @@ export default function VenueDetailScreen() {
     );
   };
 
-  if (isLoading || !v) {
-    return <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>;
+  // 목록 캐시에 없는 경로(딥링크, 앱 재시작 직후)로 들어오면 밑그림이 없다. 그때만
+  // 화면 전체를 스켈레톤으로 그린다 — 스피너와 달리 들어올 내용의 모양을 미리 보여준다.
+  if (!v) {
+    return isLoading
+      ? <VenueDetailSkeleton onBack={() => router.back()} />
+      : <View style={styles.center}><Text style={styles.empty}>{t('venue.notFound')}</Text></View>;
   }
 
   return (
@@ -160,7 +173,10 @@ export default function VenueDetailScreen() {
           )}
 
           {/* 소개글 — 상세를 열 때 한국관광공사 OpenAPI에서 실시간으로 받아온다. */}
-          {!!v.liveInfo?.overview && (
+          {liveLoading && (
+            <View style={{ marginTop: 16 }}><SkeletonText lines={5} /></View>
+          )}
+          {!liveLoading && !!v.liveInfo?.overview && (
             <Pressable onPress={() => setOverviewOpen((o) => !o)}>
               <Text style={styles.overview} numberOfLines={overviewOpen ? undefined : 5}>
                 {v.liveInfo.overview}
@@ -172,6 +188,18 @@ export default function VenueDetailScreen() {
           {/* 정보 (라벨 좌 / 값 우).
               실시간 조회값을 우선 쓰고, 없을 때만 저장된 값으로 채운다. */}
           <View style={styles.info}>
+            {/* 라벨과 구분선은 바로 그리고 값만 막대로 둔다. 어떤 항목이 올지는 장소마다
+                달라서, 값이 온 뒤 줄 수가 줄어들 수 있다(그 아래가 조금 당겨진다).
+                그래도 빈 화면보다 낫다고 보고 흔한 네 줄을 미리 그린다. */}
+            {liveLoading && (['hours', 'closed', 'contact', 'website'] as const).map((k) => (
+              <View key={k} style={styles.infoRow}>
+                <Text style={styles.infoLabel}>{t(`venue.info.${k}`)}</Text>
+                <Skeleton width="40%" height={14} />
+              </View>
+            ))}
+            {/* 아래 줄들은 liveLoading 일 때 따로 막지 않아도 된다 — 밑그림은 liveInfo 와
+                operatingHours·phone·homepageUrl 을 모두 null 로 채우므로 하나도 그려지지
+                않는다(queries.ts 의 seedVenueDetail). */}
             {!!(v.liveInfo?.useTime || v.operatingHours) && (
               <InfoRow label={t('venue.info.hours')} value={(v.liveInfo?.useTime || v.operatingHours) as string} />
             )}
@@ -227,6 +255,45 @@ export default function VenueDetailScreen() {
   );
 }
 
+/**
+ * 목록을 거치지 않고 들어왔을 때(딥링크, 앱 재시작 직후) 그리는 밑그림.
+ *
+ * 뒤로가기만 살려 둔다. 하트·신고는 어떤 장소인지 모르는 상태라 누를 수 없고,
+ * 비활성 아이콘을 띄우면 눌러 보고 아무 일도 안 일어나는 쪽이 더 나쁘다.
+ */
+function VenueDetailSkeleton({ onBack }: { onBack: () => void }) {
+  const t = useT();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <View style={styles.topBar}>
+        <Pressable hitSlop={8} onPress={onBack}>
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
+        </Pressable>
+      </View>
+      <ScrollView contentContainerStyle={{ paddingBottom: 32 + insets.bottom }} showsVerticalScrollIndicator={false}>
+        {/* 높이가 실제 사진과 같아서 사진이 와도 화면이 밀리지 않는다. */}
+        <View style={styles.hero} />
+        <View style={styles.body}>
+          <Skeleton width="62%" height={22} radius={7} />
+          <View style={{ marginTop: 10 }}><Skeleton width="80%" height={13} /></View>
+          <View style={{ marginTop: 12 }}><Skeleton width="34%" height={13} /></View>
+          <View style={{ marginTop: 16 }}><SkeletonText lines={5} /></View>
+          <View style={styles.info}>
+            {(['hours', 'closed', 'contact', 'website'] as const).map((k) => (
+              <View key={k} style={styles.infoRow}>
+                <Text style={styles.infoLabel}>{t(`venue.info.${k}`)}</Text>
+                <Skeleton width="40%" height={14} />
+              </View>
+            ))}
+          </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.infoRow}>
@@ -239,6 +306,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
+  empty: { textAlign: 'center', color: colors.textFaint, fontSize: 14 },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.md, paddingVertical: 8 },
   topActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   hero: { width: '100%', height: 230, backgroundColor: colors.bgSoft },

@@ -391,6 +391,7 @@ export const ja: Record<string, string> = {
   'venue.source': '出典：ⓒ{name}',
   'venue.source.kopis': '公演芸術統合電算網（KOPIS）',
   'venue.source.tourapi': '韓国観光公社',
+  'venue.notFound': '場所が見つかりませんでした',
   'venue.perfs': '開催中・開催予定のイベント',
   'venue.perfsNearby': '周辺で開催されるイベント',
   'venueRegister.title.new': '場所の登録',

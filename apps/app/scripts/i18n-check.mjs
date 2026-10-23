@@ -180,6 +180,7 @@ const DONE = [
   'src/components/PerformanceCarousel.tsx',
   'src/components/FeedCarousel.tsx',
   'src/components/SectionHeader.tsx',
+  'src/components/Skeleton.tsx',
   'src/app/_layout.tsx',
   'src/app/bookmarks.tsx',
   'src/app/my/accounts.tsx',
