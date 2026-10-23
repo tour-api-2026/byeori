@@ -391,6 +391,7 @@ export const zh: Record<string, string> = {
   'venue.source': '来源：ⓒ{name}',
   'venue.source.kopis': '演出艺术综合信息网(KOPIS)',
   'venue.source.tourapi': '韩国旅游发展局',
+  'venue.notFound': '找不到这个地点',
   'venue.perfs': '进行中・即将举办的活动',
   'venue.perfsNearby': '附近举办的活动',
   'venueRegister.title.new': '登记地点',

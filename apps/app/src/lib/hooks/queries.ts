@@ -17,7 +17,88 @@ import {
   VenueCreateBody, VenueFilter, type LiveSearchParams, type NearbyParams,
 } from '../api/venues';
 import { addWishlist, fetchMyWishlists, removeWishlist } from '../api/wishlists';
+import type { Performance, Venue, VenueDetail } from '../api/types';
 import { useAuthStore } from '../store/authStore';
+
+// ---------- 목록 캐시에서 상세의 밑그림 꺼내기 ----------
+
+/**
+ * 상세를 열 때 목록이 이미 들고 있던 값을 먼저 그린다.
+ *
+ * 장소 상세는 한국관광공사 OpenAPI를 실시간으로 부르기 때문에 응답이 늦다 — 운영에서
+ * 한국어 1.2초, 외국어 첫 조회 3.8초다(소개글을 그 자리에서 AI 번역한다). 그동안 화면
+ * 전체가 비어 있으면 지도에서 누른 장소가 몇 초간 안 보인다.
+ *
+ * 그런데 이름·사진·주소·평점은 **누르기 전 목록에 이미 떠 있던 값**이다. 다시 받을
+ * 때까지 기다릴 이유가 없다. 캐시에서 찾아 placeholderData 로 주면 즉시 그려지고,
+ * 진짜 응답이 오면 조용히 바뀐다.
+ *
+ * 못 찾으면 undefined 를 돌려준다(딥링크로 바로 들어온 경우). 그때는 화면이 스켈레톤을
+ * 그린다 — isPlaceholderData 가 아니라 data 가 없는 상태다.
+ */
+const VENUE_LIST_KEYS = ['venues', 'venues-nearby', 'venues-search-live'] as const;
+const PERF_LIST_KEYS = ['performances', 'performances-nearby'] as const;
+
+/** 페이지({content:[]})든 배열이든 항목 목록으로 편다. 모르는 모양이면 빈 배열. */
+function itemsOf(data: unknown): unknown[] {
+  if (Array.isArray(data)) return data;
+  const page = data as { content?: unknown } | null | undefined;
+  return page && Array.isArray(page.content) ? page.content : [];
+}
+
+/**
+ * 캐시된 목록들에서 이 id 의 항목을 찾는다.
+ *
+ * tourContentId 로도 맞춰 본다 — 우리 DB에 없는 장소는 id 가 없어서 상세를 그 값으로
+ * 열기 때문이다(지도의 router.push 참고). 둘 다 문자열로 비교한다. URL 파라미터는
+ * 언제나 문자열인데 캐시 안에서는 숫자다.
+ */
+function findInLists<T>(qc: ReturnType<typeof useQueryClient>, prefixes: readonly string[], id: number | string): T | undefined {
+  const want = String(id);
+  if (!want) return undefined;
+  for (const prefix of prefixes) {
+    for (const [, data] of qc.getQueriesData({ queryKey: [prefix] })) {
+      for (const raw of itemsOf(data)) {
+        const it = raw as { id?: unknown; tourContentId?: unknown };
+        if (String(it?.id ?? '') === want || String(it?.tourContentId ?? '') === want) return raw as T;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * 목록 항목을 상세 모양으로 채운다.
+ *
+ * 비는 칸은 **null 로 둔다 — undefined 가 아니다.** 화면이 `{v.address}` 처럼 그대로
+ * 그리는 자리가 있어서, undefined 면 "undefined" 라는 글자가 찍힌다. 목록 종류에 따라
+ * 주소나 좌표가 없는 것도 있다(최근 본 장소는 VenueCardItem 이라 좌표가 없다).
+ */
+function seedVenueDetail(qc: ReturnType<typeof useQueryClient>, id: number | string) {
+  const v = findInLists<Partial<Venue>>(qc, VENUE_LIST_KEYS, id);
+  if (!v?.name) return undefined;
+  return {
+    tourContentId: v.tourContentId ?? null,
+    id: v.id ?? 0,
+    name: v.name,
+    address: v.address ?? '',
+    category: v.category ?? null,
+    imageUrl: v.imageUrl ?? null,
+    hanbokDiscount: v.hanbokDiscount ?? false,
+    hanbokDiscountDesc: v.hanbokDiscountDesc ?? null,
+    avgRating: v.avgRating ?? 0,
+    reviewCount: v.reviewCount ?? 0,
+    source: v.source ?? '',
+    lat: v.lat ?? 0,
+    lng: v.lng ?? 0,
+    description: null,
+    operatingHours: null,
+    phone: null,
+    homepageUrl: null,
+    visibility: 'PUBLIC',
+    liveInfo: null,
+  } satisfies VenueDetail;
+}
 
 // ---------- 장소 ----------
 export function useVenuesQuery(filter: VenueFilter = {}) {
@@ -51,7 +132,14 @@ export function useNearbyVenuesQuery(p: NearbyParams | null) {
   });
 }
 export function useVenueDetailQuery(id: number | string) {
-  return useQuery({ queryKey: ['venue', id], queryFn: () => fetchVenueDetail(id), enabled: !!id });
+  const qc = useQueryClient();
+  return useQuery({
+    queryKey: ['venue', id],
+    queryFn: () => fetchVenueDetail(id),
+    enabled: !!id,
+    // 목록에 있던 값으로 먼저 그린다. isPlaceholderData 로 "아직 밑그림"임을 알 수 있다.
+    placeholderData: () => seedVenueDetail(qc, id),
+  });
 }
 /** 좌표 주변 행사. 좌표가 없으면 호출하지 않는다. */
 export function useNearbyPerformancesQuery(p: { lat?: number | null; lng?: number | null } | null) {
@@ -94,7 +182,14 @@ export function useReportVenueMutation() {
 
 // ---------- 공연 ----------
 export function usePerformanceQuery(id: number) {
-  return useQuery({ queryKey: ['performance', id], queryFn: () => fetchPerformance(id), enabled: !!id });
+  const qc = useQueryClient();
+  return useQuery({
+    queryKey: ['performance', id],
+    queryFn: () => fetchPerformance(id),
+    enabled: !!id,
+    // 행사 목록 항목은 상세와 모양이 같아 그대로 밑그림이 된다(장소처럼 채울 칸이 없다).
+    placeholderData: () => findInLists<Performance>(qc, PERF_LIST_KEYS, id),
+  });
 }
 export function usePerformancesQuery(filter: PerformanceFilter = {}) {
   return useQuery({ queryKey: ['performances', filter], queryFn: () => fetchPerformances(filter) });

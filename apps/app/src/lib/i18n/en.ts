@@ -391,6 +391,7 @@ export const en: Record<string, string> = {
   'venue.source': 'Source: ⓒ {name}',
   'venue.source.kopis': 'Korea Performing Arts Box Office Information System (KOPIS)',
   'venue.source.tourapi': 'Korea Tourism Organization',
+  'venue.notFound': 'This place could not be found',
   'venue.perfs': 'Ongoing & upcoming events',
   'venue.perfsNearby': 'Events nearby',
   'venueRegister.title.new': 'Add a place',

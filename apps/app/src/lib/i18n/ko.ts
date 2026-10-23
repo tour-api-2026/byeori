@@ -397,6 +397,7 @@ export const ko: Record<string, string> = {
   'venue.source': '출처: ⓒ{name}',
   'venue.source.kopis': '공연예술통합전산망(KOPIS)',
   'venue.source.tourapi': '한국관광공사',
+  'venue.notFound': '장소를 찾을 수 없어요',
   'venue.perfs': '진행 중·예정 행사',
   'venue.perfsNearby': '주변에서 열리는 행사',
   'venueRegister.title.new': '장소등록',

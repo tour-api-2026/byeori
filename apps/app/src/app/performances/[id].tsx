@@ -2,10 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from '@/components/Image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ContentComments } from '@/components/ContentComments';
 import { Rating } from '@/components/Rating';
+import { Skeleton, SkeletonText } from '@/components/Skeleton';
 import { usePerformanceQuery } from '@/lib/hooks/queries';
 import { useT } from '@/lib/i18n';
 import { genreLabel } from '@/lib/i18n/labels';
@@ -24,14 +25,12 @@ export default function PerformanceDetailScreen() {
   const insets = useSafeAreaInsets();   // 안드로이드는 edge-to-edge 라 시스템 바 아래까지 그린다
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { data: p, isLoading } = usePerformanceQuery(Number(id));
+  const { data: p, isLoading, isPlaceholderData } = usePerformanceQuery(Number(id));
 
-  if (isLoading) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} />
-      </SafeAreaView>
-    );
+  // 목록 캐시에 없는 경로(딥링크, 앱 재시작 직후)로 들어왔을 때만 전체 밑그림을 그린다.
+  // 목록에서 들어왔으면 placeholderData 로 포스터·제목·기간이 이미 차 있다.
+  if (isLoading && !p) {
+    return <PerformanceDetailSkeleton onBack={() => router.back()} />;
   }
   if (!p) {
     return (
@@ -99,7 +98,15 @@ export default function PerformanceDetailScreen() {
             ) : null}
           </View>
 
-          {p.overview ? (
+          {/* 소개글은 공사 축제(TOURAPI)에만 있고 상세를 열 때 실시간으로 받아온다(약 1초).
+              KOPIS 공연은 아예 없으므로 출처를 보고 가른다 — 모든 행사에 막대를 띄우면
+              대부분은 잠깐 떴다 사라지는 헛약속이 된다. */}
+          {isPlaceholderData && p.source === 'TOURAPI' ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('performance.intro')}</Text>
+              <SkeletonText lines={4} />
+            </View>
+          ) : p.overview ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>{t('performance.intro')}</Text>
               <Text style={styles.overview}>{p.overview}</Text>
@@ -137,6 +144,44 @@ export default function PerformanceDetailScreen() {
           ) : null}
 
           <ContentComments targetType="PERFORMANCE" targetId={p.id} targetName={p.title} />
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+/**
+ * 목록을 거치지 않고 들어왔을 때 그리는 밑그림.
+ *
+ * 포스터 높이를 실제와 같게 두어 사진이 와도 화면이 밀리지 않는다. 소개글 자리는
+ * 비워 둔다 — 공사 축제에만 있는 항목이라, 여기서는 어느 쪽인지 알 길이 없다.
+ */
+function PerformanceDetailSkeleton({ onBack }: { onBack: () => void }) {
+  const t = useT();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 + insets.bottom }}>
+        <View style={styles.header}>
+          <Pressable hitSlop={10} onPress={onBack}>
+            <Ionicons name="chevron-back" size={24} color={colors.text} />
+          </Pressable>
+        </View>
+        <View style={[styles.poster, { backgroundColor: colors.bgSoft }]} />
+        <View style={styles.body}>
+          <View style={styles.badges}>
+            <Skeleton width={58} height={24} radius={12} />
+            <Skeleton width={46} height={24} radius={12} />
+          </View>
+          <View style={{ marginTop: 12 }}><Skeleton width="72%" height={20} radius={7} /></View>
+          <View style={{ marginTop: 12 }}><Skeleton width="34%" height={13} /></View>
+          <View style={styles.rows}>
+            <View style={styles.row}>
+              <Text style={styles.rowLabel}>{t('performance.period')}</Text>
+              <Skeleton width="45%" height={14} />
+            </View>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
