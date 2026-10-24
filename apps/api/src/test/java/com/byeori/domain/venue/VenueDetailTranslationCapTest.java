@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -33,6 +34,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
         "byeori.auth.jwt-secret=test-only-secret-not-for-production-0123456789",
         "byeori.translation.detail-daily-cap=2"
 })
+@Import(com.byeori.domain.translation.SameThreadExecutor.class)
 class VenueDetailTranslationCapTest {
 
     @Container
@@ -60,20 +62,31 @@ class VenueDetailTranslationCapTest {
         return String.valueOf(id);
     }
 
+    /**
+     * 상한은 **번역을 거는 횟수**를 센다. 조회 자체는 막지 않는다 — 번역이 없으면 한국어를 준다.
+     *
+     * 전에는 조회가 번역을 기다렸으므로 "상한에 닿으면 한국어"가 곧 "그 조회의 결과"였다.
+     * 이제는 조회가 늘 한국어를 주고(뒤에서 번역된다), 상한은 뒤에서 도는 일이 몇 번
+     * 걸리는지를 막는다.
+     */
     @Test
-    @DisplayName("상한을 넘으면 AI 를 부르지 않고 한국어를 준다 — 저장된 번역은 상한과 무관하게 읽힌다")
+    @DisplayName("상한을 넘으면 번역을 걸지 않는다 — 저장된 번역은 상한과 무관하게 읽힌다")
     void 상한() {
         when(tourClient.detail(any())).thenReturn(new TourDetail(KO, null, null, null, null, null));
         when(translationClient.translateText(any(), any())).thenReturn("EN");
         String a = seed("CAP_1"), b = seed("CAP_2"), c = seed("CAP_3");
 
-        assertThat(service.detailByKey(Lang.EN, a).liveInfo().overview()).isEqualTo("EN");
-        assertThat(service.detailByKey(Lang.EN, b).liveInfo().overview()).isEqualTo("EN");
-        // 셋째는 상한 — 한국어, AI 호출 없음
+        // 첫 조회는 모두 한국어다. 앞의 둘은 뒤에서 번역이 걸리고, 셋째는 상한에 걸려 안 걸린다.
+        assertThat(service.detailByKey(Lang.EN, a).liveInfo().overview()).isEqualTo(KO);
+        assertThat(service.detailByKey(Lang.EN, b).liveInfo().overview()).isEqualTo(KO);
         assertThat(service.detailByKey(Lang.EN, c).liveInfo().overview()).isEqualTo(KO);
         verify(translationClient, times(2)).translateText(any(), any());
-        // 이미 번역된 곳은 상한에 닿은 뒤에도 번역본을 준다
+
+        // 번역이 저장된 둘은 다시 열면 번역본이다. 셋째는 상한에 막혀 여전히 한국어고,
+        // 다시 열어도 AI 를 더 부르지 않는다.
         assertThat(service.detailByKey(Lang.EN, a).liveInfo().overview()).isEqualTo("EN");
+        assertThat(service.detailByKey(Lang.EN, b).liveInfo().overview()).isEqualTo("EN");
+        assertThat(service.detailByKey(Lang.EN, c).liveInfo().overview()).isEqualTo(KO);
         verify(translationClient, times(2)).translateText(any(), any());
     }
 }

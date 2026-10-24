@@ -8,9 +8,8 @@ import com.byeori.domain.venue.dto.VenueResponse;
 import com.byeori.global.exception.BadRequestException;
 import com.byeori.global.exception.NotFoundException;
 import com.byeori.domain.sync.CategoryMapper;
-import com.byeori.domain.translation.DetailTranslationCap;
-import com.byeori.domain.translation.TranslationClient;
 import com.byeori.global.external.dto.TourDetail;
+import com.byeori.domain.translation.DetailTranslator;
 import com.byeori.global.external.TourApiClient;
 import java.math.BigDecimal;
 import java.util.List;
@@ -18,10 +17,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @Transactional(readOnly = true)
@@ -33,16 +30,11 @@ public class VenueService {
     private final VenueRepository repo;
     private final VenueReportRepository reportRepo;
     private final TourApiClient tourClient;
-    private final TranslationClient translationClient;
-    private final DetailTranslationCap translationCap;
-    private final TransactionTemplate tx;
+    private final DetailTranslator detailTranslator;
 
     public VenueService(VenueRepository repo, VenueReportRepository reportRepo, TourApiClient tourClient,
-                        TranslationClient translationClient, DetailTranslationCap translationCap,
-                        PlatformTransactionManager txm) {
-        this.translationClient = translationClient;
-        this.translationCap = translationCap;
-        this.tx = new TransactionTemplate(txm);
+                        DetailTranslator detailTranslator) {
+        this.detailTranslator = detailTranslator;
         this.repo = repo;
         this.reportRepo = reportRepo;
         this.tourClient = tourClient;
@@ -173,29 +165,27 @@ public class VenueService {
     }
 
     /**
-     * 설명을 선택한 언어로. 처음 열릴 때 한 번 번역해 저장하고, 다음부터는 저장분을 쓴다.
+     * 설명을 선택한 언어로. 저장분이 있으면 그것, 없으면 한국어를 주고 번역을 걸어 둔다.
      *
-     * 설명은 DB 에 거의 없고(34,728곳 중 2곳) 공사 API 로 실시간 조회하는 값이다. 길어서 매번
-     * 번역하면 비싸다. 상세는 조회 빈도가 낮아 이쪽이 맞다 — 목록·지도와 달리 한 번에
-     * 한 곳만 열린다. 사용자 요청 경로에서 AI 를 부르는 유일한 자리다.
+     * 설명은 DB 에 거의 없고(34,729곳 중 2곳) 공사 API 로 실시간 조회하는 값이다. 길어서
+     * 번역에 시간이 걸린다.
      *
-     * 번역에 실패하면 한국어를 그대로 준다. 설명이 비어 보이는 것보다 낫다.
-     * 우리 DB 에 없는 장소(저장할 행이 없다)는 부르지 않는다 — 열 때마다 비용이 든다.
+     * **번역을 기다리지 않는다.** 기다리게 했더니 운영에서 이렇게 깨져 있었다 — 긴 설명은
+     * 8초 제한 안에 끝나지 않아 매번 끊겼고, 끊기면 저장할 것이 없어 다음에 열 때도 똑같이
+     * 8.5초를 쓰고 또 실패했다. 외국어로 열면 8.5초 뒤에 한국어가 나왔다. 그래서 지금
+     * 여는 사람에게는 한국어를 바로 주고 번역은 뒤에서 돌린다(DetailTranslator).
+     * 다음에 여는 사람부터 번역된 글을 본다.
+     *
+     * 첫 사람이 한국어를 보는 것은 손해가 아니다. 전에는 모두가 영원히 한국어를 봤다.
+     *
+     * 우리 DB 에 없는 장소는 저장할 행이 없어 번역을 걸지 않는다 — 열 때마다 돈만 든다.
      */
     private String describedIn(Venue v, Lang lang, String koDescription) {
         if (lang == Lang.KO || koDescription == null || koDescription.isBlank()) return koDescription;
         String saved = v.descIn(lang);
-        if (saved != null && !saved.isBlank()) return saved;      // 두 번째부터는 AI 를 부르지 않는다
-        // 로그인 없이 열리는 화면이라 하루 총량으로 막는다. 닿으면 한국어 — 번역 실패와 같은 길이다.
-        if (!translationCap.tryAcquire()) return koDescription;
-        String tr = translationClient.translateText(lang, koDescription);
-        if (tr == null || tr.isBlank()) return koDescription;     // 실패 — 한국어로 둔다
-        // 낡은 사본을 통째로 저장하면 그 사이 바뀐 평점 등을 덮으므로 다시 읽어 설명만 바꾼다.
-        tx.executeWithoutResult(st -> repo.findById(v.getId()).ifPresent(fresh -> {
-            fresh.applyDescription(lang, tr);
-            repo.save(fresh);
-        }));
-        return tr;
+        if (saved != null && !saved.isBlank()) return saved;      // 이미 번역된 글
+        detailTranslator.request(v.getId(), lang, koDescription);
+        return koDescription;
     }
 
     private VenueDetailResponse detailByContentId(Lang lang, String contentId) {

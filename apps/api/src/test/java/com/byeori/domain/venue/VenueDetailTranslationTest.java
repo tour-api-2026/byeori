@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.testcontainers.junit.jupiter.Container;
@@ -30,13 +31,15 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * 트랜잭션 없이 돈다 — 서비스가 AI 를 트랜잭션 밖에서 부르는 구조를 검증하려면 테스트가 감싸면 안 된다.
  * 그래서 행을 실제로 커밋하고 끝나면 지운다.
  *
- * 상세 설명은 처음 열릴 때만 AI 를 부른다. 사용자 요청 경로에 AI 가 들어오는 유일한 자리라
- * 실패·재조회·한국어·빈 설명 네 길을 모두 고정한다. AI 와 공사 API 는 가짜로 바꾼다.
+ * 상세 설명 번역은 **화면 뒤에서** 돈다. 지금 여는 사람은 한국어를 받고, 번역이 저장된 뒤
+ * 여는 사람부터 번역본을 본다. 실패·재조회·한국어·빈 설명 네 길을 모두 고정한다.
+ * AI 와 공사 API 는 가짜로 바꾸고, 뒤에서 도는 일은 같은 스레드에서 실행한다.
  */
 @Testcontainers
 @SpringBootTest(properties = {
         "byeori.auth.jwt-secret=test-only-secret-not-for-production-0123456789"
 })
+@Import(com.byeori.domain.translation.SameThreadExecutor.class)
 class VenueDetailTranslationTest {
 
     @Container
@@ -69,14 +72,20 @@ class VenueDetailTranslationTest {
         return service.detailByKey(lang, key).liveInfo().overview();
     }
 
+    /**
+     * 이 테스트가 이 변경의 핵심이다. 전에는 첫 조회가 번역을 기다렸고, 긴 글은 그 안에 끝나지
+     * 않아 매번 실패하며 아무것도 저장되지 않았다 — 그래서 아무도 번역본을 못 봤다.
+     */
     @Test
-    @DisplayName("첫 조회는 번역해 저장하고, 두 번째는 AI 를 부르지 않는다")
-    void 두_번째는_저장분() {
+    @DisplayName("첫 조회는 한국어를 주고, 번역은 뒤에서 저장된다. 두 번째부터 번역본")
+    void 첫_조회는_한국어_두_번째는_번역본() {
         when(translationClient.translateText(Lang.EN, KO)).thenReturn("The main palace of Joseon.");
 
-        assertThat(overview(Lang.EN)).isEqualTo("The main palace of Joseon.");
-        // 트랜잭션 밖에서 읽으므로 메모리가 아니라 커밋된 DB 값이다
+        // 기다리지 않는다 — 지금 여는 사람은 한국어를 받는다
+        assertThat(overview(Lang.EN)).isEqualTo(KO);
+        // 그 사이 뒤에서 번역이 끝나 커밋됐다(트랜잭션 밖에서 읽으므로 DB 값이다)
         assertThat(repo.findById(Long.valueOf(key)).orElseThrow().getDescEn()).isEqualTo("The main palace of Joseon.");
+        // 다음 사람부터 번역본
         assertThat(overview(Lang.EN)).isEqualTo("The main palace of Joseon.");
 
         verify(translationClient, times(1)).translateText(eq(Lang.EN), any());
@@ -111,7 +120,9 @@ class VenueDetailTranslationTest {
     void 언어별() {
         when(translationClient.translateText(Lang.EN, KO)).thenReturn("EN");
         when(translationClient.translateText(Lang.JA, KO)).thenReturn("JA");
-        assertThat(overview(Lang.EN)).isEqualTo("EN");
+        overview(Lang.EN);                                  // 한 번 열어 번역을 걸고
+        overview(Lang.JA);
+        assertThat(overview(Lang.EN)).isEqualTo("EN");       // 그다음부터 각자의 번역본
         assertThat(overview(Lang.JA)).isEqualTo("JA");
     }
 
@@ -124,7 +135,7 @@ class VenueDetailTranslationTest {
             return "EN";
         });
 
-        assertThat(overview(Lang.EN)).isEqualTo("EN");
+        overview(Lang.EN);
         assertThat(inTx[0]).isFalse();
         assertThat(repo.findById(Long.valueOf(key)).orElseThrow().getDescEn()).isEqualTo("EN");
     }

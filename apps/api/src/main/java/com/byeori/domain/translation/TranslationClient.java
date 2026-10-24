@@ -107,7 +107,7 @@ public class TranslationClient {
             "additionalProperties", false);
 
     /**
-     * 한 장소의 긴 설명 하나를 번역한다. 사용자 요청 경로에서 AI 를 부르는 유일한 자리다.
+     * 한 장소의 긴 설명 하나를 번역한다. 화면 뒤에서만 불린다(DetailTranslator) — 사용자가 기다리지 않는다.
      *
      * translate() 를 쓰지 않는 이유 — 그쪽 프롬프트는 "카드 라벨처럼 짧게" 를 요구해 문단을
      * 줄여 버리고, 원문을 src 로 그대로 되돌려야 하는데 긴 글은 그게 자주 어긋난다.
@@ -116,7 +116,7 @@ public class TranslationClient {
     public String translateText(Lang lang, String text) {
         if (lang == Lang.KO || text == null || text.isBlank()) return null;
         try {
-            JsonNode res = openAi.completeJsonLive(systemForProse(lang), text, "description", TEXT_SCHEMA, 0.2);
+            JsonNode res = openAi.completeJsonLongText(systemForProse(lang), text, "description", TEXT_SCHEMA, 0.2);
             if (res == null || !res.path("text").isTextual()) return null;
             String tr = res.get("text").asText().trim();
             return tr.isEmpty() ? null : tr;
