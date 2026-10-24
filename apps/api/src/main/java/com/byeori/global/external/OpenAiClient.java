@@ -29,10 +29,14 @@ public class OpenAiClient {
     private final RestClient http;
 
     /**
-     * 화면이 기다리는 호출용. 상세 설명 번역이 쓴다. 실패해도 한국어를 즉시 줄 수 있으니(공짜)
-     * 길게 기다릴 이유가 없다 — 놓친 번역은 다음에 열 때 다시 시도된다. TourApiClient 의 liveHttp 와 같은 이유.
+     * 긴 글 한 편을 번역하는 호출용. 상세 설명 번역(DetailTranslator)이 쓴다.
+     *
+     * 전에는 화면이 이 호출을 기다렸기 때문에 8초로 짧게 끊었다. 그런데 긴 설명은 8초 안에
+     * 끝나지 않아 **매번** 끊겼고, 끊기면 저장할 것이 없어 다음에 열 때도 또 8.5초를 쓰고
+     * 또 실패했다(운영에서 34,729곳 중 번역이 저장된 곳은 1곳뿐이었다). 이제 화면이
+     * 기다리지 않으므로 끝까지 받는다 — 짧게 끊어 아무것도 못 얻느니 느려도 끝내는 쪽이 낫다.
      */
-    private final RestClient liveHttp;
+    private final RestClient longTextHttp;
 
     public OpenAiClient(@Value("${byeori.ai.openai-api-key:}") String apiKey,
                         @Value("${byeori.ai.openai-model:gpt-4o-mini}") String model) {
@@ -42,10 +46,10 @@ public class OpenAiClient {
         f.setConnectTimeout(Duration.ofSeconds(3));
         f.setReadTimeout(Duration.ofSeconds(20));
         this.http = RestClient.builder().requestFactory(f).build();
-        SimpleClientHttpRequestFactory live = new SimpleClientHttpRequestFactory();
-        live.setConnectTimeout(Duration.ofSeconds(2));
-        live.setReadTimeout(Duration.ofSeconds(8));
-        this.liveHttp = RestClient.builder().requestFactory(live).build();
+        SimpleClientHttpRequestFactory longText = new SimpleClientHttpRequestFactory();
+        longText.setConnectTimeout(Duration.ofSeconds(3));
+        longText.setReadTimeout(Duration.ofSeconds(60));
+        this.longTextHttp = RestClient.builder().requestFactory(longText).build();
     }
 
     public boolean enabled() {
@@ -71,10 +75,10 @@ public class OpenAiClient {
         return call(http, system, user, schemaName, schema, temperature);
     }
 
-    /** 사용자가 화면에서 기다리는 호출. 짧은 시간 제한(liveHttp)으로 부른다. */
-    public JsonNode completeJsonLive(String system, String user, String schemaName, Map<String, Object> schema,
-                                     double temperature) {
-        return call(liveHttp, system, user, schemaName, schema, temperature);
+    /** 긴 글 한 편을 번역하는 호출. 화면이 기다리지 않으므로 시간 제한이 넉넉하다. */
+    public JsonNode completeJsonLongText(String system, String user, String schemaName, Map<String, Object> schema,
+                                         double temperature) {
+        return call(longTextHttp, system, user, schemaName, schema, temperature);
     }
 
     private JsonNode call(RestClient http, String system, String user, String schemaName,
