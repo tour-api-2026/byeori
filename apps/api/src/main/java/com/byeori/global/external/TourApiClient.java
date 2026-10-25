@@ -5,6 +5,7 @@ import com.byeori.global.external.dto.TourBasic;
 import com.byeori.global.external.dto.TourDetail;
 import com.byeori.global.external.dto.TourFestivalItem;
 import com.byeori.global.external.dto.TourItem;
+import com.byeori.global.i18n.Lang;
 import com.byeori.global.external.dto.TourSyncItem;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,6 +34,13 @@ public class TourApiClient {
 
     private static final String BASE = "https://apis.data.go.kr/B551011/KorService2";
 
+    /**
+     * 공사 다국어판. 국문판(KorService2)과 **별도 서비스**이고 contentId 체계도 다르다
+     * (경복궁: 국문 126508 / 영문 264337). 인증키는 같은 계정의 것을 그대로 쓴다 —
+     * 활용신청만 서비스별로 하면 된다.
+     */
+    private static final String MULTILANG_BASE = "https://apis.data.go.kr/B551011/";
+
     private final SyncProperties props;
     private final ObjectMapper om = new ObjectMapper();
 
@@ -57,6 +65,39 @@ public class TourApiClient {
 
     public TourApiClient(SyncProperties props) {
         this.props = props;
+    }
+
+    /**
+     * 다국어판 지역기반 목록. 지역을 지정하지 않고 전체를 받는다(한 언어가 1만 5천 건 남짓).
+     *
+     * 돌려주는 TourItem 의 contentId 는 **다국어판 쪽 id** 다. 국문판 장소와 잇는 일은
+     * MultilangSyncService 가 이름·좌표로 한다.
+     */
+    public List<TourItem> multilangList(Lang lang, int page, int rows) {
+        if (!props.tourApiEnabled()) return List.of();
+        String service = switch (lang) {
+            case EN -> "EngService2";
+            case JA -> "JpnService2";
+            case ZH -> "ChsService2";
+            case KO -> null;
+        };
+        if (service == null) return List.of();
+        try {
+            URI uri = UriComponentsBuilder.fromUriString(MULTILANG_BASE + service + "/areaBasedList2")
+                    .queryParam("serviceKey", encKey())
+                    .queryParam("MobileOS", "ETC")
+                    .queryParam("MobileApp", "byeori")
+                    .queryParam("_type", "json")
+                    .queryParam("arrange", "A")
+                    .queryParam("numOfRows", rows)
+                    .queryParam("pageNo", page)
+                    .build(true)
+                    .toUri();
+            return parseItems(http.get().uri(uri).retrieve().body(String.class));
+        } catch (Exception e) {
+            log.warn("TourAPI 다국어 목록 실패 lang={} page={}: {}", lang, page, TourApiError.reasonOf(e));
+            return List.of();
+        }
     }
 
     /** 지역기반 목록(areaBasedList2). lDongSignguCd는 lDongRegnCd 동반 필수. */

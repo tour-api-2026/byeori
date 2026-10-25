@@ -76,6 +76,14 @@ public class Venue {
     @Column(name = "tr_source") private String trSource;
 
     /**
+     * 공사 다국어판에서 찾아낸 같은 장소의 contentId. 국문판과 값이 다르다
+     * (경복궁: 국문 126508 / 영문 264337). 설명을 공식 번역으로 받아올 때 쓴다.
+     */
+    @Column(name = "tour_content_id_en") private String tourContentIdEn;
+    @Column(name = "tour_content_id_ja") private String tourContentIdJa;
+    @Column(name = "tour_content_id_zh") private String tourContentIdZh;
+
+    /**
      * 언어별 연속 실패 횟수. TranslationBatch.MAX_ATTEMPTS 에 닿으면 그 언어는 큐에서 빠진다.
      * 성공하면 0 으로 돌아간다. 컬럼은 V30.
      */
@@ -110,12 +118,60 @@ public class Venue {
             case KO -> { }   // 원본이 한국어다 — 덮어쓸 것이 없다
         }
         // 사람이 번역한 행은 일부 언어만 AI 가 채워도 HUMAN 으로 남긴다. 이 표시가 "기계가 사람의
-        // 작업을 덮어쓰지 않게" 하는 유일한 근거라 내리면 안 된다.
-        if (!"HUMAN".equals(this.trSource)) this.trSource = "AI";
+        // 작업을 덮어쓰지 않게" 하는 유일한 근거라 내리면 안 된다. 공사 공식 번역(TOURAPI)도
+        // 같다 — 영어만 공식이고 일본어를 AI 가 채웠다고 해서 행 전체를 AI 로 내리면,
+        // 다음에 공식 동기화가 그 행을 덮어도 되는 것으로 잘못 판단한다.
+        if (!"HUMAN".equals(this.trSource) && !"TOURAPI".equals(this.trSource)) this.trSource = "AI";
         resetFailure(lang);
     }
 
     public boolean isHumanTranslated() { return "HUMAN".equals(trSource); }
+
+    /**
+     * 공사 다국어판의 공식 이름으로 바꾸고, 그쪽 contentId 를 적어 둔다.
+     *
+     * 출처 우선순위는 HUMAN > TOURAPI > AI 다. 사람이 손본 행은 건드리지 않는다 —
+     * 부르는 쪽(MultilangSyncService)이 이미 거르지만, 여기서도 막아 둔다.
+     * AI 가 쓴 것은 덮는다. 공사 공식 번역이 gpt-4o-mini 보다 낫다
+     * (AI 는 '창경궁'을 'Changdeokgung Palace' 로 적는다 — 다른 궁이다).
+     *
+     * contentId 는 이름을 덮지 않을 때도 적어 둔다. 설명을 받아오는 데는 쓸 수 있다.
+     */
+    public void applyOfficialTranslation(Lang lang, String text, String contentId) {
+        switch (lang) {
+            case EN -> this.tourContentIdEn = contentId;
+            case JA -> this.tourContentIdJa = contentId;
+            case ZH -> this.tourContentIdZh = contentId;
+            case KO -> { }
+        }
+        if (isHumanTranslated() || text == null || text.isBlank()) return;
+        switch (lang) {
+            case EN -> this.nameEn = text;
+            case JA -> this.nameJa = text;
+            case ZH -> this.nameZh = text;
+            case KO -> { }
+        }
+        this.trSource = "TOURAPI";
+        resetFailure(lang);
+    }
+
+    /**
+     * 공식 번역을 넣은 뒤 이름 해시를 찍는다. **빠뜨리면 야간 AI 배치가 그 행을 다시 집는다**
+     * (findNeedingTranslation 의 첫 조건이 name_hash IS NULL 이다). 그러면 공식 번역을
+     * AI 번역이 덮어쓴다. 해시를 찍어도 아직 번역이 없는 언어는 여전히 대상이라,
+     * 공사가 다루지 않는 언어는 AI 가 그대로 채운다.
+     */
+    public String nameForHash() { return name; }
+
+    /** 그 언어의 공사 다국어 contentId. 없으면 null. */
+    public String tourContentIdIn(Lang lang) {
+        return switch (lang) {
+            case EN -> tourContentIdEn;
+            case JA -> tourContentIdJa;
+            case ZH -> tourContentIdZh;
+            case KO -> null;
+        };
+    }
 
     public void markHash(String hash) { this.nameHash = hash; }
 
