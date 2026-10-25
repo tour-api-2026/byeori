@@ -13,6 +13,7 @@ export const en: Record<string, string> = {
   'category.체험': 'Activities',
   'category.맛집': 'Restaurants',
   'category.카페': 'Cafés',
+  'category.필수명소': 'Must-Visit',
   'category.전통시장': 'Markets',
   'category.공예': 'Crafts',
   'category.한옥스테이': 'Hanok Stay',

@@ -199,7 +199,7 @@ public class VenueService {
         if (basic == null) {
             throw new NotFoundException("VENUE_NOT_FOUND", "장소를 찾을 수 없습니다.");
         }
-        String category = CategoryMapper.fromTour(basic.contentTypeId(), basic.lclsSystm2(), basic.lclsSystm3());
+        String category = CategoryMapper.fromTour(basic.contentTypeId(), basic.title(), basic.lclsSystm2(), basic.lclsSystm3());
         if (category == null) category = "문화";   // 우리 분류 밖이어도 상세는 보여준다
         return VenueDetailResponse.fromTour(basic, tourClient.detail(contentId), category);
     }

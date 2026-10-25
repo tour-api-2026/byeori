@@ -19,6 +19,7 @@ export const ko: Record<string, string> = {
   'category.체험': '체험',
   'category.맛집': '맛집',
   'category.카페': '카페',
+  'category.필수명소': '필수 명소',
   'category.전통시장': '전통시장',
   'category.공예': '공예',
   'category.한옥스테이': '한옥스테이',

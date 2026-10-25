@@ -13,6 +13,7 @@ export const ja: Record<string, string> = {
   'category.체험': '体験',
   'category.맛집': 'グルメ',
   'category.카페': 'カフェ',
+  'category.필수명소': '必訪スポット',
   'category.전통시장': '伝統市場',
   'category.공예': '工芸',
   'category.한옥스테이': '韓屋ステイ',

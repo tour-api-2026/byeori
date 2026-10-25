@@ -13,6 +13,7 @@ export const zh: Record<string, string> = {
   'category.체험': '体验',
   'category.맛집': '美食',
   'category.카페': '咖啡馆',
+  'category.필수명소': '必去景点',
   'category.전통시장': '传统市场',
   'category.공예': '手工艺',
   'category.한옥스테이': '韩屋住宿',
