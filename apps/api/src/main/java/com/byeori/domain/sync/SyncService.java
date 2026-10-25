@@ -191,7 +191,7 @@ public class SyncService {
         if (lat == null || lng == null) return 0;
         double latD = lat.doubleValue(), lngD = lng.doubleValue();
         if (latD < 33.0 || latD > 38.7 || lngD < 124.5 || lngD > 132.0) return 0;
-        String category = CategoryMapper.fromTour(it.contentTypeId(), it.lclsSystm2(), it.lclsSystm3());
+        String category = CategoryMapper.fromTour(it.contentTypeId(), it.title(), it.lclsSystm2(), it.lclsSystm3());
         // 쇼핑·숙박은 전통문화와 닿는 소분류만 담는다(약국·모텔 등은 category가 null).
         if (category == null) return 0;
         try {
