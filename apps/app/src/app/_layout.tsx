@@ -4,7 +4,7 @@ import { Stack } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAutoUpdate } from '@/hooks/use-auto-update';
 import { applyGlobalFont } from '@/lib/font';
@@ -13,6 +13,7 @@ import { useT } from '@/lib/i18n';
 import { languageLabel } from '@/lib/i18n/labels';
 import { useLocaleStore } from '@/lib/store/localeStore';
 import { colors, fonts } from '@/lib/theme';
+import { WebLanguageSwitcher } from '@/components/WebLanguageSwitcher';
 import LanguageScreen from './language';
 
 applyGlobalFont();
@@ -69,7 +70,12 @@ export default function RootLayout() {
 
   // 언어를 아직 안 고른 사람에게는 이 화면만 보여 준다. 탭을 먼저 띄우고 그 위에
   // 쌓으면 뒤에 한국어 화면이 비친다. 고르면 chosen 이 true 가 되어 아래 Stack 으로 넘어간다.
-  if (!chosen) {
+  //
+  // **웹은 막지 않는다.** 주소를 치고 들어온 사람에게 아무것도 안 보여 준 채 선택을 먼저
+  // 요구하면, 그게 무슨 사이트인지 모르는 상태로 막힌다. 웹은 브라우저 언어로 바로 열고
+  // (hydrate 의 detectDeviceLocale), 바꾸고 싶으면 오른쪽 위 버튼에서 바꾼다.
+  // 앱은 그대로 둔다 — 설치하고 처음 여는 자리라 한 번 묻는 편이 낫다.
+  if (!chosen && Platform.OS !== 'web') {
     return (
       <QueryClientProvider client={client}>
         <SafeAreaProvider>
@@ -84,6 +90,8 @@ export default function RootLayout() {
     <QueryClientProvider client={client}>
       <SafeAreaProvider>
         <StatusBar style="dark" />
+        {/* 웹에서만, 탭 화면에서만 보인다. Stack 위에 떠 있어 모든 탭에서 같은 자리다. */}
+        <WebLanguageSwitcher />
         <Stack
           screenOptions={{
             headerTintColor: colors.text,

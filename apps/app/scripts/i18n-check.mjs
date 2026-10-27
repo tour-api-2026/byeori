@@ -174,6 +174,7 @@ const DONE = [
   'src/app/review/write.tsx',
   'src/components/VenueCard.tsx',
   'src/components/VenueRow.tsx',
+  'src/components/WebLanguageSwitcher.tsx',
   'src/components/Rating.tsx',
   'src/components/ContentComments.tsx',
   'src/components/ReportDialog.tsx',
