@@ -20,9 +20,10 @@ public class SyncController {
     private final SyncService syncService;
     private final PerformanceDeduper deduper;
     private final TranslationBatch translationBatch;
+    private final MultilangSyncService multilangSync;
 
     /**
-     * only=all(기본)|incremental|venues|performances|festivals|seoul|dedupe|translate 로 대상 선택.
+     * only=all(기본)|incremental|venues|performances|festivals|seoul|dedupe|translate|multilang 로 대상 선택.
      *
      * incremental = 변경분만(정기 동기화와 같은 경로, 약 3건 호출)
      * venues      = 전량 재수집(약 350건 호출) — 초기 적재·정합성 복구용
@@ -46,6 +47,10 @@ public class SyncController {
             // since(yyyyMMdd)를 주면 그 날짜부터 다시 받는다. 장애로 며칠 걸렀을 때
             // 구간을 지정해 따라잡거나, 동작을 확인할 때 쓴다.
             return ApiResponse.ok(Map.of("incremental", syncService.syncVenuesIncremental(since)));
+        }
+        if (only.equals("multilang")) {
+            // 공사 다국어판에서 공식 번역 이름을 가져와 붙인다. AI 를 부르지 않는다.
+            return ApiResponse.ok(Map.of("multilang", multilangSync.syncAll()));
         }
         if (only.equals("dedupe")) {
             PerformanceDeduper.Summary s = deduper.sweep();

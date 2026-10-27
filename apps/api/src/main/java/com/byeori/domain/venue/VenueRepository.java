@@ -242,6 +242,13 @@ public interface VenueRepository extends JpaRepository<Venue, Long> {
                                    @Param("other") int other);
 
     /**
+     * 이름이 있는 살아 있는 장소 전부. 공사 다국어판을 이름으로 맞출 때 한 번에 읽는다 —
+     * 다국어 1만 5천 건마다 질의하면 왕복이 그만큼 생긴다.
+     */
+    @Query("select v from Venue v where v.status = 'ACTIVE' and v.name is not null and v.name <> ''")
+    List<Venue> findAllActiveWithName();
+
+    /**
      * 번역이 필요한 행 중 실패가 :max 번 미만인 것. 해당 언어 번역이 비었거나 이름이 바뀌어
      * 해시가 어긋난 행이 "필요한" 행이다. 해시가 맞고 번역이 있는 행은 영원히 다시 번역하지
      * 않는다 — 이 조건이 뒤집히면 매일 전량을 세 언어로 다시 번역해 비용이 수백 배가 된다.
