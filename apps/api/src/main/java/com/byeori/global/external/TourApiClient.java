@@ -257,6 +257,45 @@ public class TourApiClient {
         }
     }
 
+    /**
+     * 공사 다국어판의 번역된 설명. 없으면 null.
+     *
+     * 목록(multilangList)에는 설명이 없어서 장소 하나씩 불러야 한다. 그래서 화면이 열릴 때
+     * 필요한 것만 받는다(DetailTranslator) — 1만 5천 건을 미리 받으면 하루 호출 한도
+     * 1,000건으로 보름이 걸린다.
+     *
+     * 같은 detailCommon2 지만 **서비스가 달라 contentId 도 다르다.** 국문 번호를 그대로
+     * 넣으면 엉뚱한 장소가 오거나 빈 응답이 온다. 넣는 번호는 venues.tour_content_id_* 에
+     * 적어 둔 다국어판 번호다(MultilangSyncService 가 찾아 둔다).
+     */
+    public String multilangOverview(Lang lang, String contentId) {
+        if (!props.tourApiEnabled() || contentId == null || contentId.isBlank()) return null;
+        String service = switch (lang) {
+            case EN -> "EngService2";
+            case JA -> "JpnService2";
+            case ZH -> "ChsService2";
+            case KO -> null;
+        };
+        if (service == null) return null;
+        try {
+            URI uri = UriComponentsBuilder.fromUriString(MULTILANG_BASE + service + "/detailCommon2")
+                    .queryParam("serviceKey", encKey())
+                    .queryParam("MobileOS", "ETC")
+                    .queryParam("MobileApp", "byeori")
+                    .queryParam("_type", "json")
+                    .queryParam("contentId", contentId)
+                    .build(true)
+                    .toUri();
+            JsonNode item = firstItem(http.get().uri(uri).retrieve().body(String.class));
+            String overview = item == null ? null : stripTags(text(item, "overview"));
+            return (overview == null || overview.isBlank()) ? null : overview;
+        } catch (Exception e) {
+            log.warn("TourAPI 다국어 설명 조회 실패 lang={} contentId={}: {}",
+                    lang, contentId, TourApiError.reasonOf(e));
+            return null;
+        }
+    }
+
     public TourDetail detail(String contentId) {
         if (!props.tourApiEnabled() || contentId == null || contentId.isBlank()) return null;
         try {

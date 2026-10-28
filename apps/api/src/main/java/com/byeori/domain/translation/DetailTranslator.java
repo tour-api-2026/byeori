@@ -2,6 +2,7 @@ package com.byeori.domain.translation;
 
 import com.byeori.domain.venue.Venue;
 import com.byeori.domain.venue.VenueRepository;
+import com.byeori.global.external.TourApiClient;
 import com.byeori.global.i18n.Lang;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,6 +34,7 @@ public class DetailTranslator {
 
     private final VenueRepository repo;
     private final TranslationClient client;
+    private final TourApiClient tourClient;
     private final DetailTranslationCap cap;
     private final Executor executor;
     private final TransactionTemplate tx;
@@ -53,11 +55,13 @@ public class DetailTranslator {
      * 테스트는 같은 이름의 빈으로 같은 스레드에서 바로 실행하는 것을 끼워, 뒤에서 도는 일이
      * 끝나기를 기다리지 않게 한다(SameThreadExecutor).
      */
-    public DetailTranslator(VenueRepository repo, TranslationClient client, DetailTranslationCap cap,
+    public DetailTranslator(VenueRepository repo, TranslationClient client, TourApiClient tourClient,
+                            DetailTranslationCap cap,
                             @Qualifier("applicationTaskExecutor") Executor executor,
                             PlatformTransactionManager txm) {
         this.repo = repo;
         this.client = client;
+        this.tourClient = tourClient;
         this.cap = cap;
         this.executor = executor;
         this.tx = new TransactionTemplate(txm);
@@ -74,10 +78,9 @@ public class DetailTranslator {
 
         String key = venueId + ":" + lang;
         if (!inFlight.add(key)) return;                 // 이미 같은 번역이 돌고 있다
-        if (!cap.tryAcquire()) {                        // 오늘 몫을 다 썼다 — 내일 다시 걸린다
-            inFlight.remove(key);
-            return;
-        }
+        // 하루 상한은 여기서 깎지 않는다. 공사 공식 번역으로 채워지는 건은 돈이 들지 않아
+        // 세면 안 되는데, 이 자리에서는 어느 길로 갈지 아직 모른다. AI 를 부르기 직전에 깎는다.
+        // 큐가 쌓이는 것은 inFlight 가 막는다 — 같은 장소·언어는 동시에 한 번만 들어간다.
 
         executor.execute(() -> {
             try {
@@ -91,6 +94,13 @@ public class DetailTranslator {
         });
     }
 
+    /** 공사 다국어판에 번역된 설명이 있으면 가져온다. 이어진 곳이 없으면 null. */
+    private String officialOverview(Venue v, Lang lang) {
+        String contentId = v.tourContentIdIn(lang);
+        if (contentId == null || contentId.isBlank()) return null;
+        return tourClient.multilangOverview(lang, contentId);
+    }
+
     private void translateAndSave(long venueId, Lang lang, String koText) {
         // 거는 사이에 다른 요청이 이미 저장했을 수 있다. 번역은 돈이 드니 한 번 더 본다.
         Venue before = repo.findById(venueId).orElse(null);
@@ -98,12 +108,24 @@ public class DetailTranslator {
         String already = before.descIn(lang);
         if (already != null && !already.isBlank()) return;
 
-        String tr = client.translateText(lang, koText);
+        // 공사가 이미 공식 번역해 둔 설명이 있으면 그것을 쓴다. AI 보다 정확하고 돈이 들지 않는다.
+        // 쓸 수 있는 곳이 3,770곳이다(MultilangSyncService 가 찾아 둔 다국어 contentId).
+        String tr = officialOverview(before, lang);
+        boolean official = tr != null;
+        if (tr == null) {
+            // 공사가 다루지 않는 장소다. 하루 총량을 여기서 깎는다 — 공식 번역을 쓴 건은
+            // 돈이 들지 않으므로 세지 않는다.
+            if (!cap.tryAcquire()) return;
+            tr = client.translateText(lang, koText);
+        }
         if (tr == null || tr.isBlank()) return;         // 실패 — 저장하지 않으면 다음에 다시 시도된다
+        if (official) log.debug("설명을 공사 공식 번역으로 채움 장소 id={} lang={}", venueId, lang);
 
+        // 람다가 읽으려면 값이 고정돼 있어야 한다(위에서 tr 에 두 번 넣는다).
+        final String text = tr;
         // 낡은 사본을 통째로 저장하면 그 사이 바뀐 평점 등을 덮으므로 다시 읽어 설명만 바꾼다.
         tx.executeWithoutResult(st -> repo.findById(venueId).ifPresent(fresh -> {
-            fresh.applyDescription(lang, tr);
+            fresh.applyDescription(lang, text);
             repo.save(fresh);
         }));
     }

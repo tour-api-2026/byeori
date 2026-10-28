@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.byeori.domain.venue.Venue;
 import com.byeori.domain.venue.VenueRepository;
+import com.byeori.global.external.TourApiClient;
 import com.byeori.global.i18n.Lang;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -45,9 +46,12 @@ class DetailTranslatorTest {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @MockitoBean TranslationClient client;
+    @MockitoBean TourApiClient tourClient;
 
     @Autowired DetailTranslator translator;
     @Autowired VenueRepository repo;
+    @Autowired DetailTranslationCap cap;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     private static final String KO = "조선의 법궁입니다.";
     private final List<Long> ids = new ArrayList<>();
@@ -120,6 +124,64 @@ class DetailTranslatorTest {
         }
         assertThat(repo.findById(id).orElseThrow().getDescEn()).isEqualTo("EN");
         verify(client, times(1)).translateText(any(), any());
+    }
+
+    /**
+     * 이 세 개가 이번 변경의 핵심이다. 공사가 이미 번역해 둔 설명이 있으면 AI 를 부르지 않는다 —
+     * 더 정확하고 돈이 들지 않는다. 쓸 수 있는 곳이 3,770곳이다.
+     */
+    @Test
+    @DisplayName("공사 공식 번역이 있으면 그것을 쓰고 AI 를 부르지 않는다")
+    void 공식_번역을_먼저() throws Exception {
+        long id = seed("ASYNC_4");
+        jdbc.update("update venues set tour_content_id_en = '264337' where id = ?", id);
+        when(tourClient.multilangOverview(Lang.EN, "264337"))
+                .thenReturn("Gyeongbokgung Palace is the main royal palace.");
+
+        translator.request(id, Lang.EN, KO);
+        await(id);
+
+        assertThat(repo.findById(id).orElseThrow().getDescEn())
+                .isEqualTo("Gyeongbokgung Palace is the main royal palace.");
+        verify(client, times(0)).translateText(any(), any());
+    }
+
+    @Test
+    @DisplayName("공사에 없는 장소는 AI 로 채운다")
+    void 공사에_없으면_AI() throws Exception {
+        long id = seed("ASYNC_5");   // tour_content_id_en 이 없다
+        when(client.translateText(any(), any())).thenReturn("AI translated.");
+
+        translator.request(id, Lang.EN, KO);
+        await(id);
+
+        assertThat(repo.findById(id).orElseThrow().getDescEn()).isEqualTo("AI translated.");
+        verify(client, times(1)).translateText(any(), any());
+    }
+
+    /**
+     * 공식 번역은 돈이 들지 않으므로 하루 상한을 깎으면 안 된다. 깎으면 공사가 다루는 곳만
+     * 열려도 상한이 닳아, 정작 AI 가 필요한 곳이 그날 번역되지 못한다.
+     */
+    @Test
+    @DisplayName("공식 번역을 쓴 건은 하루 상한을 깎지 않는다")
+    void 공식은_상한을_안_깎는다() throws Exception {
+        long a = seed("ASYNC_6");
+        jdbc.update("update venues set tour_content_id_en = '111' where id = ?", a);
+        when(tourClient.multilangOverview(Lang.EN, "111")).thenReturn("Official text.");
+
+        int before = cap.remaining();
+        translator.request(a, Lang.EN, KO);
+        await(a);
+
+        assertThat(cap.remaining()).as("공식 번역은 상한을 쓰지 않는다").isEqualTo(before);
+    }
+
+    /** 뒤에서 도는 저장이 끝나기를 기다린다. 가짜가 바로 돌려주므로 금방 끝난다. */
+    private void await(long id) throws Exception {
+        for (int i = 0; i < 100 && repo.findById(id).orElseThrow().getDescEn() == null; i++) {
+            Thread.sleep(50);
+        }
     }
 
     @Test
