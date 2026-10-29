@@ -47,8 +47,15 @@ byeori:
     review-id: ${REVIEW_ID:}
     review-password: ${REVIEW_PASSWORD:}
   maps:
-    # 카카오모빌리티 길찾기(여러 경유지) REST 키 — 로그인 키와 동일 값 재사용. 서버 전용.
-    kakao-rest-key: ${KAKAO_REST_KEY:}
+    # 지도/로컬·카카오모빌리티용 REST 키. 서버 전용.
+    #
+    # 로그인 키와 **따로 받는다.** 카카오맵 무료 쿼터는 개발자 계정에서 '첫 번째로 활성화한
+    # 앱'에만 주어지는데, 그 앱이 로그인에 쓰는 앱과 다를 수 있기 때문이다. 로그인은 앱에
+    # 등록된 Redirect URI 와 짝이라 키를 바꾸면 깨진다.
+    #
+    # KAKAO_MAP_REST_KEY 를 주지 않으면 예전처럼 KAKAO_REST_KEY 를 쓴다 — 두 앱이 같은
+    # 곳이면 아무것도 설정하지 않아도 그대로 동작한다.
+    kakao-rest-key: ${KAKAO_MAP_REST_KEY:${KAKAO_REST_KEY:}}
   ai:
     # AI 루트 생성. 키가 비어 있으면 기능 자체가 꺼진다(앱은 버튼을 숨긴다). 서버 전용.
     openai-api-key: ${OPENAI_API_KEY:}
