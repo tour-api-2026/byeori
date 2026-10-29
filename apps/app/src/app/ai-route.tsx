@@ -10,7 +10,7 @@ import { Calendar } from '@/components/Calendar';
 import LoginRequired from '@/components/LoginRequired';
 import { AREAS, DEFAULT_THEMES, MAP_PICKED, MY_LOCATION } from '@/lib/aiRouteAreas';
 import { AI_THEMES, generateAiRoute, saveAiRoute, type AiRoutePreview } from '@/lib/api/ai';
-import { searchKakaoPlaces, type KakaoPlace } from '@/lib/api/itineraries';
+import { searchKakaoPlacePage, type KakaoPlace } from '@/lib/api/itineraries';
 import { useT } from '@/lib/i18n';
 import { areaLabel, categoryLabel, type TFn } from '@/lib/i18n/labels';
 import { sized } from '@/lib/img';
@@ -454,27 +454,38 @@ function AreaSearchModal({ visible, onClose, onPick }: {
   const [keyword, setKeyword] = useState('');
   const [results, setResults] = useState<KakaoPlace[]>([]);
   const [loading, setLoading] = useState(false);
+  /** 다음에 받을 쪽. end 가 true 면 더 받지 않는다(카카오는 45건까지만 준다). */
+  const [page, setPage] = useState(1);
+  const [end, setEnd] = useState(true);
+  const [more, setMore] = useState(false);
   const t = useT();
 
   useEffect(() => {
     if (!visible) {
       setKeyword('');
       setResults([]);
+      setPage(1);
+      setEnd(true);
       return;
     }
     const q = keyword.trim();
     if (!q) {
       setResults([]);
+      setPage(1);
+      setEnd(true);
       return;
     }
     let live = true;
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const r = await searchKakaoPlaces(q);
-        if (live) setResults(r);
+        const r = await searchKakaoPlacePage(q, 1);
+        if (!live) return;
+        setResults(r.items);
+        setPage(2);
+        setEnd(r.end);
       } catch {
-        if (live) setResults([]);
+        if (live) { setResults([]); setEnd(true); }
       } finally {
         if (live) setLoading(false);
       }
@@ -484,6 +495,34 @@ function AreaSearchModal({ visible, onClose, onPick }: {
       clearTimeout(timer);
     };
   }, [keyword, visible]);
+
+  /**
+   * 목록 끝에 닿으면 다음 쪽을 받는다.
+   *
+   * 끝인지는 서버가 전해 주는 카카오의 is_end 를 믿는다 — '45건이면 끝'을 여기 적으면
+   * 카카오가 상한을 바꿨을 때 따라가지 못한다. 이미 받는 중이면 겹쳐 부르지 않는다.
+   */
+  const loadMore = async () => {
+    if (end || more || loading) return;
+    const q = keyword.trim();
+    if (!q) return;
+    setMore(true);
+    try {
+      const r = await searchKakaoPlacePage(q, page);
+      // 같은 장소가 두 번 들어오지 않게 id 로 거른다. 카카오는 상한을 넘긴 쪽에도
+      // 마지막 쪽을 그대로 돌려주므로, 거르지 않으면 목록에 중복이 쌓인다.
+      setResults((cur) => {
+        const seen = new Set(cur.map((x) => x.kakaoPlaceId));
+        return [...cur, ...r.items.filter((x) => !seen.has(x.kakaoPlaceId))];
+      });
+      setPage((n) => n + 1);
+      setEnd(r.end);
+    } catch {
+      setEnd(true);   // 더 받다 실패하면 멈춘다. 이미 받아 둔 것은 그대로 쓴다.
+    } finally {
+      setMore(false);
+    }
+  };
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -505,7 +544,16 @@ function AreaSearchModal({ visible, onClose, onPick }: {
               autoCorrect={false}
             />
           </View>
-          <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            style={{ flexGrow: 0 }}
+            onScroll={({ nativeEvent: e }) => {
+              // 바닥에서 120 이내로 오면 미리 받아 둔다. 바닥에 닿은 뒤 받으면 끊겨 보인다.
+              const left = e.contentSize.height - e.layoutMeasurement.height - e.contentOffset.y;
+              if (left < 120) void loadMore();
+            }}
+            scrollEventThrottle={200}
+          >
             {loading ? <ActivityIndicator color={colors.primary} style={{ marginVertical: 18 }} /> : null}
             {!loading && keyword.trim() && results.length === 0 ? (
               <Text style={styles.modalNote}>{t('aiRoute.search.empty')}</Text>
@@ -519,6 +567,7 @@ function AreaSearchModal({ visible, onClose, onPick }: {
                 </View>
               </Pressable>
             ))}
+            {more ? <ActivityIndicator color={colors.primary} style={{ marginVertical: 12 }} /> : null}
             <Text style={styles.modalNote}>
               {t('aiRoute.search.note')}
             </Text>

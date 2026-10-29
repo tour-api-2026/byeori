@@ -28,6 +28,15 @@ public class KakaoLocalClient {
     private final RestClient http;
 
     /** 카카오 장소 한 곳. categoryGroup 은 FD6(음식점)·CE7(카페)·AT4(관광명소) 같은 그룹 코드. */
+    /**
+     * 한 쪽의 결과와 '끝인지' 여부.
+     *
+     * 끝 판정을 우리가 계산하지 않고 카카오가 준 is_end 를 그대로 전한다. 카카오는 한 쪽에
+     * 15건까지, 전체 45건까지만 내준다(total_count 가 19만이어도 pageable_count 는 45다).
+     * 그 상한을 우리 코드에 적어 두면 카카오가 바꿨을 때 따라가지 못한다.
+     */
+    public record Page(java.util.List<Place> places, boolean end) {}
+
     public record Place(String id, String name, String categoryGroup, String categoryName,
                         String address, String phone, double lat, double lng) {}
 
@@ -57,10 +66,20 @@ public class KakaoLocalClient {
      * 실패 시 빈 목록.
      */
     public List<Place> search(String query, Double lat, Double lng) {
-        if (!enabled() || query == null || query.isBlank()) return List.of();
+        return searchPage(query, lat, lng, 1).places();
+    }
+
+    /**
+     * 한 쪽을 받는다. page 는 1부터.
+     *
+     * size 는 카카오 상한인 15 로 고정한다 — 더 크게 보내면 거부된다. 더 보려면 쪽을 넘긴다.
+     */
+    public Page searchPage(String query, Double lat, Double lng, int page) {
+        if (!enabled() || query == null || query.isBlank()) return new Page(List.of(), true);
         try {
             UriComponentsBuilder b = UriComponentsBuilder.fromUriString(URL)
                     .queryParam("query", query.strip())
+                    .queryParam("page", Math.max(1, page))
                     .queryParam("size", 15);
             if (lat != null && lng != null) {
                 b.queryParam("y", lat).queryParam("x", lng).queryParam("radius", 20000).queryParam("sort", "distance");
@@ -84,10 +103,13 @@ public class KakaoLocalClient {
                         d.path("y").asDouble(),
                         d.path("x").asDouble()));
             }
-            return out;
+            // is_end 가 없으면(형식이 바뀌었거나 오류) 끝으로 본다 — 모르는 채로 더 부르면
+            // 같은 결과를 반복해 받는다(카카오는 상한을 넘긴 쪽에도 마지막 쪽을 돌려준다).
+            boolean end = om.readTree(json).path("meta").path("is_end").asBoolean(true);
+            return new Page(out, end);
         } catch (Exception e) {
             log.warn("카카오 로컬 검색 실패: {}", e.getMessage());
-            return List.of();
+            return new Page(List.of(), true);
         }
     }
 }
