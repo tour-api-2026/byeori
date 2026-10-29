@@ -1,6 +1,7 @@
 package com.byeori.domain.translation;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import com.byeori.global.i18n.Lang;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -106,5 +107,33 @@ class TranslationClientTest {
         assertThat(TranslationClient.hasHangul("SUPERPOSITION #3. PP \u3142\u314D")).isFalse();
         assertThat(TranslationClient.hasHangul("\u3131\u8A18\u61B6\u6F14\u5287\u5C55")).isFalse();
         assertThat(TranslationClient.hasHangul("\u3145\u314F\u3139\u3141")).isFalse();
+    }
+
+    /**
+     * 검증이 버리는 것을 프롬프트가 금지해야 한다.
+     *
+     * 운영에서 일본어·중국어 묶음의 거의 전부가 "한글이 남아 버림" 으로 떨어졌다(40건 중 39건).
+     * 모델이 빠뜨린 것이 아니다 — 프롬프트는 **로마자만** 금지하고 한글은 금지하지 않는데
+     * hasHangul 은 한글을 버렸다. 모델은 지시를 어기지 않았고 우리가 요구하지 않은 것을 버렸다.
+     * 두 곳이 어긋나면 멀쩡한 이름이 영원히 번역되지 않으므로 그 짝을 여기 고정한다.
+     */
+    @Test
+    @DisplayName("일본어·중국어 프롬프트는 한글을 금지한다 — hasHangul 이 버리는 것과 같아야 한다")
+    void 프롬프트가_한글을_금지() {
+        for (Lang lang : List.of(Lang.JA, Lang.ZH)) {
+            String p = TranslationClient.systemFor(lang);
+            assertThat(p).as("%s 프롬프트가 한글 금지를 말해야 한다", lang)
+                         .containsIgnoringCase("hangul");
+            // 금지만 하면 모델이 빈칸을 내놓는다. 대신 무엇을 쓸지도 말해야 한다.
+            assertThat(p).as("%s 프롬프트가 음역 방법을 말해야 한다", lang)
+                         .containsIgnoringCase("transliterate");
+        }
+    }
+
+    /** 영어는 로마자를 쓰므로 한글 금지가 필요 없다 — 괜히 넣어 규칙을 늘리지 않는다. */
+    @Test
+    @DisplayName("영어 프롬프트는 그대로 둔다")
+    void 영어_프롬프트() {
+        assertThat(TranslationClient.systemFor(Lang.EN)).contains("Revised Romanization");
     }
 }

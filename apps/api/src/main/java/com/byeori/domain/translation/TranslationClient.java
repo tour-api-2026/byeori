@@ -4,6 +4,7 @@ import com.byeori.global.external.OpenAiClient;
 import com.byeori.global.i18n.Lang;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.*;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -45,25 +46,35 @@ public class TranslationClient {
     private static final String JA = """
         Target language: Japanese. Write in Japanese script only, never in Latin letters
         (except where the Korean name itself contains Latin letters or digits).
+        NEVER leave Hangul (Korean letters) in the output. Every syllable must come out as
+        kanji, hiragana or katakana. An answer containing Hangul is discarded.
         Use the established Japanese name written in kanji when one exists:
         경복궁 -> "景福宮", 창덕궁 -> "昌徳宮", 창경궁 -> "昌慶宮", 북촌한옥마을 -> "北村韓屋村",
         국립중앙박물관 -> "国立中央博物館", 광화문 -> "光化門", 한강공원 -> "漢江公園".
         Otherwise translate the common nouns (公園, 寺, 市場, 博物館...) and write the Korean proper
         part in katakana following how Japanese guidebooks transliterate Korean.
+        Many names are native Korean words with no kanji at all (옛날두부, 웃장, 오얏리, 예원).
+        Do not give up and do not echo the Korean: transliterate the sound into katakana
+        (떡볶이 -> "トッポッキ", 비빔밥 -> "ビビンバ").
         """;
 
     private static final String ZH = """
         Target language: Simplified Chinese. Write in Chinese characters only, never in Latin letters
         (except where the Korean name itself contains Latin letters or digits).
+        NEVER leave Hangul (Korean letters) in the output. Every syllable must come out as a
+        Chinese character. An answer containing Hangul is discarded.
         Use the established Mainland Chinese name when one exists:
         경복궁 -> "景福宫", 창덕궁 -> "昌德宫", 창경궁 -> "昌庆宫", 북촌한옥마을 -> "北村韩屋村",
         국립중앙박물관 -> "韩国国立中央博物馆", 광화문 -> "光化门", 한강공원 -> "汉江公园".
         Otherwise translate the common nouns (公园, 寺, 市场, 博物馆...) and transliterate the Korean
         proper part with the usual Chinese guidebook rendering of Korean names (hanja readings
         when the hanja is well known).
+        Many names are native Korean words with no hanja at all (옛날두부, 웃장, 오얏리, 예원).
+        Do not give up and do not echo the Korean: translate the common noun and transliterate
+        the proper part with 音译 characters (떡볶이 -> "炒年糕", 비빔밥 -> "拌饭").
         """;
 
-    private static String systemFor(Lang lang) {
+    static String systemFor(Lang lang) {
         return COMMON + switch (lang) { case JA -> JA; case ZH -> ZH; default -> EN; };
     }
 
@@ -85,7 +96,14 @@ public class TranslationClient {
             if (res == null) throw new UnavailableException("응답 없음(비활성·실패·거절)", null);
             Map<String, String> got = parse(res, names);
             int answered = got.size();
-            if (lang == Lang.JA || lang == Lang.ZH) got.values().removeIf(TranslationClient::hasHangul);
+            if (lang == Lang.JA || lang == Lang.ZH) {
+                // 버린 짝 몇 개는 남긴다. 숫자만으로는 모델이 무엇을 내놨는지 알 수 없어,
+                // 프롬프트를 고쳐야 하는지 이름 자체가 어려운지 판단할 수 없었다.
+                String sample = got.entrySet().stream().filter(e -> hasHangul(e.getValue())).limit(3)
+                        .map(e -> e.getKey() + " -> " + e.getValue()).collect(Collectors.joining(", "));
+                got.values().removeIf(TranslationClient::hasHangul);
+                if (!sample.isEmpty()) log.info("한글이 남아 버린 표본 lang={} : {}", lang, sample);
+            }
             // 부르는 쪽은 '못 한 행' 을 한 숫자로만 센다. 그 안에 아주 다른 두 가지가 섞여 있다 —
             // 모델이 아예 빠뜨린 것은 다시 물으면 되고, 한글이 남아 버린 것은 다시 물어도 같다.
             // 어느 쪽인지 모르면 무엇을 고쳐야 하는지 알 수 없어 여기서 갈라 적는다.
