@@ -30,12 +30,31 @@ public class PlaceController {
         }
     }
 
+    /**
+     * 장소 검색. 한 쪽에 15건이고, 카카오는 전체 45건까지만 내준다.
+     *
+     * **page 를 주느냐에 따라 응답 모양이 다르다.**
+     * <ul>
+     *   <li>안 주면(기존) 그냥 배열 — 이미 깔려 있는 앱이 unwrap&lt;KakaoPlace[]&gt; 로 읽는다.
+     *       OTA 를 안 받은 버전이 남아 있으므로 이 모양을 깨면 그쪽에서 장소 검색이 죽는다.</li>
+     *   <li>주면 {items, end} — 더 받을 것이 있는지 함께 준다.</li>
+     * </ul>
+     *
+     * 끝 판정은 우리가 세지 않고 카카오가 준 is_end 를 그대로 전한다. 45 라는 상한을 코드에
+     * 적어 두면 카카오가 바꿨을 때 따라가지 못한다.
+     */
     @GetMapping("/search")
-    public ApiResponse<List<PlaceResult>> search(@RequestParam("query") String query,
-                                                 @RequestParam(name = "lat", required = false) Double lat,
-                                                 @RequestParam(name = "lng", required = false) Double lng) {
-        return ApiResponse.ok(kakao.search(query, lat, lng).stream().map(PlaceResult::from).toList());
+    public ApiResponse<?> search(@RequestParam("query") String query,
+                                 @RequestParam(name = "lat", required = false) Double lat,
+                                 @RequestParam(name = "lng", required = false) Double lng,
+                                 @RequestParam(name = "page", required = false) Integer page) {
+        KakaoLocalClient.Page p = kakao.searchPage(query, lat, lng, page == null ? 1 : page);
+        List<PlaceResult> items = p.places().stream().map(PlaceResult::from).toList();
+        return ApiResponse.ok(page == null ? items : new SearchPage(items, p.end()));
     }
+
+    /** 한 쪽의 결과. end 가 true 면 더 받을 것이 없다. */
+    public record SearchPage(List<PlaceResult> items, boolean end) {}
 
     /** "음식점 > 한식 > 국밥" → "국밥" */
     private static String lastSegment(String s) {

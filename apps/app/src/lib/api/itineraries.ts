@@ -154,6 +154,26 @@ export function searchKakaoPlaces(query: string, near?: { lat: number; lng: numb
   }));
 }
 
+/** 한 쪽의 검색 결과. end 가 true 면 더 받을 것이 없다. */
+export type KakaoPlacePage = { items: KakaoPlace[]; end: boolean };
+
+/**
+ * 쪽을 넘겨 가며 검색한다. page 는 1부터.
+ *
+ * 카카오는 한 쪽에 15건, 전체 45건까지만 내준다. 그 상한을 여기 적지 않는 이유는 서버가
+ * 카카오의 is_end 를 그대로 전해 주기 때문이다 — 카카오가 상한을 바꿔도 따라간다.
+ *
+ * page 를 주면 서버가 {items, end} 를 준다. 안 주면 예전처럼 배열이라(이미 깔린 앱이 그
+ * 모양을 읽는다) 위 searchKakaoPlaces 는 그대로 둔다.
+ */
+export function searchKakaoPlacePage(
+  query: string, page: number, near?: { lat: number; lng: number } | null,
+): Promise<KakaoPlacePage> {
+  return unwrap<KakaoPlacePage>(api.get<ApiEnvelope<KakaoPlacePage>>('/places/search', {
+    params: { query, page, lat: near?.lat, lng: near?.lng },
+  }));
+}
+
 /** 이 자리의 장소를 카카오에서 고른 곳으로 바꾼다. */
 export function replaceItemPlace(id: number, itemId: number, place: KakaoPlace): Promise<ItineraryItem> {
   return unwrap<ItineraryItem>(api.patch<ApiEnvelope<ItineraryItem>>(`/itineraries/${id}/items/${itemId}/place`, {
