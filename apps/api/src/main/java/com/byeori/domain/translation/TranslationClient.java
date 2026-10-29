@@ -84,7 +84,14 @@ public class TranslationClient {
             JsonNode res = openAi.completeJson(systemFor(lang), user, "translations", SCHEMA, 0.2);
             if (res == null) throw new UnavailableException("응답 없음(비활성·실패·거절)", null);
             Map<String, String> got = parse(res, names);
+            int answered = got.size();
             if (lang == Lang.JA || lang == Lang.ZH) got.values().removeIf(TranslationClient::hasHangul);
+            // 부르는 쪽은 '못 한 행' 을 한 숫자로만 센다. 그 안에 아주 다른 두 가지가 섞여 있다 —
+            // 모델이 아예 빠뜨린 것은 다시 물으면 되고, 한글이 남아 버린 것은 다시 물어도 같다.
+            // 어느 쪽인지 모르면 무엇을 고쳐야 하는지 알 수 없어 여기서 갈라 적는다.
+            if (got.size() < names.size())
+                log.info("번역 묶음 lang={} 물은 것={} 쓸 수 있음={} 한글이 남아 버림={} 응답에 없음={}",
+                        lang, names.size(), got.size(), answered - got.size(), names.size() - answered);
             return got;
         } catch (UnavailableException e) {
             throw e;
@@ -137,8 +144,10 @@ public class TranslationClient {
      * 다시 시도한다(한글뿐인 이름이 계속 실패하면 그 몇 건만 매일 재시도한다).
      */
     static boolean hasHangul(String s) {
-        return s.codePoints().anyMatch(c -> (c >= 0xAC00 && c <= 0xD7A3) || (c >= 0x1100 && c <= 0x11FF)
-                || (c >= 0x3130 && c <= 0x318F));
+        // 음절(가~힣)만 본다. 낱자(ㄱ, ㅂㅍ)는 제목에 디자인으로 쓴 것이라 번역문에도 남아야
+        // 한다(`SUPERPOSITION #3. PP ㅂㅍ`, `제5회 ㄱ기억연극전`). CSV 임포터
+        // (scripts/import-translations.py)도 음절만 본다 — 두 곳의 기준이 같아야 한다.
+        return s.codePoints().anyMatch(c -> c >= 0xAC00 && c <= 0xD7A3);
     }
 
     /**
@@ -153,6 +162,19 @@ public class TranslationClient {
         JsonNode items = res.get("items");
         if (items == null || !items.isArray()) return out;
         Set<String> want = new HashSet<>(asked);
+        // 앞뒤 공백이 든 제목이 있다. AI 는 "echoing the input unchanged" 를 지시해도 src 에서
+        // 공백을 떼어 돌려준다. 글자 그대로만 맞추면 그 행은 매번 버려지고 세 밤 뒤 포기 상태가
+        // 된다(영어 포기 14건 중 13건이 이것이었다). 그래서 공백을 뗀 꼴로도 찾는다.
+        //
+        // 공백만 다른 두 이름을 같은 묶음에서 물었으면 어느 쪽인지 알 수 없다. 그 꼴은 빼 둔다 —
+        // 틀린 행에 번역이 붙는 것보다 다음 배치가 다시 시도하는 것이 낫다.
+        Map<String, String> loose = new HashMap<>();
+        Set<String> ambiguous = new HashSet<>();
+        for (String a : asked) {
+            String k = a.strip();
+            if (k.isEmpty() || k.equals(a)) continue;   // 글자 그대로 찾히니 느슨한 꼴이 필요 없다
+            if (loose.put(k, a) != null) ambiguous.add(k);
+        }
         for (JsonNode it : items) {
             // path() 는 null 값 노드를 NullNode 로 돌려주고, asText(null) 은 거기서 "null" 문자열을 준다.
             // 값이 문자열이 아니면 버린다.
@@ -161,8 +183,11 @@ public class TranslationClient {
             if (!s.isTextual() || !o.isTextual()) continue;
             String src = s.asText();
             String tr = o.asText().trim();
-            if (tr.isEmpty() || !want.contains(src)) continue;
-            out.put(src, tr);
+            // 글자 그대로가 먼저다. 못 찾으면 공백을 뗀 꼴로 한 번 더 본다.
+            String key = want.contains(src) ? src
+                       : ambiguous.contains(src.strip()) ? null : loose.get(src.strip());
+            if (tr.isEmpty() || key == null) continue;
+            out.put(key, tr);
         }
         return out;
     }
