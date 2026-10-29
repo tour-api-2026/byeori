@@ -37,18 +37,21 @@ export function AreaMapPicker({ lat, lng, onPick }: {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * 무시할 idle 횟수.
+   * 코드로 마지막에 옮긴 좌표.
    *
-   * 지도를 코드로 옮기면(처음 띄울 때, 칩을 고를 때) 그 직후에도 idle 이 온다. 그것까지
-   * "사용자가 옮겼다"로 받으면 **칩을 누르자마자 이름이 '지도에서 고른 곳'으로 바뀐다** —
-   * 운영에서 실제로 그랬다. 코드로 옮길 때마다 하나씩 늘려 그만큼 건너뛴다.
+   * 지도를 코드로 옮기면 그 직후에도 idle 이 온다. 그 메아리를 "사용자가 옮겼다"로 받으면
+   * 칩을 누르자마자 이름이 '지도에서 고른 곳'으로 바뀐다. 그래서 들어온 좌표가 우리가
+   * 방금 설정한 값과 같으면 흘려보낸다.
    *
-   * 처음 1은 지도가 자기 기본 위치에서 뜰 때 보내는 idle 몫이다.
+   * 처음엔 idle 횟수를 세어 건너뛰었는데 깨졌다 — 지도가 보내는 idle 수가 상황마다
+   * 달라서(처음 뜰 때와 setCenter 가 한 번으로 합쳐지기도 한다) 하나 더 먹으면 **진짜
+   * 사용자 조작까지 삼킨다.** 실제로 운영에서 지도를 부산으로 옮겨도 이름이 안 바뀌었다.
+   * 좌표를 비교하면 몇 번 오든 상관이 없다.
    */
-  const skip = useRef(1);
+  const applied = useRef<{ lat: number; lng: number } | null>(null);
 
   const center = useCallback((la: number, ln: number) => {
-    skip.current += 1;
+    applied.current = { lat: la, lng: ln };
     ref.current?.injectJavaScript(
       `if(window.map){map.setCenter(new kakao.maps.LatLng(${la},${ln}));}true;`);
   }, []);
@@ -76,7 +79,11 @@ export function AreaMapPicker({ lat, lng, onPick }: {
     }
     // 움직임이 멎었다 — 지금 한가운데가 고른 곳이다.
     if (msg.type === 'idle' && typeof msg.lat === 'number' && typeof msg.lng === 'number') {
-      if (skip.current > 0) { skip.current -= 1; return; }   // 코드로 옮긴 몫
+      // 우리가 방금 옮긴 자리의 메아리면 흘려보낸다. 11m 는 setCenter 가 그대로 돌아오는
+      // 오차를 덮을 만큼 작아, 사용자가 조금 민 것까지 삼키지 않는다.
+      const a = applied.current;
+      if (a && Math.abs(a.lat - msg.lat) < 0.0001 && Math.abs(a.lng - msg.lng) < 0.0001) return;
+      applied.current = null;
       onPick({ lat: msg.lat, lng: msg.lng });
     }
   }, [onPick, t]);
