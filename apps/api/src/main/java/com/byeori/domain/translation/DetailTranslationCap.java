@@ -36,6 +36,12 @@ public class DetailTranslationCap {
         this.clock = clock;
     }
 
+    /** 오늘 남은 몫. 상태를 바꾸지 않는다 — 테스트가 '깎였는지'를 보는 데 쓴다. */
+    public synchronized int remaining() {
+        LocalDate today = LocalDate.now(clock);
+        return today.equals(day) ? Math.max(0, limit - used) : limit;
+    }
+
     /** 한 번 쓸 수 있으면 차감하고 true. 상한에 닿는 첫 순간 하루 한 번만 로그를 남긴다. */
     public synchronized boolean tryAcquire() {
         LocalDate today = LocalDate.now(clock);
