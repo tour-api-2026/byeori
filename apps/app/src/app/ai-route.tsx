@@ -139,8 +139,9 @@ export default function AiRouteScreen() {
   const onMapPick = (c: { lat: number; lng: number }) =>
     setAreas((cur) => cur.map((x, i) => {
       if (i !== editingDay) return x;
-      // 거의 같은 자리면 그대로 둔다 — 지도는 멎을 때마다 좌표를 보내므로
-      // 이름이 붙은 칩 선택이 미세한 흔들림에 지워질 수 있다.
+      // 거의 같은 자리(약 55m)면 그대로 둔다 — 지도는 멎을 때마다 좌표를 보내므로
+      // 이름이 붙은 칩 선택이 미세한 흔들림에 지워질 수 있다. 코드로 옮긴 메아리는
+      // AreaMapPicker 가 이미 걸러 내므로, 여기 걸리는 것은 손떨림 정도다.
       if (x.lat != null && x.lng != null
           && Math.abs(x.lat - c.lat) < 0.0005 && Math.abs(x.lng - c.lng) < 0.0005) return x;
       return { name: MAP_PICKED, lat: c.lat, lng: c.lng };
