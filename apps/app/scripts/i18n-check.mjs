@@ -192,6 +192,7 @@ const DONE = [
   'src/app/my/service-info.tsx',
   'src/app/my/venues.tsx',
   'src/app/search.tsx',
+  'src/components/AreaMapPicker.tsx',
   'src/components/BottomSheet.tsx',
   'src/components/Chip.tsx',
   'src/components/HeaderRight.tsx',
