@@ -125,8 +125,11 @@ const styles = StyleSheet.create({
     height: 220, borderRadius: radius.md, overflow: 'hidden',
     borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgSoft,
   },
+  // zIndex 가 필요하다. 카카오 지도는 자기 요소에 높은 z-index 를 주므로, 이것을 빼면
+  // 지도가 뜨는 순간 핀도 힌트도 지도 아래로 깔려 **보이지 않는다**(운영에서 그랬다).
+  // 지도가 실패해 회색 상자만 있을 때는 멀쩡히 보여서, 로컬 미리보기로는 못 잡는 종류다.
   pinWrap: {
-    position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
+    position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 10,
     alignItems: 'center', justifyContent: 'center',
     // 핀의 뾰족한 끝이 한가운데를 가리키게 아이콘 높이의 절반만큼 올린다
     paddingBottom: 40,
@@ -134,12 +137,12 @@ const styles = StyleSheet.create({
   // 흰 핀 위에 겹쳐 놓는다. 크기 차이의 절반만큼 밀어 가운데를 맞춘다.
   pinFront: { position: 'absolute', left: 4, top: 4 },
   overlay: {
-    position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
+    position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 10,
     alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bgSoft,
   },
   overlayText: { fontFamily: fonts.medium, fontSize: 13, color: colors.textFaint },
   hint: {
-    position: 'absolute', left: 8, right: 8, bottom: 8,
+    position: 'absolute', left: 8, right: 8, bottom: 8, zIndex: 10,
     backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: radius.sm,
     paddingVertical: 5, paddingHorizontal: 10,
   },
