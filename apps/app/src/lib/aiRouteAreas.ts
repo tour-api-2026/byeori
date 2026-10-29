@@ -16,4 +16,9 @@ export const AREAS = [
 ] as const;
 
 export const MY_LOCATION = '내 위치 주변';
+/**
+ * 지도를 움직여 고른 곳. 지명을 붙이려면 역지오코딩을 불러야 하는데 호출 비용이 들고,
+ * AI 루트는 좌표만 있으면 돌아간다. 서버에는 이 이름 그대로 간다(areaName).
+ */
+export const MAP_PICKED = '지도에서 고른 곳';
 export const DEFAULT_THEMES = ['문화', '맛집'];
