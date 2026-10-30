@@ -99,16 +99,17 @@ public class TranslationClient {
             if (lang == Lang.JA || lang == Lang.ZH) {
                 // 버린 짝 몇 개는 남긴다. 숫자만으로는 모델이 무엇을 내놨는지 알 수 없어,
                 // 프롬프트를 고쳐야 하는지 이름 자체가 어려운지 판단할 수 없었다.
-                String sample = got.entrySet().stream().filter(e -> hasHangul(e.getValue())).limit(3)
-                        .map(e -> e.getKey() + " -> " + e.getValue()).collect(Collectors.joining(", "));
-                got.values().removeIf(TranslationClient::hasHangul);
-                if (!sample.isEmpty()) log.info("한글이 남아 버린 표본 lang={} : {}", lang, sample);
+                String sample = got.entrySet().stream().filter(e -> !usable(e.getKey(), e.getValue()))
+                        .limit(3).map(e -> e.getKey() + " -> " + e.getValue())
+                        .collect(Collectors.joining(", "));
+                got.entrySet().removeIf(e -> !usable(e.getKey(), e.getValue()));
+                if (!sample.isEmpty()) log.info("쓸 수 없어 버린 표본 lang={} : {}", lang, sample);
             }
             // 부르는 쪽은 '못 한 행' 을 한 숫자로만 센다. 그 안에 아주 다른 두 가지가 섞여 있다 —
             // 모델이 아예 빠뜨린 것은 다시 물으면 되고, 한글이 남아 버린 것은 다시 물어도 같다.
             // 어느 쪽인지 모르면 무엇을 고쳐야 하는지 알 수 없어 여기서 갈라 적는다.
             if (got.size() < names.size())
-                log.info("번역 묶음 lang={} 물은 것={} 쓸 수 있음={} 한글이 남아 버림={} 응답에 없음={}",
+                log.info("번역 묶음 lang={} 물은 것={} 쓸 수 있음={} 쓸 수 없어 버림={} 응답에 없음={}",
                         lang, names.size(), got.size(), answered - got.size(), names.size() - answered);
             return got;
         } catch (UnavailableException e) {
@@ -157,15 +158,49 @@ public class TranslationClient {
     }
 
     /**
-     * 일본어·중국어 칸에 한글이 남은 번역은 못 쓴다. 100건 표본에서 "고척동 고인돌" 을 그대로
-     * 돌려주거나 "寺(서울)" 처럼 한글을 섞은 것이 나왔다. 버리면 해시가 안 찍혀 다음 배치가
-     * 다시 시도한다(한글뿐인 이름이 계속 실패하면 그 몇 건만 매일 재시도한다).
+     * 일본어·중국어 번역을 쓸 수 있는지.
+     *
+     * 처음에는 한글이 하나라도 남으면 버렸다. 그런데 모델은 보통명사만 번역하고 고유명사를
+     * 한글로 남긴다 — `뚝섬한강공원` → `뚝섬汉江公园`, `두가헌 레스토랑` → `두가헌レストラン`.
+     * 프롬프트에서 금지해도 계속 그런다(한자가 없는 이름을 음역자로 만드는 것을 꺼린다).
+     * 운영에서 일본어·중국어 묶음의 거의 전부가 이 이유로 떨어졌다.
+     *
+     * 그걸 버리면 사용자에게 **한국어 원문이 그대로** 보인다. 汉江公园 만 읽어도 무엇인지 아는
+     * 쪽이 낫고, 실제 가이드북도 음역이 안 되는 고유명사는 원문으로 둔다. 그래서 '한글이
+     * 남았나' 가 아니라 **'한국어를 얼마나 줄였나'** 로 판정한다.
+     *
+     * 다만 부분 번역을 받는 것과 '일을 안 한 것' 을 받는 것은 다르다. 절반도 줄이지 못했으면
+     * 버린다 — 원문을 그대로 되돌린 것(`고척동 고인돌`)이 여기 걸린다. 번역된 글자가 아예
+     * 없는 것도 버린다 — 줄긴 했어도 원문을 자른 것뿐이다(`뚝섬한강공원` → `뚝섬`).
+     *
+     * 버리면 해시가 안 찍혀 다음 배치가 다시 시도한다.
      */
-    static boolean hasHangul(String s) {
-        // 음절(가~힣)만 본다. 낱자(ㄱ, ㅂㅍ)는 제목에 디자인으로 쓴 것이라 번역문에도 남아야
-        // 한다(`SUPERPOSITION #3. PP ㅂㅍ`, `제5회 ㄱ기억연극전`). CSV 임포터
-        // (scripts/import-translations.py)도 음절만 본다 — 두 곳의 기준이 같아야 한다.
-        return s.codePoints().anyMatch(c -> c >= 0xAC00 && c <= 0xD7A3);
+    static boolean usable(String src, String out) {
+        if (out == null || out.isBlank()) return false;
+        int left = hangulSyllables(out);
+        if (left == 0) return true;                        // 온전히 옮겼다
+        if (left * 2 > hangulSyllables(src)) return false; // 절반도 못 줄였다 = 일을 안 했다
+        return hasTranslatedScript(out);
+    }
+
+    /**
+     * 완성형 한글 음절 수.
+     *
+     * 낱자(ㄱ, ㅂㅍ)는 세지 않는다 — 제목에 디자인으로 쓴 것이라 번역문에도 남아야 한다
+     * (`SUPERPOSITION #3. PP ㅂㅍ`, `제5회 ㄱ기억연극전`). CSV 임포터
+     * (scripts/import-translations.py)도 음절만 본다 — 두 곳의 기준이 같아야 한다.
+     */
+    static int hangulSyllables(String s) {
+        return (int) s.codePoints().filter(c -> c >= 0xAC00 && c <= 0xD7A3).count();
+    }
+
+    /** 번역된 글자가 하나라도 있나. 원문을 잘라 한글만 남긴 것을 막는다. */
+    private static boolean hasTranslatedScript(String s) {
+        return s.codePoints().anyMatch(c ->
+                   (c >= 0x4E00 && c <= 0x9FFF)     // 한자
+                || (c >= 0x3040 && c <= 0x30FF)     // 히라가나·가타카나
+                || (c >= 0xF900 && c <= 0xFAFF)     // 호환 한자
+                || (c < 0x80 && Character.isLetter(c)));   // 원문에 든 로마자(THE FAN 등)
     }
 
     /**

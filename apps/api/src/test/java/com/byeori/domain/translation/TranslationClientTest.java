@@ -56,13 +56,48 @@ class TranslationClientTest {
         assertThat(TranslationClient.parse(om.readTree("{\"items\":\"x\"}"), List.of("경복궁"))).isEmpty();
     }
 
+    /**
+     * 한글이 하나라도 남으면 버리던 것을 바꿨다.
+     *
+     * 모델은 보통명사만 번역하고 고유명사를 한글로 남긴다(`뚝섬汉江公园`). 금지해도 계속 그런다 —
+     * 한자가 없는 이름을 음역자로 만드는 것을 꺼린다. 그런데 그걸 버리면 **중국어 사용자에게
+     * 한국어 원문이 그대로 보인다.** 汉江公园 만 읽어도 무엇인지 아는 쪽이 낫고, 실제 가이드북도
+     * 음역이 안 되는 고유명사는 원문으로 둔다.
+     *
+     * 그래서 '한글이 남았나' 가 아니라 **'한국어를 얼마나 줄였나'** 로 판정한다.
+     */
     @Test
-    @DisplayName("한글이 섞인 번역은 일본어·중국어에서 쓰지 않는다")
-    void 한글_섞임() {
-        assertThat(TranslationClient.hasHangul("고척동 고인돌")).isTrue();
-        assertThat(TranslationClient.hasHangul("寺(서울)")).isTrue();
-        assertThat(TranslationClient.hasHangul("景福宮")).isFalse();
-        assertThat(TranslationClient.hasHangul("Gyeongbokgung Palace")).isFalse();
+    @DisplayName("고유명사만 한글로 남은 부분 번역은 쓴다")
+    void 부분_번역은_쓴다() {
+        assertThat(TranslationClient.usable("뚝섬한강공원", "뚝섬汉江公园")).isTrue();
+        assertThat(TranslationClient.usable("꽃잔디식당", "花잔디食堂")).isTrue();
+        assertThat(TranslationClient.usable("두가헌 레스토랑", "두가헌レストラン")).isTrue();
+        assertThat(TranslationClient.usable("씨야 20주년 전국 투어 콘서트: THE FAN [서울]",
+                "씨야 20周年全国巡演音乐会: THE FAN [首尔]")).isTrue();
+    }
+
+    @Test
+    @DisplayName("한글이 안 남은 번역은 당연히 쓴다")
+    void 온전한_번역() {
+        assertThat(TranslationClient.usable("경복궁", "景福宮")).isTrue();
+        assertThat(TranslationClient.usable("웃장", "ウッチャン")).isTrue();
+        // 낱자만 든 제목은 그대로 돌려주는 것이 맞다 — 디자인으로 쓴 고유명사다
+        assertThat(TranslationClient.usable("SUPERPOSITION #3. PP \u3142\u314D",
+                "SUPERPOSITION #3. PP \u3142\u314D")).isTrue();
+    }
+
+    /** 부분 번역을 받아들이는 것과 '일을 안 한 것' 을 받아들이는 것은 다르다. */
+    @Test
+    @DisplayName("일을 안 한 응답은 계속 버린다")
+    void 일을_안_한_것() {
+        // 원문을 그대로 되돌렸다
+        assertThat(TranslationClient.usable("고척동 고인돌", "고척동 고인돌")).isFalse();
+        // 절반도 줄이지 못했다
+        assertThat(TranslationClient.usable("서울남산국악당 젊은국악", "서울남산국악당 若手国楽")).isFalse();
+        // 번역하지 않고 잘라 냈다 — 줄긴 했지만 번역된 글자가 없다
+        assertThat(TranslationClient.usable("뚝섬한강공원", "뚝섬")).isFalse();
+        assertThat(TranslationClient.usable("경복궁", "")).isFalse();
+        assertThat(TranslationClient.usable("경복궁", null)).isFalse();
     }
 
     /**
@@ -102,23 +137,25 @@ class TranslationClientTest {
      * CSV 임포터(scripts/import-translations.py)는 이미 음절만 본다. 기준을 맞춘다.
      */
     @Test
-    @DisplayName("낱자만 든 것은 한글 섞임으로 보지 않는다 — 임포터와 같은 기준")
-    void 낱자는_통과() {
-        assertThat(TranslationClient.hasHangul("SUPERPOSITION #3. PP \u3142\u314D")).isFalse();
-        assertThat(TranslationClient.hasHangul("\u3131\u8A18\u61B6\u6F14\u5287\u5C55")).isFalse();
-        assertThat(TranslationClient.hasHangul("\u3145\u314F\u3139\u3141")).isFalse();
+    @DisplayName("낱자는 한글로 세지 않는다 — 임포터와 같은 기준")
+    void 낱자는_세지_않는다() {
+        assertThat(TranslationClient.hangulSyllables("SUPERPOSITION #3. PP \u3142\u314D")).isZero();
+        assertThat(TranslationClient.hangulSyllables("\u3131\u8A18\u61B6\u6F14\u5287\u5C55")).isZero();
+        assertThat(TranslationClient.hangulSyllables("\u3145\u314F\u3139\u3141")).isZero();
+        assertThat(TranslationClient.hangulSyllables("\uACBD\uBD35\uAD81")).isEqualTo(3);
     }
 
     /**
-     * 검증이 버리는 것을 프롬프트가 금지해야 한다.
+     * 프롬프트는 여전히 한글을 금지한다.
      *
-     * 운영에서 일본어·중국어 묶음의 거의 전부가 "한글이 남아 버림" 으로 떨어졌다(40건 중 39건).
-     * 모델이 빠뜨린 것이 아니다 — 프롬프트는 **로마자만** 금지하고 한글은 금지하지 않는데
-     * hasHangul 은 한글을 버렸다. 모델은 지시를 어기지 않았고 우리가 요구하지 않은 것을 버렸다.
-     * 두 곳이 어긋나면 멀쩡한 이름이 영원히 번역되지 않으므로 그 짝을 여기 고정한다.
+     * usable() 이 고유명사가 남은 것을 받아 주게 됐지만, 그건 **차선을 버리지 않는 것**이고
+     * 요구는 그대로다 — 온전히 옮긴 쪽이 낫다. 프롬프트에서 금지를 빼면 모델이 쉬운 길로 가
+     * 절반만 옮긴 것이 늘고, 그중 상당수는 usable() 의 '절반' 선에 걸려 결국 버려진다.
+     *
+     * 금지만 하면 모델이 빈칸을 내놓으므로 대신 무엇을 쓸지도 말해야 한다. 그 짝을 고정한다.
      */
     @Test
-    @DisplayName("일본어·중국어 프롬프트는 한글을 금지한다 — hasHangul 이 버리는 것과 같아야 한다")
+    @DisplayName("일본어·중국어 프롬프트는 한글을 금지하고 음역 방법을 알려 준다")
     void 프롬프트가_한글을_금지() {
         for (Lang lang : List.of(Lang.JA, Lang.ZH)) {
             String p = TranslationClient.systemFor(lang);
