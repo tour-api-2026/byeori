@@ -74,6 +74,12 @@ class TranslationClientTest {
         assertThat(TranslationClient.usable("두가헌 레스토랑", "두가헌レストラン")).isTrue();
         assertThat(TranslationClient.usable("씨야 20주년 전국 투어 콘서트: THE FAN [서울]",
                 "씨야 20周年全国巡演音乐会: THE FAN [首尔]")).isTrue();
+        // 고유명사가 보통명사보다 길어도 받는다. 村 만 봐도 마을인 것을 안다 —
+        // 처음 둔 '절반' 선이 이것들을 버렸다.
+        assertThat(TranslationClient.usable("예움터 마을", "예움터村")).isTrue();
+        assertThat(TranslationClient.usable("꾸꾸네", "꾸꾸家")).isTrue();
+        assertThat(TranslationClient.usable("뚝도 아리수 정수센터", "뚝도 아리수 정수中心")).isTrue();
+        assertThat(TranslationClient.usable("서울남산국악당 젊은국악", "서울남산국악당 若手国楽")).isTrue();
     }
 
     @Test
@@ -90,10 +96,14 @@ class TranslationClientTest {
     @Test
     @DisplayName("일을 안 한 응답은 계속 버린다")
     void 일을_안_한_것() {
-        // 원문을 그대로 되돌렸다
+        // 원문을 그대로 되돌렸다 — 짧은 순우리말 이름에서 모델이 자주 이렇게 한다
         assertThat(TranslationClient.usable("고척동 고인돌", "고척동 고인돌")).isFalse();
-        // 절반도 줄이지 못했다
-        assertThat(TranslationClient.usable("서울남산국악당 젊은국악", "서울남산국악당 若手国楽")).isFalse();
+        assertThat(TranslationClient.usable("예당", "예당")).isFalse();
+        assertThat(TranslationClient.usable("빠우", " 빠우 ")).isFalse();   // 공백만 다른 것도 되돌림이다
+        // 로마자가 섞여 있어도 되돌림은 되돌림이다
+        assertThat(TranslationClient.usable("Heon Seo (헌서) 1st EP", "Heon Seo (헌서) 1st EP")).isFalse();
+        // 한국어가 한 글자도 줄지 않았다
+        assertThat(TranslationClient.usable("예당", "예당 ホール")).isFalse();
         // 번역하지 않고 잘라 냈다 — 줄긴 했지만 번역된 글자가 없다
         assertThat(TranslationClient.usable("뚝섬한강공원", "뚝섬")).isFalse();
         assertThat(TranslationClient.usable("경복궁", "")).isFalse();
