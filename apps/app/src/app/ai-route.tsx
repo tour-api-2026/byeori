@@ -94,6 +94,8 @@ export default function AiRouteScreen() {
   const [editingDay, setEditingDay] = useState(0);
   const [areaSearchOpen, setAreaSearchOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  // 지도에 손이 닿아 있는 동안 페이지 스크롤을 멈추는 데 쓴다
+  const [mapGrabbed, setMapGrabbed] = useState(false);
   const [picking, setPicking] = useState<'start' | 'end'>('start');
   const [themes, setThemes] = useState<string[]>(DEFAULT_THEMES);
 
@@ -205,7 +207,11 @@ export default function AiRouteScreen() {
   return (
     <View style={styles.safe}>
       <Stack.Screen options={{ title: t('aiRoute.title') }} />
-      <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 48 + insets.bottom }}>
+      {/* 지도를 잡고 있는 동안은 스크롤을 멈춘다. 한 페이지로 바꾸면서 지도를 스크롤 안에
+          넣었는데(#105) 그때 제스처 경쟁을 보지 못했다 — 지도를 끌면 화면만 내려갔다.
+          지도는 세로 스크롤을 쓰는 다른 화면에는 없다(지도 화면·루트 화면은 지도가 스크롤 밖). */}
+      <ScrollView scrollEnabled={!mapGrabbed}
+        contentContainerStyle={{ padding: space.lg, paddingBottom: 48 + insets.bottom }}>
         {!preview ? (
           <>
             {/* 한 화면에 전부 띄운다. 전에는 5단계로 나누고 마지막에 '확인' 화면을 뒀는데,
@@ -249,6 +255,7 @@ export default function AiRouteScreen() {
                 lat={dayArea.lat ?? AREAS[0].lat}
                 lng={dayArea.lng ?? AREAS[0].lng}
                 onPick={onMapPick}
+                onGrab={setMapGrabbed}
               />
             )}
             <Text style={styles.pickedArea} numberOfLines={1}>{areaLabel(t, dayArea)}</Text>
