@@ -169,18 +169,24 @@ public class TranslationClient {
      * 쪽이 낫고, 실제 가이드북도 음역이 안 되는 고유명사는 원문으로 둔다. 그래서 '한글이
      * 남았나' 가 아니라 **'한국어를 얼마나 줄였나'** 로 판정한다.
      *
-     * 다만 부분 번역을 받는 것과 '일을 안 한 것' 을 받는 것은 다르다. 절반도 줄이지 못했으면
-     * 버린다 — 원문을 그대로 되돌린 것(`고척동 고인돌`)이 여기 걸린다. 번역된 글자가 아예
-     * 없는 것도 버린다 — 줄긴 했어도 원문을 자른 것뿐이다(`뚝섬한강공원` → `뚝섬`).
+     * 다만 부분 번역을 받는 것과 '일을 안 한 것' 을 받는 것은 다르다. 아무것도 번역하지
+     * 않았으면 버린다 — 원문을 그대로 되돌린 것(`예당` → `예당`), 한국어가 한 글자도 줄지
+     * 않은 것, 번역된 글자가 아예 없는 것(`뚝섬한강공원` → `뚝섬`, 자른 것뿐이다)이 걸린다.
+     *
+     * 처음에는 '절반도 줄이지 못했으면 버린다' 로 뒀는데 그 선이 틀렸다. 고유명사가 보통명사보다
+     * 길면 걸려 버린다 — `예움터 마을` → `예움터村`, `꾸꾸네` → `꾸꾸家` 가 그래서 버려졌다.
+     * 村 만 봐도 마을인 것을 아는데 그걸 버리면 한국어 원문이 그대로 보인다. 살리려던 종류를
+     * 임의로 정한 비율이 다시 버리고 있었다.
      *
      * 버리면 해시가 안 찍혀 다음 배치가 다시 시도한다.
      */
     static boolean usable(String src, String out) {
         if (out == null || out.isBlank()) return false;
         int left = hangulSyllables(out);
-        if (left == 0) return true;                        // 온전히 옮겼다
-        if (left * 2 > hangulSyllables(src)) return false; // 절반도 못 줄였다 = 일을 안 했다
-        return hasTranslatedScript(out);
+        if (left == 0) return true;                                  // 온전히 옮겼다
+        if (out.strip().equals(src.strip())) return false;           // 그대로 되돌렸다
+        if (left >= hangulSyllables(src)) return false;              // 한국어가 줄지 않았다
+        return hasTranslatedScript(out);                             // 번역된 글자가 있어야 한다
     }
 
     /**
