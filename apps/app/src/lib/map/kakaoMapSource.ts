@@ -10,8 +10,17 @@ import { CATEGORY_EMOJI } from '@/lib/categories';
  */
 export const MAP_POST_FN = `function post(msg){ try{ if(window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(msg)); }catch(e){} }`;
 
-/** #map 컨테이너와 핀 마커 스타일 */
-export const MAP_CSS = `  html,body,#map{margin:0;padding:0;width:100%;height:100%;background:#EAF0E6}
+/**
+ * #map 컨테이너와 핀 마커 스타일.
+ *
+ * touch-action:none 은 끌기·핀치를 브라우저가 먼저 먹지 않게 한다. 지도 SDK 가 터치를 직접
+ * 다루므로 브라우저 기본 동작은 방해만 된다 — 이게 없으면 웹에서 지도를 끌 때 바깥 스크롤
+ * 컨테이너가 먼저 움직인다(AI 루트 화면이 그랬다).
+ *
+ * 선택자 첫머리(html,body,#map)는 그대로 둔다. 웹 구현이 그 조각을 #map 으로 바꿔 넣어
+ * 페이지 전체가 물드는 것을 막는다(KakaoMapView.web.tsx).
+ */
+export const MAP_CSS = `  html,body,#map{margin:0;padding:0;width:100%;height:100%;background:#EAF0E6;touch-action:none}
   .pin{display:inline-block;min-width:30px;text-align:center;padding:3px 8px;border-radius:999px;
        color:#fff;font-size:12px;font-weight:800;box-shadow:0 2px 6px rgba(0,0,0,.25);
        font-family:-apple-system,system-ui,sans-serif;border:2px solid #fff}
