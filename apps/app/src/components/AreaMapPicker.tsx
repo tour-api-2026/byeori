@@ -25,10 +25,18 @@ const KAKAO_WEB_ORIGIN = 'https://byeori.seoulride.site';
  * 좌표만 올려 보낸다. 그 자리의 지명은 부르는 쪽이 정한다 — 역지오코딩은 호출 비용이
  * 들고, AI 루트는 좌표만 있으면 돌아간다.
  */
-export function AreaMapPicker({ lat, lng, onPick }: {
+export function AreaMapPicker({ lat, lng, onPick, onGrab }: {
   lat: number;
   lng: number;
   onPick: (c: { lat: number; lng: number }) => void;
+  /**
+   * 지도에 손이 닿았는지. 부모가 세로 ScrollView 라면 그동안 스크롤을 잠가야 한다.
+   *
+   * 잠그지 않으면 지도를 끌어도 지도가 아니라 화면이 내려간다 — 세로로 끄는 거리가 터치
+   * 슬롭을 넘는 순간 부모 ScrollView 가 제스처를 가져가고(안드로이드 onInterceptTouchEvent,
+   * iOS UIScrollView 팬 인식기), 그 뒤로 WebView 는 움직임을 못 받는다.
+   */
+  onGrab?: (grabbed: boolean) => void;
 }) {
   const t = useT();
   const labels = useMapLabels();
@@ -91,7 +99,14 @@ export function AreaMapPicker({ lat, lng, onPick }: {
   if (!KAKAO_JS_KEY) return null;
 
   return (
-    <View style={styles.wrap}>
+    <View
+      style={styles.wrap}
+      // 터치가 WebView 에 떨어져도 이 조상까지 올라온다(RN 의 터치 버블링).
+      // 손을 뗀 곳이 지도 밖이어도 취소 이벤트로 반드시 풀어 준다 — 안 풀면 페이지가 잠긴다.
+      onTouchStart={() => onGrab?.(true)}
+      onTouchEnd={() => onGrab?.(false)}
+      onTouchCancel={() => onGrab?.(false)}
+    >
       <KakaoMapView
         ref={ref}
         jsKey={KAKAO_JS_KEY}
